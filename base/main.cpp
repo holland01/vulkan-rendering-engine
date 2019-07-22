@@ -8,16 +8,25 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#include <memory>
 
 #include "render.h"
+
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 600
 
 static const char* g_shader_vertex = GLSL(layout(location = 0) in vec3 in_Position;
                                           layout(location = 1) in vec4 in_Color;
 
                                           smooth out vec4 frag_Color;
 
+                                          uniform mat4 unif_ModelView;
+                                          uniform mat4 unif_Projection;
+
                                           void main() {
-                                            gl_Position = vec4(in_Position, 1.0);
+                                            gl_Position = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
                                             frag_Color = in_Color;
                                           });
 
@@ -63,12 +72,21 @@ struct view_data {
       position(0.0f),
       step(0.1f),
       view_width(width),
-      view_height(height)
-  {}
+      view_height(height) {
+  }
 
-  // Pick a translation direction, and this will modify it
-  // so that any object's within the viewing volume will be oriented/moved
+  void reset_proj() {
+    float aspect = static_cast<float>(view_width) / static_cast<float>(view_height);
+    proj = glm::perspective(45.0f, aspect, 0.1f, 10.0f);
+  }
+
+  //
+  // view_<dir>(): series of functions used for "moving" the camera in a particular direction.
+  //
+  // Pick a translation direction, and RET_VIEW_DIR will produce a transformed vector offset
+  // such that any object's within the viewing volume will be oriented/moved
   // to provide the illusion that the viewer is moving in the requested direction.
+  //
 #define RET_VIEW_DIR(x, y, z) glm::vec3 dir(glm::inverse(orient) * glm::vec3(x, y, z)); return dir
   
   glm::vec3 view_up() const { RET_VIEW_DIR(0.0f, 1.0f, 0.0f); }
@@ -144,13 +162,16 @@ struct view_data {
   }
 
   //
-  // operator ():
+  // operator (): updates position
   //
   // move struct is volatile because we're using bitsets here.
   //
   // very simple: if the corresponding direction is set to 1, 
   // we compute the appropriate offset for that direction and add its
   // scaled value to our position vector.
+  //
+  // Our goal is to let whatever key-input methods are used
+  // be handled separately from this class.
   //
   volatile struct move {
     uint8_t up : 1;
@@ -179,6 +200,39 @@ struct view_data {
   
 #undef TESTDIR
 };
+
+struct glsl_uniform {
+  GLint id;
+  std::string name;
+
+  glsl_uniform(const std::string& n)
+    : id(-1),
+      name(n) {
+  }
+
+  void load(GLuint program) {
+    ASSERT(id == -1);
+    GL_FN(id = glGetUniformLocation(program, name.c_str()));
+  }
+
+  GLint operator ()() const {
+    ASSERT(id != -1);
+    return id;
+  }
+
+  void up_mat4x4(GLuint program, const glm::mat4& m) const {
+    GL_FN(glProgramUniformMatrix4fv(program,
+                                    id,
+                                    1,
+                                    GL_FALSE,
+                                    &m[0][0] ));
+  }
+};
+
+static glsl_uniform g_unif_model_view("unif_ModelView");
+static glsl_uniform g_unif_projection("unif_Projection");
+
+static view_data g_view(SCREEN_WIDTH, SCREEN_HEIGHT);
 
 static void init_api_data() {
   float s = 0.5f;
@@ -219,12 +273,15 @@ static void init_api_data() {
 
   g_api_data.program = make_program(g_shader_vertex, g_shader_fragment);
 
-  GL_FN(glViewport(0, 0, 640, 480));
+  GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
   
   GL_FN(glDisable(GL_CULL_FACE));
   GL_FN(glEnable(GL_DEPTH_TEST));
   GL_FN(glDepthFunc(GL_LEQUAL));
   GL_FN(glClearDepth(1.0f));
+
+  g_unif_model_view.load(g_api_data.program);
+  g_unif_projection.load(g_api_data.program);
 }
 
 static void error_callback(int error, const char* description) {
@@ -239,6 +296,12 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 static void render(GLFWwindow* window) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+  g_unif_model_view.up_mat4x4(g_api_data.program,
+                              g_view.view());
+
+  g_unif_projection.up_mat4x4(g_api_data.program,
+                              g_view.proj );
+  
   GL_FN(glUseProgram(g_api_data.program));
   GL_FN(glDrawArrays(GL_TRIANGLES, 0, 3));
   GL_FN(glUseProgram(0));
@@ -258,7 +321,7 @@ int main(void) {
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_FALSE);
   glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
-  window = glfwCreateWindow(640, 480, "OpenGL Boilerplate", NULL, NULL);
+  window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Boilerplate", NULL, NULL);
   if (!window) {
     goto error;
   }
@@ -286,7 +349,6 @@ int main(void) {
 
     glfwSwapBuffers(window);
     glfwPollEvents();
-    //glfwWaitEvents();
   }
 
   glfwDestroyWindow(window);

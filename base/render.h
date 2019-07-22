@@ -8,6 +8,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#define write_logf(...) logf_impl(__LINE__, __func__, __FILE__, __VA_ARGS__) 
+
+// Macro'd out incase non-c++17 compilers are used.
+#define STATIC_IF(cond) if constexpr ((cond))
+
 #define GLSL(src) "#version 450 core\n" #src
 
 #define GL_FN(expr)                                     \
@@ -16,6 +21,17 @@
   report_gl_error(__LINE__, __func__, __FILE__, #expr); \
  } while (0)
 
+#define ASSERT(cond) assert_impl((cond), __LINE__, __func__, __FILE__, #cond)
+
+static inline void logf_impl( int line, const char* func, const char* file,
+                              const char* fmt, ... );
+
+static inline void assert_impl(bool cond, int line, const char* func, const char* file, const char* expr) {
+  if (!cond) {
+    logf_impl(line, func, file, "ASSERT FAILURE: %s", expr);
+    exit(EXIT_FAILURE);
+  }
+}
 
 static inline void logf_impl( int line, const char* func, const char* file,
     const char* fmt, ... )
@@ -23,13 +39,13 @@ static inline void logf_impl( int line, const char* func, const char* file,
     va_list arg;
 
     va_start( arg, fmt );
-    fprintf( stdout, "\n[ %s@%i ]: ", func, line );
+    fprintf( stdout, "\n[ %s@%s:%i ]: ", func, file, line );
     vfprintf( stdout, fmt, arg );
     fputs( "\n", stdout );
     va_end( arg );
 }
 
-#define write_logf(...) logf_impl(__LINE__, __func__, __FILE__, __VA_ARGS__) 
+
 
 std::vector<std::string> g_gl_err_msg_cache;
 
