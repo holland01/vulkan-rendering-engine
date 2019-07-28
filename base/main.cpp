@@ -421,9 +421,11 @@ struct models {
   }
 
   void render(int model, transformorder to, GLuint program) const {
-    //glm::mat4 T = __table[to](model);
-    //glm::mat4 mv = g_view.view() * T;
-    //glm::mat4 proj = g_view.proj;
+    glm::mat4 T = __table[to](model);
+    glm::mat4 mv = g_view.view() * T;
+
+    g_unif_model_view.up_mat4x4(g_api_data.program, mv);
+    g_unif_projection.up_mat4x4(g_api_data.program, g_view.proj);
     
     auto ofs = vertex_offsets[model];
     auto count = vertex_counts[model];
@@ -520,14 +522,14 @@ static void render(GLFWwindow* window) {
 
   GL_FN(glUseProgram(g_api_data.program));
 
-  g_unif_model_view.up_mat4x4(g_api_data.program, g_view.view());
-  g_unif_projection.up_mat4x4(g_api_data.program, g_view.proj);
 
   g_vertex_buffer.bind();
-  
-  g_models.render(0,
-                  models::to_srt,
-                  g_api_data.program);
+
+  for (auto id: g_model_ids) {  
+    g_models.render(id,
+                    models::to_srt,
+                    g_api_data.program);
+  }
 
   g_vertex_buffer.unbind();
   
