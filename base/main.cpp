@@ -368,14 +368,17 @@ struct vertex_buffer {
 struct models {
   enum transformorder {
     to_srt = 0,
+    to_lookat,
     transformorder_count
   };
 
   using transform_fn_type = std::function<glm::mat4(int model)>;
   using index_type = uint16_t;
   
-  std::array<transform_fn_type, transformorder_count> __table{
-    [this](int model) { return scale(model) * rotate(model) * translate(model); }
+  std::array<transform_fn_type, transformorder_count> __table = {
+    [this](int model) { return scale(model) * rotate(model) * translate(model); },
+    [this](int model) { return glm::inverse(g_view.view())
+                        * glm::lookAt(look_at.eye, look_at.center, look_at.up); }
   };
   
   std::vector<v3> positions;
@@ -383,6 +386,17 @@ struct models {
   std::vector<v3> angles;  
   std::vector<index_type> vertex_offsets;
   std::vector<index_type> vertex_counts;
+  std::vector<bool> draw;
+
+  struct {
+    v3 eye;
+    v3 center;
+    v3 up;
+  } look_at = {
+    glm::zero<v3>(),
+    glm::zero<v3>(),
+    glm::zero<v3>()
+  };
   
   int new_model(index_type vbo_offset = 0,
                 index_type num_vertices = 0,
@@ -398,6 +412,8 @@ struct models {
 
     vertex_offsets.push_back(vbo_offset);
     vertex_counts.push_back(num_vertices);
+
+    draw.push_back(true);
 
     return id;
   }
@@ -421,18 +437,20 @@ struct models {
   }
 
   void render(int model, transformorder to, GLuint program) const {
-    glm::mat4 T = __table[to](model);
-    glm::mat4 mv = g_view.view() * T;
+    if (draw.at(model) == true) {
+      glm::mat4 T = __table[to](model);
+      glm::mat4 mv = g_view.view() * T;
 
-    g_unif_model_view.up_mat4x4(g_api_data.program, mv);
-    g_unif_projection.up_mat4x4(g_api_data.program, g_view.proj);
+      g_unif_model_view.up_mat4x4(g_api_data.program, mv);
+      g_unif_projection.up_mat4x4(g_api_data.program, g_view.proj);
     
-    auto ofs = vertex_offsets[model];
-    auto count = vertex_counts[model];
+      auto ofs = vertex_offsets[model];
+      auto count = vertex_counts[model];
 
-    GL_FN(glDrawArrays(GL_TRIANGLES,
-                       ofs,
-                       count));
+      GL_FN(glDrawArrays(GL_TRIANGLES,
+                         ofs,
+                         count));
+    }
   }
 } static g_models;
 
@@ -501,7 +519,7 @@ static void init_api_data() {
     g_model_ids.push_back(g_models.new_model(offset, 3));
   }
   
-  g_model_ids.push_back(new_sphere(v3(0.0f, 0.0f, -10.0f)));
+  g_model_ids.push_back(new_sphere(v3(0.0f, 5.0f, -10.0f)));
 
   g_vertex_buffer.reset();
   
@@ -565,13 +583,17 @@ static void render(GLFWwindow* window) {
 
   GL_FN(glUseProgram(g_api_data.program));
 
-
   g_vertex_buffer.bind();
 
-  for (auto id: g_model_ids) {  
-    g_models.render(id,
-                    models::to_srt,
-                    g_api_data.program);
+  g_models.look_at.eye = g_models.positions[1];
+  g_models.look_at.center = g_models.positions[0];
+  g_models.look_at.up = v3(0.0f, 1.0f, 0.0f);
+  g_models.draw[1] = false;
+  
+  for (auto id: g_model_ids) {
+     g_models.render(id,
+                     models::to_lookat,
+                     g_api_data.program);
   }
 
   g_vertex_buffer.unbind();
