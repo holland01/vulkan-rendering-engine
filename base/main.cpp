@@ -407,23 +407,15 @@ struct models {
   }
 
   glm::mat4 translate(int model) const {
-    glm::mat4 t(1.0f);
-
-    if (positions.at(model) != glm::zero<v3>()) {
-      t = glm::translate(glm::mat4(1.0f), positions.at(model));
-    }
-    
-    return t; 
+    return glm::translate(glm::mat4(1.0f), positions.at(model)); 
   }
 
   glm::mat4 rotate(int model) const {
     glm::mat4 rot(1.0f);
     
-    if (angles.at(model) != glm::zero<v3>()) {
-      rot = glm::rotate(glm::mat4(1.0f), angles.at(model).x, v3(1.0f, 0.0f, 0.0f));
-      rot = glm::rotate(glm::mat4(1.0f), angles.at(model).y, v3(0.0f, 1.0f, 0.0f)) * rot;
-      rot = glm::rotate(glm::mat4(1.0f), angles.at(model).z, v3(0.0f, 0.0f, 1.0f)) * rot;
-    }
+    rot = glm::rotate(glm::mat4(1.0f), angles.at(model).x, v3(1.0f, 0.0f, 0.0f));
+    rot = glm::rotate(glm::mat4(1.0f), angles.at(model).y, v3(0.0f, 1.0f, 0.0f)) * rot;
+    rot = glm::rotate(glm::mat4(1.0f), angles.at(model).z, v3(0.0f, 0.0f, 1.0f)) * rot;
     
     return rot;
   }
