@@ -436,6 +436,47 @@ struct models {
   }
 } static g_models;
 
+auto new_sphere(const v3& position = glm::zero<v3>(), const v3& scale = v3(1.0f)) {
+  auto offset = g_vertex_buffer.num_vertices();
+
+  float step = 0.1f;
+
+  auto count = 0;
+  
+  auto cart = [&scale](float phi, float theta) {
+    v3 ret;
+    ret.x = scale.x * glm::cos(theta) * glm::cos(phi);
+    ret.y = scale.y * glm::sin(phi);
+    ret.z = scale.z * glm::sin(theta) * glm::cos(phi);
+    return ret;
+  };
+  
+  for (float phi = -glm::half_pi<float>(); phi <= glm::half_pi<float>(); phi += step) {
+    for (float theta = 0.0f; theta <= glm::two_pi<float>(); theta += step) {
+      auto color = v4(1.0f);
+    
+      auto a = cart(phi, theta);
+      auto b = cart(phi, theta + step);
+      auto c = cart(phi + step, theta + step);
+      auto d = cart(phi + step, theta);
+
+      g_vertex_buffer.add_triangle(a, color,
+                                   b, color,
+                                   c, color);
+
+      g_vertex_buffer.add_triangle(c, color,
+                                   d, color,
+                                   a, color);
+
+      count += 6;
+    }
+  }
+
+  return g_models.new_model(offset, count, position, scale);
+}
+
+static std::vector<int> g_model_ids;
+
 static void init_api_data() { 
   g_view.reset_proj();
 
@@ -460,6 +501,8 @@ static void init_api_data() {
     g_model_ids.push_back(g_models.new_model(offset, 3));
   }
   
+  g_model_ids.push_back(new_sphere(v3(0.0f, 0.0f, -10.0f)));
+
   g_vertex_buffer.reset();
   
   g_api_data.program = make_program(g_shader_vertex, g_shader_fragment);
@@ -472,7 +515,7 @@ static void init_api_data() {
   GL_FN(glClearDepth(1.0f));
 
   g_unif_model_view.load(g_api_data.program);
-  g_unif_projection.load(g_api_data.program);  
+  g_unif_projection.load(g_api_data.program);
 }
 
 static void error_callback(int error, const char* description) {
