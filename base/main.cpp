@@ -324,9 +324,13 @@ struct vertex_buffer {
     unbind();
   }
 
-  void add_triangle(v3 a_position, v4 a_color,
-                    v3 b_position, v4 b_color,
-                    v3 c_position, v4 c_color) {
+  auto num_vertices() const {
+    return static_cast<int>(data.size());
+  }
+
+  auto add_triangle(v3 a_position, v4 a_color,
+                   v3 b_position, v4 b_color,
+                   v3 c_position, v4 c_color) {
     vertex a = {
       a_position,
       a_color
@@ -339,6 +343,8 @@ struct vertex_buffer {
       c_position,
       c_color
     };
+
+    auto offset = num_vertices();
 
     data.push_back(a);
     data.push_back(b);
@@ -353,6 +359,8 @@ struct vertex_buffer {
 	  b4 = g_view.proj * b4;
 	  c4 = g_view.proj * c4;
 #endif
+
+    return offset;
   }
   
 } static g_vertex_buffer;
@@ -437,23 +445,26 @@ struct models {
 static void init_api_data() { 
   g_view.reset_proj();
 
-  volatile int id = g_models.new_model(0, 3); // returns 0 for the model id
-  
   GL_FN(glGenVertexArrays(1, &g_api_data.vao));
   GL_FN(glBindVertexArray(g_api_data.vao));
 
-  float s = 1.0f;
-  float t = -3.5f;
-  
-  g_vertex_buffer.add_triangle(v3(-s, 0.0f, t), // a
-                               v4(1.0f, 0.0f, 0.0f, 1.0f),                            
+  {
+    float s = 1.0f;
+    float t = -3.5f;
 
-                               v3(s, 0.0f, t), // b
-                               v4(1.0f, 1.0f, 1.0f, 1.0f),
+    // returns 0; used for the model id
+    auto offset = g_vertex_buffer.add_triangle(v3(-s, 0.0f, t), // a
+                                               v4(1.0f, 0.0f, 0.0f, 1.0f),                            
+
+                                               v3(s, 0.0f, t), // b
+                                               v4(1.0f, 1.0f, 1.0f, 1.0f),
                                
-                               v3(0.0f, s, t), // c
-                               v4(0.0f, 0.0f, 1.0f, 1.0f));
+                                               v3(0.0f, s, t), // c
+                                               v4(0.0f, 0.0f, 1.0f, 1.0f));
 
+
+    g_model_ids.push_back(g_models.new_model(offset, 3));
+  }
   
   g_vertex_buffer.reset();
   
