@@ -49,6 +49,10 @@ struct programs {
            void main() {
              fb_Color = frag_Color;
            })
+    },
+
+    {
+      "render_to_quad_position_color",
     }
   };
   
@@ -63,6 +67,9 @@ struct programs {
       handles[def.name] = make_program(def.vertex, def.fragment);
     }
   }
+
+  const std::string default_fb = "position_color";
+  const std::string default_rtq = "render_to_quad_position_texture_color";
   
 } static g_programs;
 
@@ -548,8 +555,8 @@ static void init_api_data() {
   GL_FN(glDepthFunc(GL_LEQUAL));
   GL_FN(glClearDepth(1.0f));
 
-  g_unif_model_view.load(g_programs("position_color"));
-  g_unif_projection.load(g_programs("position_color"));
+  g_unif_model_view.load(g_programs(g_programs.default_fb));
+  g_unif_projection.load(g_programs(g_programs.default_fb));
 }
 
 static void error_callback(int error, const char* description) {
@@ -597,7 +604,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 static void render(GLFWwindow* window) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  GL_FN(glUseProgram(g_programs("position_color")));
+  GL_FN(glUseProgram(g_programs(g_programs.default_fb)));
 
   g_vertex_buffer.bind();
 
@@ -609,7 +616,7 @@ static void render(GLFWwindow* window) {
   for (auto id: g_model_ids) {
      g_models.render(id,
                      models::to_lookat,
-                     g_programs("position_color"));
+                     g_programs(g_programs.default_fb));
   }
 
   g_vertex_buffer.unbind();
