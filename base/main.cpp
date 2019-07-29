@@ -52,7 +52,42 @@ struct programs {
     },
 
     {
-      "render_to_quad_position_color",
+      "render_to_quad",
+
+      GLSL(smooth out vec2 frag_TexCoord;
+
+           // quad
+           // 01    11
+           // 00    10
+           //
+           // xy  |  vertex id
+           // 01  |  00
+           // 00  |  01
+           // 11  |  10
+           // 10  |  11
+            
+           void main() {
+             float x = float((gl_VertexID >> 1) & 1);
+             float y = float(1 - (gl_VertexID & 1));
+             
+             frag_TexCoord = vec2(x, y);
+
+             x = 2.0 * x - 1.0;
+             y = 2.0 * y - 1.0;
+             
+             gl_Position = vec4(x, y, 0.0, 1.0);
+           }),
+      
+      GLSL(smooth in vec2 frag_TexCoord;
+           out vec4 fb_Color;
+
+           uniform sampler2D unif_TexSampler;
+           
+           void main() {
+             //             fb_Color = vec4(frag_TexCoord.x, 0.0, frag_TexCoord.y, 1.0);
+             fb_Color = vec4(texture(unif_TexSampler, frag_TexCoord).rgb, 1.0)
+               * vec4(frag_TexCoord.x, 0.0, frag_TexCoord.y, 1.0);
+           })          
     }
   };
   
@@ -69,8 +104,7 @@ struct programs {
   }
 
   const std::string default_fb = "position_color";
-  const std::string default_rtq = "render_to_quad_position_texture_color";
-  
+  const std::string default_rtq = "render_to_quad";
 } static g_programs;
 
 GLuint g_vao = 0;
@@ -281,12 +315,14 @@ struct glsl_uniform {
                                     GL_FALSE,
                                     &m[0][0] ));
 
-#endif  
+  void up_int(int i) const {
+    GL_FN(glUniform1i(id, i));
   }
 };
 
 static glsl_uniform g_unif_model_view("unif_ModelView");
 static glsl_uniform g_unif_projection("unif_Projection");
+static glsl_uniform g_unif_rtq_sampler("unif_TexSampler");
 
 struct vertex {
   v3 position;
@@ -420,6 +456,9 @@ struct models {
     glm::zero<v3>(),
     glm::zero<v3>()
   };
+
+  int modind_tri = 0;
+  int modind_sphere = 1;
   
   int new_model(index_type vbo_offset = 0,
                 index_type num_vertices = 0,
@@ -518,10 +557,69 @@ auto new_sphere(const v3& position = glm::zero<v3>(), const v3& scale = v3(1.0f)
 
 static std::vector<int> g_model_ids;
 
+struct capture {
+  GLuint fbo, tex, rbo;
+  int width, height;
+
+  capture()
+    :
+    fbo(0),
+    tex(0),
+    rbo(0),
+    width(SCREEN_WIDTH),
+    height(SCREEN_HEIGHT){
+  }
+
+  void load() {
+    GL_FN(glGenFramebuffers(1, &fbo));
+    bind();
+
+    GL_FN(glGenTextures(1, &tex));
+    GL_FN(glBindTexture(GL_TEXTURE_2D, tex));
+    GL_FN(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL));
+    GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+    GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+    GL_FN(glBindTexture(GL_TEXTURE_2D, 0));
+
+    // attach it to currently bound framebuffer object
+    GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0));
+
+    GL_FN(glGenRenderbuffers(1, &rbo));
+    GL_FN(glBindRenderbuffer(GL_RENDERBUFFER, rbo)); 
+    GL_FN(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height));  
+    GL_FN(glBindRenderbuffer(GL_RENDERBUFFER, 0));
+
+    GL_FN(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo));
+
+    ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+    unbind();
+  }
+  
+  void bind() const {
+    GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
+  }
+
+  void unbind() const {
+    GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+  }
+
+  void sample_begin(const glsl_uniform& sampler, int slot) const {
+    GL_FN(glBindTexture(GL_TEXTURE_2D, tex));
+    GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<decltype(GL_TEXTURE0)>(slot)));
+    sampler.up_int(slot);
+  }
+
+  void sample_end() const {
+    GL_FN(glBindTexture(GL_TEXTURE_2D, 0));
+  }
+  
+} static g_capture;
+
 static void init_api_data() { 
   g_view.reset_proj();
 
   g_programs.load();
+  g_capture.load();
   
   GL_FN(glGenVertexArrays(1, &g_vao));
   GL_FN(glBindVertexArray(g_vao));
@@ -557,6 +655,7 @@ static void init_api_data() {
 
   g_unif_model_view.load(g_programs(g_programs.default_fb));
   g_unif_projection.load(g_programs(g_programs.default_fb));
+  g_unif_rtq_sampler.load(g_programs(g_programs.default_rtq));
 }
 
 static void error_callback(int error, const char* description) {
@@ -601,27 +700,51 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 #undef map_move_f
 }
 
-static void render(GLFWwindow* window) {
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  GL_FN(glUseProgram(g_programs(g_programs.default_fb)));
-
-  g_vertex_buffer.bind();
-
-  g_models.look_at.eye = g_models.positions[1];
-  g_models.look_at.center = g_models.positions[0];
-  g_models.look_at.up = v3(0.0f, 1.0f, 0.0f);
-  g_models.draw[1] = false;
-  
+static void draw_models(GLuint program, models::transformorder to) {
   for (auto id: g_model_ids) {
-     g_models.render(id,
-                     models::to_lookat,
-                     g_programs(g_programs.default_fb));
+    g_models.render(id,
+                    models::to_lookat,
+                    g_programs(g_programs.default_fb));
+  }
+}
+
+static void render(GLFWwindow* window) {
+  {   
+    g_capture.bind();
+
+    GL_FN(glClearColor(0.0f, 0.3f, 0.0f, 1.0f));
+    GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+  
+    GL_FN(glUseProgram(g_programs(g_programs.default_fb)));
+
+    g_vertex_buffer.bind();
+
+    g_models.look_at.eye = g_models.positions[g_models.modind_sphere];
+    g_models.look_at.center = g_models.positions[g_models.modind_tri];
+    g_models.look_at.up = v3(0.0f, 1.0f, 0.0f);
+    g_models.draw[g_models.modind_sphere] = false;
+  
+
+
+    g_vertex_buffer.unbind();
+  
+    GL_FN(glUseProgram(0));
+
+    g_capture.unbind();
   }
 
-  g_vertex_buffer.unbind();
-  
-  GL_FN(glUseProgram(0));
+  {
+    GL_FN(glClearColor(1.0f, 1.0f, 1.0f, 1.0f));
+    GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+    
+    GL_FN(glUseProgram(g_programs(g_programs.default_rtq)));
+    g_capture.sample_begin(g_unif_rtq_sampler, 0);
+
+    GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+    
+    g_capture.sample_end();
+    GL_FN(glUseProgram(0));
+  }
 }
 
 int main(void) {
@@ -656,8 +779,6 @@ int main(void) {
   }
 
   glfwSetKeyCallback(window, key_callback);
-
-  glClearColor(0.0f, 0.3f, 0.0f, 1.0f);
 
   init_api_data();
   
