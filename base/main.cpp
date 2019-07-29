@@ -22,35 +22,51 @@
 using v3 = glm::vec3;
 using v4 = glm::vec4;
 
-static const
-char* g_shader_vertex = GLSL(layout(location = 0) in vec3 in_Position;
-                             layout(location = 1) in vec4 in_Color;
+struct programs {
+  struct programdef {
+    std::string name;
+    const char* vertex;
+    const char* fragment;
+  };
 
-                             smooth out vec4 frag_Color;
+  std::vector<programdef> defs = {
+    {
+      "position_color",
+      
+      GLSL(layout(location = 0) in vec3 in_Position;
+           layout(location = 1) in vec4 in_Color;          
+           smooth out vec4 frag_Color;          
+           uniform mat4 unif_ModelView;
+           uniform mat4 unif_Projection;
+           void main() {
+             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
+             gl_Position = clip;
+             frag_Color = abs(clip / clip.w);
+           }),
+      
+      GLSL(smooth in vec4 frag_Color;
+           out vec4 fb_Color;
+           void main() {
+             fb_Color = frag_Color;
+           })
+    }
+  };
+  
+  std::unordered_map<std::string, GLuint> handles;
 
-                             uniform mat4 unif_ModelView;
-                             uniform mat4 unif_Projection;
+  GLuint operator()(const std::string& name) const {
+    return handles.at(name);
+  }
 
-                             void main() {
-                               vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
-                               gl_Position = clip;
-                               frag_Color = abs(clip / clip.w);
-                             });
+  void load() {
+    for (const auto& def: defs) {
+      handles[def.name] = make_program(def.vertex, def.fragment);
+    }
+  }
+  
+} static g_programs;
 
-static const
-char* g_shader_fragment = GLSL(smooth in vec4 frag_Color;
-                               out vec4 fb_Color;
-
-                               void main() {
-                                 fb_Color = frag_Color;
-                               });
-struct {
-  GLuint vao;
-  GLuint program;
-} static g_api_data = {
-  0,
-  0
-};
+GLuint g_vao = 0;
 
 struct move_state {
   uint8_t up : 1;
@@ -441,8 +457,8 @@ struct models {
       glm::mat4 T = __table[to](model);
       glm::mat4 mv = g_view.view() * T;
 
-      g_unif_model_view.up_mat4x4(g_api_data.program, mv);
-      g_unif_projection.up_mat4x4(g_api_data.program, g_view.proj);
+      g_unif_model_view.up_mat4x4(program, mv);
+      g_unif_projection.up_mat4x4(program, g_view.proj);
     
       auto ofs = vertex_offsets[model];
       auto count = vertex_counts[model];
@@ -498,8 +514,10 @@ static std::vector<int> g_model_ids;
 static void init_api_data() { 
   g_view.reset_proj();
 
-  GL_FN(glGenVertexArrays(1, &g_api_data.vao));
-  GL_FN(glBindVertexArray(g_api_data.vao));
+  g_programs.load();
+  
+  GL_FN(glGenVertexArrays(1, &g_vao));
+  GL_FN(glBindVertexArray(g_vao));
 
   {
     float s = 1.0f;
@@ -522,8 +540,6 @@ static void init_api_data() {
   g_model_ids.push_back(new_sphere(v3(0.0f, 5.0f, -10.0f)));
 
   g_vertex_buffer.reset();
-  
-  g_api_data.program = make_program(g_shader_vertex, g_shader_fragment);
 
   GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
   
@@ -532,8 +548,8 @@ static void init_api_data() {
   GL_FN(glDepthFunc(GL_LEQUAL));
   GL_FN(glClearDepth(1.0f));
 
-  g_unif_model_view.load(g_api_data.program);
-  g_unif_projection.load(g_api_data.program);
+  g_unif_model_view.load(g_programs("position_color"));
+  g_unif_projection.load(g_programs("position_color"));
 }
 
 static void error_callback(int error, const char* description) {
@@ -581,7 +597,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 static void render(GLFWwindow* window) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  GL_FN(glUseProgram(g_api_data.program));
+  GL_FN(glUseProgram(g_programs("position_color")));
 
   g_vertex_buffer.bind();
 
@@ -593,7 +609,7 @@ static void render(GLFWwindow* window) {
   for (auto id: g_model_ids) {
      g_models.render(id,
                      models::to_lookat,
-                     g_api_data.program);
+                     g_programs("position_color"));
   }
 
   g_vertex_buffer.unbind();
