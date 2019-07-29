@@ -27,20 +27,25 @@ struct programs {
     std::string name;
     const char* vertex;
     const char* fragment;
-  };
 
+    std::vector<std::string> uniforms;
+    std::vector<std::string> attribs;
+  };
+  
   std::vector<programdef> defs = {
     {
-      "position_color",
-      
+      "main",
       GLSL(layout(location = 0) in vec3 in_Position;
-           layout(location = 1) in vec4 in_Color;          
+           layout(location = 1) in vec4 in_Color;
+           
            smooth out vec4 frag_Color;          
+           
            uniform mat4 unif_ModelView;
            uniform mat4 unif_Projection;
+           
            void main() {
              vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
-             gl_Position = clip;
+             gl_Position = clip;             
              frag_Color = abs(clip / clip.w);
            }),
       
@@ -48,9 +53,16 @@ struct programs {
            out vec4 fb_Color;
            void main() {
              fb_Color = frag_Color;
-           })
+           }),
+      {
+        "unif_ModelView",
+        "unif_Projection"
+      },
+      {
+        "in_Position",
+        "in_Color"
+      }
     },
-
     {
       "render_to_quad",
 
@@ -85,27 +97,89 @@ struct programs {
            
            void main() {
              //             fb_Color = vec4(frag_TexCoord.x, 0.0, frag_TexCoord.y, 1.0);
-             fb_Color = vec4(texture(unif_TexSampler, frag_TexCoord).rgb, 1.0)
-               * vec4(frag_TexCoord.x, 0.0, frag_TexCoord.y, 1.0);
-           })          
+             fb_Color = vec4(texture(unif_TexSampler, frag_TexCoord).rgb, 1.0);
+               /** vec4(frag_TexCoord.x, 0.0, frag_TexCoord.y, 1.0);*/
+           }),
+      {
+        "unif_TexSampler"
+      }
+    }
+  };
+
+  struct program {
+    std::unordered_map<std::string, GLint> uniforms;
+    std::unordered_map<std::string, GLint> attribs;
+    GLuint handle;
+
+    ~program() {
+      // NOTE: GL_INVALID_OPERATION gets triggered here for some reason.
+      //GL_FN(glDeleteProgram(handle));
     }
   };
   
-  std::unordered_map<std::string, GLuint> handles;
+  std::unordered_map<std::string, std::unique_ptr<program>> data;
 
-  GLuint operator()(const std::string& name) const {
-    return handles.at(name);
+  std::string current;
+
+  const std::string default_fb = "main";
+  const std::string default_rtq = "render_to_quad";
+  
+  auto get(const std::string& name) const {
+    return data.at(name).get();
   }
 
   void load() {
     for (const auto& def: defs) {
-      handles[def.name] = make_program(def.vertex, def.fragment);
+      auto p = std::make_unique<program>();
+
+      p->handle = make_program(def.vertex, def.fragment);
+
+      for (auto unif: def.uniforms) {
+        GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle, unif.c_str()));
+        ASSERT(p->uniforms[unif] != -1);
+      }
+      
+      for (auto attrib: def.attribs) {
+        GL_FN(p->attribs[attrib] = glGetAttribLocation(p->handle, attrib.c_str()));
+        if (p->attribs[attrib] == -1) {
+          printf("Warning: attrib %s was not found in program %s\n",
+                 attrib.c_str(), def.name.c_str());
+        }
+      }
+
+      data[def.name] = std::move(p);
     }
   }
 
-  const std::string default_fb = "position_color";
-  const std::string default_rtq = "render_to_quad";
+  void make_current(const std::string& name) {
+    current = name;
+  }
+  
+  void up_mat4x4(const std::string& name, const glm::mat4& m) const {
+    auto id = data.at(current)->uniforms.at(name);
+    GL_FN(glUniformMatrix4fv(id, 1, GL_FALSE, &m[0][0]));
+  }
+
+  void up_int(const std::string& name, int i) const {
+    auto id = data.at(current)->uniforms.at(name);
+    GL_FN(glUniform1i(id, i));
+  }
+
 } static g_programs;
+
+struct use_program {
+  GLuint prog;
+
+  use_program(const std::string& name)
+    : prog(g_programs.get(name)->handle){
+    g_programs.make_current(name);
+    GL_FN(glUseProgram(prog));
+  }
+
+  ~use_program() {
+    GL_FN(glUseProgram(0));
+  }
+};
 
 GLuint g_vao = 0;
 
@@ -272,57 +346,6 @@ struct view_data {
 
 static view_data g_view(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-//
-// glsl_uniform: wrapper around GLSL host<->device uniform operations.
-//
-// These operations boil down to querying for the reference IDs which are bound to their
-// variable names and attained via the graphics API and setting the value of the uniform for the next
-// invocation of the program the uniform belongs to.
-//
-struct glsl_uniform {
-  GLint id;
-  std::string name;
-
-  glsl_uniform(const std::string& n)
-    : id(-1),
-      name(n) {
-  }
-
-  void load(GLuint program) {
-    ASSERT(id == -1);
-    GL_FN(id = glGetUniformLocation(program, name.c_str()));
-  }
-
-  GLint operator ()() const {
-    ASSERT(id != -1);
-    return id;
-  }
-
-  //
-  // up_mat4x4(): sets the value of the matrix 
-  // that is represented by 'id' for 'program'
-  //
-  // in this case, we don't need to "bind" the program to the opengl context
-  // before performing the upload (as is necessary in pre-4.x versions of the API).
-  //
-  void up_mat4x4(GLuint program, const glm::mat4& m) const {
-#if 1
-    GL_FN(glUniformMatrix4fv(id, 1, GL_FALSE, &m[0][0]));
-#else
-    GL_FN(glProgramUniformMatrix4fv(program,
-                                    id,
-                                    1,
-                                    GL_FALSE,
-                                    &m[0][0] ));
-
-  void up_int(int i) const {
-    GL_FN(glUniform1i(id, i));
-  }
-};
-
-static glsl_uniform g_unif_model_view("unif_ModelView");
-static glsl_uniform g_unif_projection("unif_Projection");
-static glsl_uniform g_unif_rtq_sampler("unif_TexSampler");
 
 struct vertex {
   v3 position;
@@ -379,7 +402,7 @@ struct vertex_buffer {
                                 sizeof(vertex),
                                 (void*) offsetof(vertex, color)));
 
-
+    
     unbind();
   }
 
@@ -388,16 +411,18 @@ struct vertex_buffer {
   }
 
   auto add_triangle(v3 a_position, v4 a_color,
-                   v3 b_position, v4 b_color,
-                   v3 c_position, v4 c_color) {
+                    v3 b_position, v4 b_color,
+                    v3 c_position, v4 c_color) {
     vertex a = {
       a_position,
       a_color
-    };        
+    };
+    
     vertex b = {
       b_position,
       b_color    
-    };                                                                  
+    };
+    
     vertex c = {
       c_position,
       c_color
@@ -498,13 +523,13 @@ struct models {
     return rot;
   }
 
-  void render(int model, transformorder to, GLuint program) const {
+  void render(int model, transformorder to) const {
     if (draw.at(model) == true) {
       glm::mat4 T = __table[to](model);
       glm::mat4 mv = g_view.view() * T;
 
-      g_unif_model_view.up_mat4x4(program, mv);
-      g_unif_projection.up_mat4x4(program, g_view.proj);
+      g_programs.up_mat4x4("unif_ModelView", mv);
+      g_programs.up_mat4x4("unif_Projection", g_view.proj);
     
       auto ofs = vertex_offsets[model];
       auto count = vertex_counts[model];
@@ -603,10 +628,10 @@ struct capture {
     GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
   }
 
-  void sample_begin(const glsl_uniform& sampler, int slot) const {
+  void sample_begin(const std::string& sampler, int slot) const {
     GL_FN(glBindTexture(GL_TEXTURE_2D, tex));
     GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<decltype(GL_TEXTURE0)>(slot)));
-    sampler.up_int(slot);
+    g_programs.up_int(sampler, slot);
   }
 
   void sample_end() const {
@@ -652,10 +677,6 @@ static void init_api_data() {
   GL_FN(glEnable(GL_DEPTH_TEST));
   GL_FN(glDepthFunc(GL_LEQUAL));
   GL_FN(glClearDepth(1.0f));
-
-  g_unif_model_view.load(g_programs(g_programs.default_fb));
-  g_unif_projection.load(g_programs(g_programs.default_fb));
-  g_unif_rtq_sampler.load(g_programs(g_programs.default_rtq));
 }
 
 static void error_callback(int error, const char* description) {
@@ -700,13 +721,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 #undef map_move_f
 }
 
-static void draw_models(GLuint program, models::transformorder to) {
-  for (auto id: g_model_ids) {
-    g_models.render(id,
-                    models::to_lookat,
-                    g_programs(g_programs.default_fb));
-  }
-}
+#define DRAW_MODELS(transform_order) for (auto id: g_model_ids) { g_models.render(id, transform_order); }
 
 static void render(GLFWwindow* window) {
   {   
@@ -715,21 +730,22 @@ static void render(GLFWwindow* window) {
     GL_FN(glClearColor(0.0f, 0.3f, 0.0f, 1.0f));
     GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
   
-    GL_FN(glUseProgram(g_programs(g_programs.default_fb)));
+    {
+      use_program u(g_programs.default_fb);
+    
+      g_vertex_buffer.bind();
 
-    g_vertex_buffer.bind();
+      g_models.look_at.eye = g_models.positions[g_models.modind_sphere];
+      g_models.look_at.center = g_models.positions[g_models.modind_tri];
+      g_models.look_at.up = v3(0.0f, 1.0f, 0.0f);
 
-    g_models.look_at.eye = g_models.positions[g_models.modind_sphere];
-    g_models.look_at.center = g_models.positions[g_models.modind_tri];
-    g_models.look_at.up = v3(0.0f, 1.0f, 0.0f);
-    g_models.draw[g_models.modind_sphere] = false;
-  
+      g_models.draw[g_models.modind_sphere] = true;
 
-
-    g_vertex_buffer.unbind();
-  
-    GL_FN(glUseProgram(0));
-
+      DRAW_MODELS(models::to_srt);
+      
+      g_vertex_buffer.unbind();
+    } 
+    
     g_capture.unbind();
   }
 
@@ -737,13 +753,15 @@ static void render(GLFWwindow* window) {
     GL_FN(glClearColor(1.0f, 1.0f, 1.0f, 1.0f));
     GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
     
-    GL_FN(glUseProgram(g_programs(g_programs.default_rtq)));
-    g_capture.sample_begin(g_unif_rtq_sampler, 0);
+    {
+      use_program u(g_programs.default_rtq);
+      
+      g_capture.sample_begin("unif_TexSampler", 0);
 
-    GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+      GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
     
-    g_capture.sample_end();
-    GL_FN(glUseProgram(0));
+      g_capture.sample_end();
+    }
   }
 }
 
