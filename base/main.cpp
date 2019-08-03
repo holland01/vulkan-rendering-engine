@@ -124,10 +124,11 @@ struct programs {
       }
     }
   };
-
+  
   struct program {
     std::unordered_map<std::string, GLint> uniforms;
-    std::unordered_map<std::string, GLint> attribs;
+    attrib_map_type attribs;
+    
     GLuint handle;
 
     ~program() {
@@ -152,20 +153,13 @@ struct programs {
       auto p = std::make_unique<program>();
 
       p->handle = make_program(def.vertex, def.fragment);
-
+      
       for (auto unif: def.uniforms) {
         GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle, unif.c_str()));
-        ASSERT(p->uniforms[unif] != -1);
+        ASSERT(p->uniforms.at(unif) != -1);
       }
       
-      for (auto attrib: def.attribs) {
-        GL_FN(p->attribs[attrib] = glGetAttribLocation(p->handle, attrib.c_str()));
-        if (p->attribs[attrib] == -1) {
-          printf("Warning: attrib %s was not found in program %s\n",
-                 attrib.c_str(), def.name.c_str());
-        }
-      }
-
+      p->attribs = def.attribs; 
       data[def.name] = std::move(p);
     }
   }
@@ -184,18 +178,53 @@ struct programs {
     GL_FN(glUniform1i(id, i));
   }
 
+  auto fetch_attrib(const std::string& program, const std::string& attrib) const {
+    return data.at(program)->attribs.at(attrib).index;
+  }
+
+  void load_layout() const {
+    const auto& p = data.at(current);
+    
+    for (const auto& attrib: p->attribs) {
+      const auto& layout = attrib.second;
+      
+      GL_FN(glEnableVertexAttribArray(layout.index));
+      GL_FN(glVertexAttribPointer(layout.index,
+                                  layout.size,
+                                  layout.type,
+                                  layout.normalized,
+                                  layout.stride,
+                                  layout.pointer));                                 
+    } 
+  }
+
+  void unload_layout() const {
+    const auto& p = data.at(current);
+    
+    for (const auto& attrib: p->attribs) {
+      GL_FN(glDisableVertexAttribArray(attrib.second.index));
+    }
+  }
+  
 } static g_programs;
 
+// Make sure the VBO is bound BEFORE
+// this is initialized
 struct use_program {
   GLuint prog;
 
   use_program(const std::string& name)
     : prog(g_programs.get(name)->handle){
+
     g_programs.make_current(name);
+    g_programs.load_layout();
+    
     GL_FN(glUseProgram(prog));
   }
 
   ~use_program() {
+
+    g_programs.unload_layout();
     GL_FN(glUseProgram(0));
   }
 };
@@ -398,23 +427,6 @@ struct vertex_buffer {
                        sizeof(data[0]) * data.size(),
                        &data[0],
                        GL_STATIC_DRAW));
-    
-    GL_FN(glEnableVertexAttribArray(0));
-    GL_FN(glVertexAttribPointer(0,
-                                3,
-                                GL_FLOAT,
-                                GL_FALSE,
-                                sizeof(vertex),
-                                (void*) offsetof(vertex, position)));
-
-    GL_FN(glEnableVertexAttribArray(1));
-    GL_FN(glVertexAttribPointer(1,
-                                4,
-                                GL_FLOAT,
-                                GL_FALSE,
-                                sizeof(vertex),
-                                (void*) offsetof(vertex, color)));
-
     
     unbind();
   }
