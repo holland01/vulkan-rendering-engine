@@ -478,8 +478,11 @@ struct vertex_buffer {
 
 struct models {
   enum transformorder {
-    to_srt = 0,
-    to_lookat,
+    // srt -> translate first, then rotate, then scale. Order is backwards
+    // on purpose, since mathematically this is how transforms work with the current
+    // conventions used.
+    transformorder_srt = 0, 
+    transformorder_lookat,
     transformorder_count
   };
 
@@ -750,35 +753,41 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 
 #define DRAW_MODELS(transform_order) for (auto id: g_model_ids) { g_models.render(id, transform_order); }
 
-static void render(GLFWwindow* window) {
+#define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
+#define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
+
+static void render() {
+  v4 background(0.0f, 0.3f, 0.0f, 1.0f);
+  
+  // reflect pass
   {   
     g_capture.bind();
 
-    GL_FN(glClearColor(0.0f, 0.3f, 0.0f, 1.0f));
-    GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-  
+    SET_CLEAR_COLOR_V4(background);
+    CLEAR_COLOR_DEPTH;
+
+    g_vertex_buffer.bind();
+
     {
       use_program u(g_programs.default_fb);
     
-      g_vertex_buffer.bind();
-
       g_models.look_at.eye = g_models.positions[g_models.modind_sphere];
       g_models.look_at.center = g_models.positions[g_models.modind_tri];
       g_models.look_at.up = v3(0.0f, 1.0f, 0.0f);
 
-      g_models.draw[g_models.modind_sphere] = true;
+      // we're rendering from the sphere's perspective
+      g_models.draw[g_models.modind_sphere] = false;
 
-      DRAW_MODELS(models::to_srt);
-      
-      g_vertex_buffer.unbind();
-    } 
+      DRAW_MODELS(models::transformorder_lookat);
+    }
     
+    g_vertex_buffer.unbind();
     g_capture.unbind();
   }
 
   {
-    GL_FN(glClearColor(1.0f, 1.0f, 1.0f, 1.0f));
-    GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+    SET_CLEAR_COLOR_V4(background);
+    CLEAR_COLOR_DEPTH;
     
     {
       use_program u(g_programs.default_rtq);
@@ -822,7 +831,7 @@ int main(void) {
       goto error;
     }
   }
-
+  
   glfwSetKeyCallback(window, key_callback);
 
   init_api_data();
@@ -830,7 +839,7 @@ int main(void) {
   while (!glfwWindowShouldClose(window)) {
     g_view(g_move_state);
     
-    render(window);
+    render();
 
     glfwSwapBuffers(window);
     glfwPollEvents();
