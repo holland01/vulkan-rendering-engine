@@ -132,7 +132,17 @@ struct programs {
     GLuint handle;
 
     ~program() {
-      // NOTE: GL_INVALID_OPERATION gets triggered here for some reason.
+      // NOTE: GL_INVALID_OPERATION gets triggered here for some reason;
+      // it could be that the driver has cleaned up by the time main has exited,
+      // (assuming this dtor has been invoked after the fact) or an actual
+      // driver bug. glDeleteProgram could throw an error if the program
+      // it's passed is currently bound. However, at least in 3.3,
+      // my understanding is that it will schedule the deletion
+      // and perform it once handle has been unbound. Given OpenGL's
+      // reputation for backward compatibility, I can't see them changing
+      // these kinds of semantics.
+      // This isn't incredibly important currently, but it should be reviewed
+      // at some point (check the spec for 4.5 on glDeleteProgram).
       //GL_FN(glDeleteProgram(handle));
     }
   };
