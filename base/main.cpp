@@ -48,7 +48,7 @@ struct programs {
     const char* fragment;
 
     std::vector<std::string> uniforms;
-    std::vector<std::string> attribs;
+    attrib_map_type attribs;
   };
   
   std::vector<programdef> defs = {
@@ -78,9 +78,9 @@ struct programs {
         "unif_Projection"
       },
       {
-        "in_Position",
-        "in_Color"
-      }
+        { "in_Position", { 0, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (void*) offsetof(vertex, position) } },
+        { "in_Color", { 1, 4, GL_FLOAT, GL_FALSE, sizeof(vertex), (void*) offsetof(vertex, color) } }
+      },
     },
     {
       "render_to_quad",
