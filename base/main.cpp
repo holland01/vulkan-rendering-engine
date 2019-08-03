@@ -19,10 +19,29 @@
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
+using v2 = glm::vec2;
 using v3 = glm::vec3;
 using v4 = glm::vec4;
 
+struct vertex {
+  v3 position;
+  v4 color;
+  v2 uv;
+};
+
 struct programs {
+  
+  struct attrib_layout {
+    GLint index;
+    GLint size;
+    GLenum type;
+    GLboolean normalized;
+    GLsizei stride;
+    const GLvoid* pointer;
+  };
+
+  using attrib_map_type = std::unordered_map<std::string, attrib_layout>;
+  
   struct programdef {
     std::string name;
     const char* vertex;
@@ -346,12 +365,6 @@ struct view_data {
 
 static view_data g_view(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-
-struct vertex {
-  v3 position;
-  v4 color;
-};
-
 struct vertex_buffer {
   
   std::vector<vertex> data;
@@ -410,22 +423,25 @@ struct vertex_buffer {
     return static_cast<int>(data.size());
   }
 
-  auto add_triangle(v3 a_position, v4 a_color,
-                    v3 b_position, v4 b_color,
-                    v3 c_position, v4 c_color) {
+  auto add_triangle(const v3& a_position, const v4& a_color, const v2& a_uv,
+                    const v3& b_position, const v4& b_color, const v2& b_uv,
+                    const v3& c_position, const v4& c_color, const v2& c_uv) {
     vertex a = {
       a_position,
-      a_color
+      a_color,
+      a_uv
     };
     
     vertex b = {
       b_position,
-      b_color    
+      b_color,
+      b_uv
     };
     
     vertex c = {
       c_position,
-      c_color
+      c_color,
+      c_uv
     };
 
     auto offset = num_vertices();
@@ -445,6 +461,17 @@ struct vertex_buffer {
 #endif
 
     return offset;
+
+  }
+  
+  auto add_triangle(const v3& a_position, const v4& a_color,
+                    const v3& b_position, const v4& b_color,
+                    const v3& c_position, const v4& c_color) {
+    v2 defaultuv(glm::zero<v2>());
+    
+    return add_triangle(a_position, a_color, defaultuv,
+                        b_position, b_color, defaultuv,
+                        c_position, c_color, defaultuv);
   }
   
 } static g_vertex_buffer;
