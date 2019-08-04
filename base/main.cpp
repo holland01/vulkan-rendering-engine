@@ -153,6 +153,79 @@ struct programs {
       {
         "unif_TexSampler"
       }
+    },
+    {
+      "reflection_sphere",
+      GLSL(layout(location = 0) in vec3 in_Position;
+           layout(location = 1) in vec4 in_Color;
+           
+           smooth out vec4 frag_Color;          
+           smooth out vec3 frag_ModelPosition;
+          
+           uniform mat4 unif_ModelView;
+           uniform mat4 unif_Projection;
+           
+           void main() {
+             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
+             gl_Position = clip;             
+             frag_Color = in_Color; //abs(clip / clip.w);
+
+             frag_ModelPosition = in_Position;
+           }),
+      
+      GLSL(smooth in vec3 frag_ModelPosition; /* interpolated somewhere between tri vertices */
+           smooth in vec4 frag_Color;
+
+           const float PI = 3.1415926535897932384626433832795;
+           const float PI_2 = 1.57079632679489661923;
+           const float PI_4 = 0.785398163397448309616;
+           
+           uniform sampler2D unif_TexFramebuffer;
+           uniform vec3 unif_LookCenter;
+
+           out vec4 fb_Color;
+
+           vec2 sphereFromCart(vec3 positionNormalized) {
+             float phi = asin(positionNormalized.y);
+             float theta = acos(positionNormalized.x / cos(phi));
+             return vec2(theta, phi);
+           }
+           
+           void main() {             
+             vec3 lookCenterNorm = normalize(unif_LookCenter);
+             vec3 modelPosNorm = normalize(frag_ModelPosition);
+
+             if (dot(lookCenterNorm, modelPosNorm) < 0) {
+               fb_Color = frag_Color;
+            
+             } else {
+               vec2 tpLook = sphereFromCart(lookCenterNorm);
+               vec2 tpModel = sphereFromCart(modelPosNorm);
+
+               float u = (tpModel.x - tpLook.x) / PI_2;
+               u *= 0.5;
+
+               float v = (tpModel.y - tpLook.y) / PI_2;
+               v *= 0.5;
+               
+               vec2 base = vec2(0.5);
+               
+               vec4 mirror = vec4(texture(unif_TexFramebuffer, base + vec2(u, v)).rgb, 1.0);
+               
+               fb_Color = mirror * frag_Color;
+             }
+           }),
+      {
+        "unif_TexFramebuffer",
+        "unif_LookCenter",
+        
+        "unif_ModelView",
+        "unif_Projection"
+      },
+      {
+        attrib_layout_position(),
+        attrib_layout_color()
+      }
     }
   };
   
@@ -184,6 +257,7 @@ struct programs {
 
   const std::string default_fb = "main";
   const std::string default_rtq = "render_to_quad";
+  const std::string default_mir = "reflection_sphere";
   
   auto get(const std::string& name) const {
     return data.at(name).get();
@@ -685,6 +759,10 @@ struct capture {
     GL_FN(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL));
     GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
     GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+    GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
+    GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
+
+
     GL_FN(glBindTexture(GL_TEXTURE_2D, 0));
 
     // attach it to currently bound framebuffer object
@@ -839,7 +917,8 @@ static void render() {
   {
     SET_CLEAR_COLOR_V4(background);
     CLEAR_COLOR_DEPTH;
-    
+
+    #if 0
     {
       use_program u(g_programs.default_rtq);
       
@@ -849,6 +928,23 @@ static void render() {
     
       g_capture.sample_end();
     }
+    #endif
+
+    g_vertex_buffer.bind();
+    {
+      use_program u(g_programs.default_mir);
+
+      g_capture.sample_begin("unif_TexFramebuffer", 0);
+      
+      g_programs.up_vec3("unif_LookCenter", g_view.position - g_models.look_at.eye);
+
+      g_models.draw[g_models.modind_sphere] = true;
+
+      DRAW_MODELS(models::transformorder_srt);
+
+      g_capture.sample_end();
+    }
+    g_vertex_buffer.unbind();
   }
 }
 
