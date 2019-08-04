@@ -3,12 +3,12 @@
 #include <GL/glew.h>
 
 #include "stb_image.h"
+#include "common.h"
 #include "util.h"
 
 #include <stdint.h>
 #include <vector>
 #include <array>
-
 
 struct textures {
   std::vector<GLuint> tex_handles;
