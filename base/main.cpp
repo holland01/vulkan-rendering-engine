@@ -510,17 +510,7 @@ struct vertex_buffer {
     data.push_back(a);
     data.push_back(b);
     data.push_back(c);
-
-#if 0
-    v4 a4(a_position, 1.0f);
-    v4 b4(b_position, 1.0f);
-    v4 c4(c_position, 1.0f);
-
-    a4 = g_view.proj * a4;
-    b4 = g_view.proj * b4;
-    c4 = g_view.proj * c4;
-#endif
-
+    
     return offset;
 
   }
