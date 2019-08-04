@@ -41,6 +41,7 @@ struct programs {
   };
 
   using attrib_map_type = std::unordered_map<std::string, attrib_layout>;
+  using attrib_entry_type = std::pair<std::string, attrib_layout>;
   
   struct programdef {
     std::string name;
@@ -50,24 +51,54 @@ struct programs {
     std::vector<std::string> uniforms;
     attrib_map_type attribs;
   };
+
+  static attrib_entry_type  attrib_layout_position() {
+    return {
+      "in_Position",
+      {
+        0,
+        3,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(vertex),
+        (void*) offsetof(vertex, position)
+      }
+    };
+  }
+
+  static attrib_entry_type attrib_layout_color() {
+    return {
+      "in_Color",
+      {
+        1,
+        4,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(vertex),
+        (void*) offsetof(vertex, color)
+      }
+    };
+  }
+  
+  const char* vertex_shader_standard =
+    GLSL(layout(location = 0) in vec3 in_Position;
+         layout(location = 1) in vec4 in_Color;
+           
+         smooth out vec4 frag_Color;          
+           
+         uniform mat4 unif_ModelView;
+         uniform mat4 unif_Projection;
+           
+         void main() {
+           vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
+           gl_Position = clip;             
+           frag_Color = abs(clip / clip.w);
+         });
   
   std::vector<programdef> defs = {
     {
       "main",
-      GLSL(layout(location = 0) in vec3 in_Position;
-           layout(location = 1) in vec4 in_Color;
-           
-           smooth out vec4 frag_Color;          
-           
-           uniform mat4 unif_ModelView;
-           uniform mat4 unif_Projection;
-           
-           void main() {
-             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
-             gl_Position = clip;             
-             frag_Color = abs(clip / clip.w);
-           }),
-      
+      vertex_shader_standard,
       GLSL(smooth in vec4 frag_Color;
            out vec4 fb_Color;
            void main() {
@@ -78,8 +109,8 @@ struct programs {
         "unif_Projection"
       },
       {
-        { "in_Position", { 0, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (void*) offsetof(vertex, position) } },
-        { "in_Color", { 1, 4, GL_FLOAT, GL_FALSE, sizeof(vertex), (void*) offsetof(vertex, color) } }
+        attrib_layout_position(),
+        attrib_layout_color()
       },
     },
     {
