@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <vector>
 #include <array>
+#include <string>
 
 struct textures {
   std::vector<GLuint> tex_handles;
@@ -20,6 +21,9 @@ struct textures {
   std::vector<GLenum> types;
 
   using index_type = int16_t;
+
+  static const inline index_type k_uninit = -1;
+  static const inline fs::path k_root_path = fs::path("resources") / fs::path("textures");
   
   textures(){}
 
@@ -85,9 +89,9 @@ struct textures {
     return index;
   }
 
-  using cmap_buffer_type = std::array<std::string, 6>;
+  using cubemap_paths_type = std::array<fs::path, 6>;
   
-  auto new_cubemap(cmap_buffer_type paths) {
+  auto new_cubemap(cubemap_paths_type paths) {
     auto cmap_id = new_texture(0, 0, 0, GL_TEXTURE_CUBE_MAP);
 
     bind(cmap_id);
@@ -95,8 +99,11 @@ struct textures {
     auto offset = 0;
     for (const auto& path: paths) {
       int w, h, chan;
-      
-      unsigned char *data = stbi_load(path.c_str(),
+
+      auto fullpath = k_root_path / path;
+      auto fullpath_string = fullpath.string();
+        
+      unsigned char *data = stbi_load(fullpath_string.c_str(),
                                       &w,
                                       &h,
                                       &chan,
