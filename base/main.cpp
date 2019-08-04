@@ -197,7 +197,7 @@ struct programs {
       
       for (auto unif: def.uniforms) {
         GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle, unif.c_str()));
-        ASSERT(p->uniforms.at(unif) != -1);
+        //ASSERT(p->uniforms.at(unif) != -1);
       }
       
       p->attribs = def.attribs; 
@@ -208,17 +208,25 @@ struct programs {
   void make_current(const std::string& name) {
     current = name;
   }
-  
-  void up_mat4x4(const std::string& name, const glm::mat4& m) const {
+
+  auto uniform(const std::string& name) const {
     auto id = data.at(current)->uniforms.at(name);
-    GL_FN(glUniformMatrix4fv(id, 1, GL_FALSE, &m[0][0]));
+    ASSERT(id != -1);
+    return id;
+  }
+  
+  void up_mat4x4(const std::string& name, const glm::mat4& m) const {    
+    GL_FN(glUniformMatrix4fv(uniform(name), 1, GL_FALSE, &m[0][0]));
   }
 
   void up_int(const std::string& name, int i) const {
-    auto id = data.at(current)->uniforms.at(name);
-    GL_FN(glUniform1i(id, i));
+    GL_FN(glUniform1i(uniform(name), i));
   }
 
+  void up_vec3(const std::string& name, const v3& v) const {
+    GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
+  }
+  
   auto fetch_attrib(const std::string& program, const std::string& attrib) const {
     return data.at(program)->attribs.at(attrib).index;
   }
