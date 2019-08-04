@@ -271,7 +271,6 @@ struct programs {
       
       for (auto unif: def.uniforms) {
         GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle, unif.c_str()));
-        //ASSERT(p->uniforms.at(unif) != -1);
       }
       
       p->attribs = def.attribs; 
