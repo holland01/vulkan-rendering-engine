@@ -17,6 +17,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+std::vector<type_module*> g_modules;
+
+textures::index_type g_skybox_texture{textures::k_uninit};
+
 GLuint g_vao = 0;
 
 struct move_state {
@@ -614,6 +618,9 @@ static void render() {
 }
 
 int main(void) {
+  g_programs.registermod();
+  g_textures.registermod();
+  
   GLFWwindow* window;
 
   glfwSetErrorCallback(error_callback);
@@ -657,6 +664,10 @@ int main(void) {
     glfwPollEvents();
   }
 
+  for (auto module : g_modules) {
+    module->free_mem();
+  }
+  
   glfwDestroyWindow(window);
 
   glfwTerminate();

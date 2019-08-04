@@ -5,7 +5,7 @@
 #include "common.h"
 #include "util.h"
 
-struct programs {
+struct programs : public type_module {
   
   struct attrib_layout {
     GLint index;
@@ -210,21 +210,6 @@ struct programs {
     attrib_map_type attribs;
     
     GLuint handle;
-
-    ~program() {
-      // NOTE: GL_INVALID_OPERATION gets triggered here for some reason;
-      // it could be that the driver has cleaned up by the time main has exited,
-      // (assuming this dtor has been invoked after the fact) or an actual
-      // driver bug. glDeleteProgram could throw an error if the program
-      // it's passed is currently bound. However, at least in 3.3,
-      // my understanding is that it will schedule the deletion
-      // and perform it once handle has been unbound. Given OpenGL's
-      // reputation for backward compatibility, I can't see them changing
-      // these kinds of semantics.
-      // This isn't incredibly important currently, but it should be reviewed
-      // at some point (check the spec for 4.5 on glDeleteProgram).
-      //GL_FN(glDeleteProgram(handle));
-    }
   };
   
   std::unordered_map<std::string, std::unique_ptr<program>> data;
@@ -234,6 +219,14 @@ struct programs {
   const std::string default_fb = "main";
   const std::string default_rtq = "render_to_quad";
   const std::string default_mir = "reflection_sphere";
+
+  void free_mem() override {
+    GL_FN(glUseProgram(0));
+    
+    for (auto& entry: data) {
+      GL_FN(glDeleteProgram(entry.second->handle));
+    }
+  }
   
   auto get(const std::string& name) const {
     return data.at(name).get();

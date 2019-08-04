@@ -11,7 +11,7 @@
 #include <array>
 #include <string>
 
-struct textures {
+struct textures : public type_module {
   std::vector<GLuint> tex_handles;
 
   std::vector<uint32_t> widths;
@@ -25,11 +25,7 @@ struct textures {
   static const inline index_type k_uninit = -1;
   static const inline fs::path k_root_path = fs::path("resources") / fs::path("textures");
   
-  textures(){}
-
-  ~textures() {
-    GL_FN(glBindTexture(GL_TEXTURE_CUBE_MAP, 0));
-    
+  void free_mem() override {
     if (!tex_handles.empty()) {
       GL_FN(glDeleteTextures(static_cast<GLsizei>(tex_handles.size()), tex_handles.data()));
     }

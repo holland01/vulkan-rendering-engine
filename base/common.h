@@ -18,3 +18,14 @@ struct vertex {
   v4 color;
   v2 uv;
 };
+
+struct type_module;
+
+extern std::vector<type_module*> g_modules;
+
+struct type_module {
+  virtual void free_mem() = 0;
+  void registermod() {
+    g_modules.push_back(this);
+  }
+};
