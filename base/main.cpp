@@ -485,6 +485,32 @@ auto new_cube(const v3& position = glm::zero<v3>(), const v3& scale = v3(1.0f), 
 
 static std::vector<models::index_type> g_model_ids;
 
+struct gl_depth_func {
+  GLint prev_depth;
+
+  gl_depth_func(GLenum func) {
+    GL_FN(glGetIntegerv(GL_DEPTH_FUNC, &prev_depth));
+    GL_FN(glDepthFunc(func));
+  }
+
+  ~gl_depth_func() {
+    GL_FN(glDepthFunc(prev_depth));
+  }
+};
+
+struct gl_clear_depth {
+  float prev_depth;
+
+  gl_clear_depth(float new_depth) {
+    GL_FN(glGetFloatv(GL_DEPTH_CLEAR_VALUE, &prev_depth));
+    GL_FN(glClearDepth(new_depth));
+  }
+
+  ~gl_clear_depth() {
+    GL_FN(glClearDepth(prev_depth));
+  }
+};
+
 struct capture {
   GLuint fbo, tex, rbo;
   int width, height;
