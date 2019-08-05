@@ -135,6 +135,56 @@ struct programs : public type_module {
       }
     },
     {
+      "reflection_sphere_cubemap",
+      GLSL(layout(location = 0) in vec3 in_Position;
+           layout(location = 1) in vec4 in_Color;
+           
+           smooth out vec4 frag_Color;
+           smooth out vec3 frag_Position;
+           smooth out vec3 frag_Normal;
+           
+           uniform mat4 unif_InverseView;
+           uniform mat4 unif_ModelView;
+           uniform mat4 unif_Projection;
+           
+           
+           void main() {
+             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
+             gl_Position = clip;             
+             frag_Color = in_Color; //abs(clip / clip.w);
+
+             frag_Normal = in_Position;
+             frag_Position = vec3(unif_InverseView * unif_ModelView * vec4(in_Position, 1.0));
+           }),
+      
+      GLSL(smooth in vec4 frag_Color;
+           smooth in vec3 frag_Position;
+           smooth in vec3 frag_Normal;
+           
+           uniform samplerCube unif_TexCubeMap;
+           uniform vec3 unif_CameraPosition;
+
+           out vec4 fb_Color;
+           
+           void main() {             
+             vec3 I = normalize(frag_Position - unif_CameraPosition);
+             vec3 R = reflect(I, normalize(frag_Normal));
+             fb_Color = vec4(texture(unif_TexCubeMap, R).rgb, 1.0) * frag_Color;
+           }),
+
+      {
+        "unif_InverseView",
+        "unif_ModelView",
+        "unif_Projection",
+        "unif_TexCubeMap",
+        "unif_CameraPosition"
+      },
+      {
+        attrib_layout_position(),
+        attrib_layout_color()
+      }
+    },
+    {
       "reflection_sphere",
       GLSL(layout(location = 0) in vec3 in_Position;
            layout(location = 1) in vec4 in_Color;
@@ -263,6 +313,7 @@ struct programs : public type_module {
   const std::string default_fb = "main";
   const std::string default_rtq = "render_to_quad";
   const std::string default_mir = "reflection_sphere";
+  const std::string sphere_cubemap = "reflection_sphere_cubemap";
   const std::string skybox = "cubemap";
   
   void free_mem() override {
