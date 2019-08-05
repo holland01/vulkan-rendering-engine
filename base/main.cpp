@@ -378,9 +378,7 @@ struct models {
   }
 } static g_models;
 
-
 static models::index_type g_skybox_model{models::k_uninit};
-
 
 auto new_sphere(const v3& position = glm::zero<v3>(), const v3& scale = v3(1.0f)) {
   auto offset = g_vertex_buffer.num_vertices();
@@ -598,12 +596,15 @@ static void init_api_data() {
                                                v4(0.0f, 0.0f, 1.0f, 1.0f));
 
 
-    g_model_ids.push_back(g_models.new_model(offset, 3));
+    g_models.modind_tri = g_models.new_model(offset, 3);
+    g_model_ids.push_back(g_models.modind_tri);
   }
   
+  g_models.modind_sphere = new_sphere(v3(0.0f, 5.0f, -10.0f));
+
+  g_model_ids.push_back(g_models.modind_sphere);
+
   g_skybox_model = new_cube();
-  
-  g_model_ids.push_back(new_sphere(v3(0.0f, 5.0f, -10.0f)));
   g_model_ids.push_back(g_skybox_model);
   
   g_vertex_buffer.reset();
@@ -619,7 +620,7 @@ static void init_api_data() {
   };
 #undef p
 
-  g_models.scales[g_skybox_model] = v3(100.0f);
+  g_models.scales[g_skybox_model] = v3(500.0f);
   
   g_skybox_texture = g_textures.new_cubemap(paths);
   
@@ -631,52 +632,14 @@ static void init_api_data() {
   GL_FN(glClearDepth(1.0f));
 }
 
-static void error_callback(int error, const char* description) {
-  fputs(description, stdout);
-}
 
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-#define map_move_t(key, dir) case key: g_move_state.dir = true; break
-#define map_move_f(key, dir) case key: g_move_state.dir = false; break
-  
-  if (action == GLFW_PRESS) {
-    switch (key) {
-    case GLFW_KEY_ESCAPE:
-      glfwSetWindowShouldClose(window, GL_TRUE);
-      break;
-      
-      map_move_t(GLFW_KEY_W, front);
-      map_move_t(GLFW_KEY_S, back);
-      map_move_t(GLFW_KEY_A, left);
-      map_move_t(GLFW_KEY_D, right);
-      map_move_t(GLFW_KEY_SPACE, up);
-      map_move_t(GLFW_KEY_LEFT_SHIFT, down);
-
-    default:
-      break;
-    }
-  } else if (action == GLFW_RELEASE) {
-    switch (key) {
-      map_move_f(GLFW_KEY_W, front);
-      map_move_f(GLFW_KEY_S, back);
-      map_move_f(GLFW_KEY_A, left);
-      map_move_f(GLFW_KEY_D, right);
-      map_move_f(GLFW_KEY_SPACE, up);
-      map_move_f(GLFW_KEY_LEFT_SHIFT, down);
-
-    default:
-      break;
-    }
-  }
-
-#undef map_move_t
-#undef map_move_f
-}
 
 #define DRAW_MODELS(transform_order) for (auto id: g_model_ids) { g_models.render(id, transform_order); }
 
 #define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
 #define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
+
+void test_draw_skybox_scene();
 
 void test_sphere_fbo_pass(const v4& background) {
   g_capture.bind();
@@ -697,9 +660,12 @@ void test_sphere_fbo_pass(const v4& background) {
     g_models.draw[g_models.modind_sphere] = false;
 
     DRAW_MODELS(models::transformorder_lookat);
-  }
-    
+  }    
   g_vertex_buffer.unbind();
+
+
+  test_draw_skybox_scene();
+  
   g_capture.unbind();
 }
 
@@ -719,19 +685,17 @@ void test_render_to_quad(const v4& background) {
 }
 
 void test_draw_reflect_sphere(const v4& background) {
-  SET_CLEAR_COLOR_V4(background);
-  CLEAR_COLOR_DEPTH;
-  
+    
   g_vertex_buffer.bind();
   {
     use_program u(g_programs.default_mir);
 
     g_capture.sample_begin("unif_TexFramebuffer", 0);
       
-    g_programs.up_vec3("unif_LookCenter", g_view.position - g_models.look_at.eye);
+    g_programs.up_vec3("unif_LookCenter", g_models.look_at.center - g_models.look_at.eye);
 
     g_models.draw[g_models.modind_sphere] = true;
-
+    
     DRAW_MODELS(models::transformorder_srt);
 
     g_capture.sample_end();
@@ -739,11 +703,37 @@ void test_draw_reflect_sphere(const v4& background) {
   g_vertex_buffer.unbind();
 }
 
-void test_draw_skybox_scene(const v4& background) {
-  SET_CLEAR_COLOR_V4(background);
-  CLEAR_COLOR_DEPTH;
-
+void test_draw_cubemap_reflect() {
   g_vertex_buffer.bind();
+
+  g_models.draw[g_models.modind_sphere] = true;
+  g_models.draw[g_models.modind_tri] = true;
+  g_models.draw[g_skybox_model] = false;
+
+  {
+    use_program u(g_programs.sphere_cubemap);
+
+    int slot = 0;
+    
+    g_textures.bind(g_skybox_texture, slot);
+    g_programs.up_int("unif_TexCubeMap", slot);
+
+    g_programs.up_mat4x4("unif_InverseView", glm::inverse(g_view.view()));
+    g_programs.up_vec3("unif_CameraPosition", g_view.position);
+    
+    DRAW_MODELS(models::transformorder_srt);
+  }
+
+  g_vertex_buffer.unbind();
+}
+
+void test_draw_skybox_scene() {  
+  
+  g_vertex_buffer.bind();
+
+  g_view.set_proj_from_fovy(120.0f);
+  
+  g_models.draw[g_skybox_model] = true;
   {
     use_program u(g_programs.skybox);
 
@@ -754,15 +744,36 @@ void test_draw_skybox_scene(const v4& background) {
     g_programs.up_int("unif_TexCubeMap", slot);
     
     g_models.render(g_skybox_model,
-                    models::transformorder_srt);
+                    models::transformorder_skybox);
     
     g_textures.unbind(g_skybox_texture, slot);
   }
   g_vertex_buffer.unbind();
+
+  g_view.set_proj_from_fovy(45.0f);
+}
+
+void test_main_0() {
+  v4 background(0.0f, 0.3f, 0.0f, 1.0f);
+
+  GL_FN(glDepthFunc(GL_LESS));
+  g_models.draw[g_skybox_model] = false;
+  test_sphere_fbo_pass(background);
+
+  g_models.draw[g_skybox_model] = false;
+  SET_CLEAR_COLOR_V4(background);
+  CLEAR_COLOR_DEPTH;
+  
+  test_draw_reflect_sphere(background);
+  test_draw_skybox_scene();
 }
 
 static void render() {
   v4 background(0.0f, 0.3f, 0.0f, 1.0f);
+  GL_FN(glDepthFunc(GL_LESS));
+
+  SET_CLEAR_COLOR_V4(background);
+  CLEAR_COLOR_DEPTH;
 
   //test_sphere_fbo_pass(background);
   //test_draw_reflect_sphere(background);
