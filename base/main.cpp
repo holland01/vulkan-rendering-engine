@@ -284,6 +284,7 @@ struct models {
     // conventions used.
     transformorder_srt = 0, 
     transformorder_lookat,
+    transformorder_skybox,
     transformorder_count
   };
 
@@ -295,7 +296,10 @@ struct models {
   std::array<transform_fn_type, transformorder_count> __table = {
     [this](int model) { return scale(model) * rotate(model) * translate(model); },
     [this](int model) { return glm::inverse(g_view.view())
-                        * glm::lookAt(look_at.eye, look_at.center, look_at.up); }
+                        * glm::lookAt(look_at.eye, look_at.center, look_at.up); },
+    [this](int model) {
+      return glm::translate(glm::mat4(1.0f), g_view.position) * scale(model);
+    }
   };
   
   std::vector<v3> positions;
