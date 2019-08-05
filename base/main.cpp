@@ -367,6 +367,10 @@ struct models {
   }
 } static g_models;
 
+
+static models::index_type g_skybox_model{models::k_uninit};
+
+
 auto new_sphere(const v3& position = glm::zero<v3>(), const v3& scale = v3(1.0f)) {
   auto offset = g_vertex_buffer.num_vertices();
 
@@ -559,10 +563,28 @@ static void init_api_data() {
     g_model_ids.push_back(g_models.new_model(offset, 3));
   }
   
+  g_skybox_model = new_cube();
+  
   g_model_ids.push_back(new_sphere(v3(0.0f, 5.0f, -10.0f)));
-
+  g_model_ids.push_back(g_skybox_model);
+  
   g_vertex_buffer.reset();
 
+#define p(path__) fs::path("skybox0") / fs::path(path__ ".jpg")
+  textures::cubemap_paths_type paths = {
+    p("right"),
+    p("left"),
+    p("top"),
+    p("bottom"),
+    p("front"),
+    p("back")
+  };
+#undef p
+
+  g_models.scales[g_skybox_model] = v3(100.0f);
+  
+  g_skybox_texture = g_textures.new_cubemap(paths);
+  
   GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
   
   GL_FN(glDisable(GL_CULL_FACE));
@@ -618,67 +640,96 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 #define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
 #define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
 
-static void render() {
-  v4 background(0.0f, 0.3f, 0.0f, 1.0f);
-  
-  // reflect pass
-  {   
-    g_capture.bind();
+void test_sphere_fbo_pass(const v4& background) {
+  g_capture.bind();
 
-    SET_CLEAR_COLOR_V4(background);
-    CLEAR_COLOR_DEPTH;
+  SET_CLEAR_COLOR_V4(background);
+  CLEAR_COLOR_DEPTH;
 
-    g_vertex_buffer.bind();
-
-    {
-      use_program u(g_programs.default_fb);
-    
-      g_models.look_at.eye = g_models.positions[g_models.modind_sphere];
-      g_models.look_at.center = g_models.positions[g_models.modind_tri];
-      g_models.look_at.up = v3(0.0f, 1.0f, 0.0f);
-
-      // we're rendering from the sphere's perspective
-      g_models.draw[g_models.modind_sphere] = false;
-
-      DRAW_MODELS(models::transformorder_lookat);
-    }
-    
-    g_vertex_buffer.unbind();
-    g_capture.unbind();
-  }
+  g_vertex_buffer.bind();
 
   {
-    SET_CLEAR_COLOR_V4(background);
-    CLEAR_COLOR_DEPTH;
-
-    #if 0
-    {
-      use_program u(g_programs.default_rtq);
-      
-      g_capture.sample_begin("unif_TexSampler", 0);
-
-      GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+    use_program u(g_programs.default_fb);
     
-      g_capture.sample_end();
-    }
-    #endif
+    g_models.look_at.eye = g_models.positions[g_models.modind_sphere];
+    g_models.look_at.center = g_models.positions[g_models.modind_tri];
+    g_models.look_at.up = v3(0.0f, 1.0f, 0.0f);
 
-    g_vertex_buffer.bind();
-    {
-      use_program u(g_programs.default_mir);
+    // we're rendering from the sphere's perspective
+    g_models.draw[g_models.modind_sphere] = false;
 
-      g_capture.sample_begin("unif_TexFramebuffer", 0);
-      
-      g_programs.up_vec3("unif_LookCenter", g_view.position - g_models.look_at.eye);
-
-      g_models.draw[g_models.modind_sphere] = true;
-
-      DRAW_MODELS(models::transformorder_srt);
-
-      g_capture.sample_end();
-    }
-    g_vertex_buffer.unbind();
+    DRAW_MODELS(models::transformorder_lookat);
   }
+    
+  g_vertex_buffer.unbind();
+  g_capture.unbind();
+}
+
+void test_render_to_quad(const v4& background) {
+  SET_CLEAR_COLOR_V4(background);
+  CLEAR_COLOR_DEPTH;
+
+  {
+    use_program u(g_programs.default_rtq);
+      
+    g_capture.sample_begin("unif_TexSampler", 0);
+
+    GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+    
+    g_capture.sample_end();
+  }
+}
+
+void test_draw_reflect_sphere(const v4& background) {
+  SET_CLEAR_COLOR_V4(background);
+  CLEAR_COLOR_DEPTH;
+  
+  g_vertex_buffer.bind();
+  {
+    use_program u(g_programs.default_mir);
+
+    g_capture.sample_begin("unif_TexFramebuffer", 0);
+      
+    g_programs.up_vec3("unif_LookCenter", g_view.position - g_models.look_at.eye);
+
+    g_models.draw[g_models.modind_sphere] = true;
+
+    DRAW_MODELS(models::transformorder_srt);
+
+    g_capture.sample_end();
+  }
+  g_vertex_buffer.unbind();
+}
+
+void test_draw_skybox_scene(const v4& background) {
+  SET_CLEAR_COLOR_V4(background);
+  CLEAR_COLOR_DEPTH;
+
+  g_vertex_buffer.bind();
+  {
+    use_program u(g_programs.skybox);
+
+    int slot = 0;
+    
+    g_textures.bind(g_skybox_texture, slot);
+
+    g_programs.up_int("unif_TexCubeMap", slot);
+    
+    g_models.render(g_skybox_model,
+                    models::transformorder_srt);
+    
+    g_textures.unbind(g_skybox_texture, slot);
+  }
+  g_vertex_buffer.unbind();
+}
+
+static void render() {
+  v4 background(0.0f, 0.3f, 0.0f, 1.0f);
+
+  //test_sphere_fbo_pass(background);
+  //test_draw_reflect_sphere(background);
+
+  test_draw_skybox_scene(background);
 }
 
 int main(void) {
@@ -691,7 +742,7 @@ int main(void) {
 
   if (!glfwInit())
     exit(EXIT_FAILURE);
-
+  
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
