@@ -70,6 +70,10 @@ struct programs : public type_module {
            gl_Position = clip;             
            frag_Color = abs(clip / clip.w);
          });
+
+  
+  
+    
   
   std::vector<programdef> defs = {
     {
@@ -202,6 +206,46 @@ struct programs : public type_module {
         attrib_layout_position(),
         attrib_layout_color()
       }
+    },
+    {
+      "cubemap",
+
+      GLSL(layout(location = 0) in vec3 in_Position;
+           layout(location = 1) in vec4 in_Color;           
+           
+           uniform mat4 unif_ModelView;
+           uniform mat4 unif_Projection;
+         
+           out vec4 frag_Color;
+           out vec3 frag_TexCoord;
+           
+           void main() {
+             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
+             gl_Position = clip;
+
+             frag_TexCoord = normalize(in_Position);
+             frag_Color = in_Color;
+           }),
+
+      GLSL(in vec3 frag_TexCoord;
+           in vec4 frag_Color;
+           out vec4 fb_Color;
+
+           uniform samplerCube unif_TexCubeMap;
+
+           void main() {
+             fb_Color = frag_Color * texture(unif_TexCubeMap, frag_TexCoord);
+           }),
+      {
+        "unif_ModelView",
+        "unif_Projection",
+        "unif_TexCubeMap"
+      },
+      
+      {
+        attrib_layout_position(),
+        attrib_layout_color()
+      }
     }
   };
   
@@ -219,7 +263,8 @@ struct programs : public type_module {
   const std::string default_fb = "main";
   const std::string default_rtq = "render_to_quad";
   const std::string default_mir = "reflection_sphere";
-
+  const std::string skybox = "cubemap";
+  
   void free_mem() override {
     GL_FN(glUseProgram(0));
     
