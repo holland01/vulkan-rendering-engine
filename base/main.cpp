@@ -67,9 +67,16 @@ struct view_data {
       view_height(height) {
   }
 
-  void reset_proj() {
-    float aspect = static_cast<float>(view_width) / static_cast<float>(view_height);
-    proj = glm::perspective(45.0f, aspect, 0.1f, 100.0f);
+  auto calc_aspect() const {
+    return static_cast<float>(view_width) / static_cast<float>(view_height);
+  }
+  
+  void reset_proj() {   
+    set_proj_from_fovy(45.0f);
+  }
+
+  void set_proj_from_fovy(float fovy) {
+    proj = glm::perspective(fovy, calc_aspect(), 0.1f, 1000.0f);
   }
 
   //
