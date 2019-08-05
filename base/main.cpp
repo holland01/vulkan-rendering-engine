@@ -775,13 +775,116 @@ static void render() {
   SET_CLEAR_COLOR_V4(background);
   CLEAR_COLOR_DEPTH;
 
-  //test_sphere_fbo_pass(background);
-  //test_draw_reflect_sphere(background);
+  test_draw_cubemap_reflect();
+  test_draw_skybox_scene();
+}
 
-  test_draw_skybox_scene(background);
+static void error_callback(int error, const char* description) {
+  fputs(description, stdout);
+}
+
+// origin for coordinates is the top left
+// of the window
+struct camera_orientation {
+  double prev_xpos;
+  double prev_ypos;
+
+  double dx;
+  double dy;
+
+  bool active;
+} static g_cam_orient = {
+  0.0, 0.0,
+  0.0, 0.0,
+  false
+};
+
+static std::array<bool, 400> g_key_states;
+
+void maybe_enable_cursor(GLFWwindow* w) {
+  if (g_cam_orient.active) {
+    glfwSetInputMode(w, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  } else {
+    glfwSetInputMode(w, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+  }
+}
+
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+#define map_move_t(key, dir) case key: g_move_state.dir = true; break
+#define map_move_f(key, dir) case key: g_move_state.dir = false; break
+#define KEY_BLOCK(key, expr)                    \
+  case key: {                                   \
+    if (!g_key_states[key]) {                   \
+      g_key_states[key] = true;                 \
+      expr;                                     \
+    }                                           \
+  } break
+  
+#define KEY_FIN(key) case key: g_key_states[key] = false; break
+  
+  if (action == GLFW_PRESS) {
+    switch (key) {
+    case GLFW_KEY_ESCAPE:
+      glfwSetWindowShouldClose(window, GL_TRUE);
+      break;
+      
+      KEY_BLOCK(GLFW_KEY_F1,
+                g_cam_orient.active = !g_cam_orient.active;
+                maybe_enable_cursor(window));
+      
+      map_move_t(GLFW_KEY_W, front);
+      map_move_t(GLFW_KEY_S, back);
+      map_move_t(GLFW_KEY_A, left);
+      map_move_t(GLFW_KEY_D, right);
+      map_move_t(GLFW_KEY_SPACE, up);
+      map_move_t(GLFW_KEY_LEFT_SHIFT, down);
+
+    default:
+      break;
+    }
+  } else if (action == GLFW_RELEASE) {
+    switch (key) {
+      KEY_FIN(GLFW_KEY_F1);
+      
+      map_move_f(GLFW_KEY_W, front);
+      map_move_f(GLFW_KEY_S, back);
+      map_move_f(GLFW_KEY_A, left);
+      map_move_f(GLFW_KEY_D, right);
+      map_move_f(GLFW_KEY_SPACE, up);
+      map_move_f(GLFW_KEY_LEFT_SHIFT, down);
+
+    default:
+      break;
+    }
+  }
+
+#undef map_move_t
+#undef map_move_f
+}
+
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+  if (g_cam_orient.active) {
+    double scale = 0.01;
+  
+    g_cam_orient.dx = xpos - g_cam_orient.prev_xpos;
+    g_cam_orient.dy = g_cam_orient.prev_ypos - ypos;
+
+    g_cam_orient.dx *= scale;
+    g_cam_orient.dy *= scale;
+  
+    g_cam_orient.prev_xpos = xpos;
+    g_cam_orient.prev_ypos = ypos;
+
+    glm::mat4 xRot = glm::rotate(glm::mat4(1.0f), static_cast<float>(g_cam_orient.dy), v3(1.0f, 0.0f, 0.0f));
+    glm::mat4 yRot = glm::rotate(glm::mat4(1.0f), static_cast<float>(g_cam_orient.dx), v3(0.0f, 1.0f, 0.0f));
+
+    g_view.orient = glm::mat3(yRot * xRot) * g_view.orient;
+  }
 }
 
 int main(void) {
+  g_key_states.fill(false);
+  
   g_programs.registermod();
   g_textures.registermod();
   
@@ -816,7 +919,9 @@ int main(void) {
   }
   
   glfwSetKeyCallback(window, key_callback);
-
+  glfwSetCursorPosCallback(window, cursor_position_callback);
+  maybe_enable_cursor(window);
+  
   init_api_data();
   
   while (!glfwWindowShouldClose(window)) {
