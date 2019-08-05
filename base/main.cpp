@@ -281,7 +281,9 @@ struct models {
   };
 
   using transform_fn_type = std::function<glm::mat4(int model)>;
-  using index_type = uint16_t;
+  using index_type = int16_t;
+
+  static const inline index_type k_uninit = -1;
   
   std::array<transform_fn_type, transformorder_count> __table = {
     [this](int model) { return scale(model) * rotate(model) * translate(model); },
@@ -404,7 +406,69 @@ auto new_sphere(const v3& position = glm::zero<v3>(), const v3& scale = v3(1.0f)
   return g_models.new_model(offset, count, position, scale);
 }
 
-static std::vector<int> g_model_ids;
+auto new_cube(const v3& position = glm::zero<v3>(), const v3& scale = v3(1.0f), const v4& color = v4(1.0f)) {
+  std::array<float, 36 * 3> vertices = {
+    // positions          
+    -1.0f,  1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+    1.0f, -1.0f, -1.0f,
+    1.0f, -1.0f, -1.0f,
+    1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+
+    -1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+
+    1.0f, -1.0f, -1.0f,
+    1.0f, -1.0f,  1.0f,
+    1.0f,  1.0f,  1.0f,
+    1.0f,  1.0f,  1.0f,
+    1.0f,  1.0f, -1.0f,
+    1.0f, -1.0f, -1.0f,
+
+    -1.0f, -1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+    1.0f,  1.0f,  1.0f,
+    1.0f,  1.0f,  1.0f,
+    1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+
+    -1.0f,  1.0f, -1.0f,
+    1.0f,  1.0f, -1.0f,
+    1.0f,  1.0f,  1.0f,
+    1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f, -1.0f,
+
+    -1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,
+    1.0f, -1.0f, -1.0f,
+    1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,
+    1.0f, -1.0f,  1.0f
+  };
+
+  auto offset = g_vertex_buffer.num_vertices();
+  
+  for (auto i = 0; i < vertices.size(); i += 9) {
+    v3 a(vertices[i + 0], vertices[i + 1], vertices[i + 2]);
+    v3 b(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
+    v3 c(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
+
+    g_vertex_buffer.add_triangle(a, color,
+                                 b, color,
+                                 c, color);
+  }
+
+  return g_models.new_model(offset, 36, position, scale);
+}
+
+
+static std::vector<models::index_type> g_model_ids;
 
 struct capture {
   GLuint fbo, tex, rbo;
