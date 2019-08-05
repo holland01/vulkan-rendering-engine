@@ -31,11 +31,13 @@ struct textures : public type_module {
     }
   }
 
-  void bind(index_type id) const {
+  void bind(index_type id, int slot = 0) const {
+    GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(slot)));
     GL_FN(glBindTexture(types[id], tex_handles[id]));
   }
 
-  void unbind(index_type id) const {
+  void unbind(index_type id, int slot = 0) const {
+    GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(slot)));
     GL_FN(glBindTexture(types[id], 0));
   }
   
