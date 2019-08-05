@@ -561,13 +561,14 @@ struct capture {
     GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
   }
 
-  void sample_begin(const std::string& sampler, int slot) const {
-    GL_FN(glBindTexture(GL_TEXTURE_2D, tex));
+  void sample_begin(const std::string& sampler, int slot = 0) const {
     GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<decltype(GL_TEXTURE0)>(slot)));
+    GL_FN(glBindTexture(GL_TEXTURE_2D, tex));
     g_programs.up_int(sampler, slot);
   }
 
-  void sample_end() const {
+  void sample_end(int slot = 0) const {
+    GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<decltype(GL_TEXTURE0)>(slot)));
     GL_FN(glBindTexture(GL_TEXTURE_2D, 0));
   }
   
