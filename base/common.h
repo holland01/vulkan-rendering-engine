@@ -9,14 +9,21 @@ namespace fs = std::experimental::filesystem;
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
-using v2 = glm::vec2;
-using v3 = glm::vec3;
-using v4 = glm::vec4;
+using vec2_t = glm::vec2;
+using vec3_t = glm::vec3;
+using vec4_t = glm::vec4;
+
+using mat4_t = glm::mat4;
+using mat3_t = glm::mat3;
+
+using real_t = float;
+
+#define R(x) static_cast<real_t>(x)
 
 struct vertex {
-  v3 position;
-  v4 color;
-  v2 uv;
+  vec3_t position;
+  vec4_t color;
+  vec2_t uv;
 };
 
 struct type_module;
