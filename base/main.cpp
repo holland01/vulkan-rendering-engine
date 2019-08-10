@@ -9,10 +9,13 @@
 #include <functional>
 #include <array>
 
+#include <iostream>
+
 #include "common.h"
 #include "textures.h"
 #include "util.h"
 #include "programs.h"
+#include "geom.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -886,23 +889,112 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 }
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-  if (g_cam_orient.active) {
-    double scale = 0.01;
-  
-    g_cam_orient.dx = xpos - g_cam_orient.prev_xpos;
-    g_cam_orient.dy = g_cam_orient.prev_ypos - ypos;
+    if (g_cam_orient.active) {
+        double scale = 0.01;
 
-    g_cam_orient.dx *= scale;
-    g_cam_orient.dy *= scale;
-  
-    g_cam_orient.prev_xpos = xpos;
-    g_cam_orient.prev_ypos = ypos;
+        g_cam_orient.dx = xpos - g_cam_orient.prev_xpos;
+        g_cam_orient.dy = g_cam_orient.prev_ypos - ypos;
 
-    glm::mat4 xRot = glm::rotate(glm::mat4(1.0f), static_cast<float>(g_cam_orient.dy), v3(1.0f, 0.0f, 0.0f));
-    glm::mat4 yRot = glm::rotate(glm::mat4(1.0f), static_cast<float>(g_cam_orient.dx), v3(0.0f, 1.0f, 0.0f));
+        g_cam_orient.dx *= scale;
+        g_cam_orient.dy *= scale;
 
-    g_view.orient = glm::mat3(yRot * xRot) * g_view.orient;
-  }
+        g_cam_orient.prev_xpos = xpos;
+        g_cam_orient.prev_ypos = ypos;
+
+        mat4_t xRot = glm::rotate(mat4_t(1.0f), static_cast<real_t>(g_cam_orient.dy), vec3_t(1.0f, 0.0f, 0.0f));
+        mat4_t yRot = glm::rotate(mat4_t(1.0f), static_cast<real_t>(g_cam_orient.dx), vec3_t(0.0f, 1.0f, 0.0f));
+
+        g_view.orient = mat3_t(yRot * xRot) * g_view.orient;
+    } else {
+        g_cam_orient.prev_xpos = xpos;
+        g_cam_orient.prev_ypos = ypos;
+    }
+}
+
+struct click_state {
+    enum click_mode {
+        mode_nothing = 0,
+        mode_select
+    };
+
+    click_mode mode{mode_select};
+
+    //
+    // cast_ray - used for mouse picking
+    //
+    // Creates an inverse transform, designed to map coordinates in screen_space back to viewspace. The coordinates
+    // being mapped are the current coordinates of the mouse cursor.
+    //
+    // From there, we use viewspace as a driver to determine whether or not the mouse has selected any 
+    // corresponding objects within the viewing frame, by casting a ray within viewspace infinitely out into the z-axis.
+    // Any intersection tests that pass for any objects in view space will be added to a selection list.
+    //
+    // See https://www.glfw.org/docs/latest/input_guide.html#cursor_pos:
+    // The documentation states that the screen coordinates are relative to the upper left
+    // of the window's content area (not the entire desktop/viewing area). So, we don't have to perform any additional calculations
+    // on the mouse coordinates themselves.
+    void cast_ray() const {
+        vec4_t screen_out( g_cam_orient.prev_xpos, 
+                           g_cam_orient.prev_ypos, 
+                           -1.0f, 
+                           1.0f);
+
+        // TODO: cache screen_sp and clip_to_ndc, since they're essentially static data
+        mat4_t screen_sp{1.0f};
+        screen_sp[0][0] = R(g_view.view_width);
+        screen_sp[1][1] = R(g_view.view_height);
+
+        // OpenGL viewport origin is lower left, GLFW's is upper left.
+        screen_out.y = screen_sp[1][1] - screen_out.y;
+
+        screen_out.x /= screen_sp[0][0];
+        screen_out.y /= screen_sp[1][1];
+
+        screen_out.x = R(2.0) * screen_out.x - R(1.0);
+        screen_out.y = R(2.0) * screen_out.y - R(1.0);
+
+        mat4_t clip{g_view.proj};
+        
+        //real_t w = (clip[2][3] * (-g_view.farp));
+
+        //screen_out.x *= w;
+        //screen_out.y *= w;
+
+        mat4_t i_clip{glm::inverse(clip)};
+        
+        mat4_t view_sp{g_view.view()};
+        
+        vec4_t view_out{i_clip * screen_out};
+        view_out.x *= view_out.w;
+        view_out.y *= view_out.w;
+        
+        const auto& bvol = g_models.bound_volumes[g_models.modind_sphere];
+        
+        geom::bvol view_bvol;
+        view_bvol.center = vec3_t(view_sp * vec4_t(bvol.center, R(1.0)));
+        view_bvol.radius = bvol.radius;
+        view_bvol.type = geom::bvol::type_sphere;
+        
+        geom::ray viewraycast;
+        viewraycast.dir = vec3_t(R(0.0), R(0.0), R(-1.0));
+        viewraycast.orig = vec3_t(view_out.x, view_out.y, R(0.0));
+
+        if (g_geom.test_ray_sphere(viewraycast, view_bvol)) {
+            std::cout << "HIT" << std::endl;
+        } else {
+            std::cout << "NO HIT" << std::endl;
+        }
+    }
+} g_click_state;
+
+static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+        switch (g_click_state.mode) {
+            case click_state::mode_select:
+                g_click_state.cast_ray();
+                break;
+        }
+    }
 }
 
 int main(void) {
