@@ -22,20 +22,20 @@
 
 std::vector<type_module*> g_modules;
 
-textures::index_type g_skybox_texture{textures::k_uninit};
+textures::index_type g_skybox_texture {textures::k_uninit};
 
 GLuint g_vao = 0;
 
 struct move_state {
-  uint8_t up : 1;
-  uint8_t down : 1;
-  uint8_t right : 1;
-  uint8_t left : 1;
-  uint8_t front : 1;
-  uint8_t back : 1;
-  uint8_t __rem : 2;
+    uint8_t up : 1;
+    uint8_t down : 1;
+    uint8_t right : 1;
+    uint8_t left : 1;
+    uint8_t front : 1;
+    uint8_t back : 1;
+    uint8_t __rem : 2;
 } static  g_move_state = {
-  0,0,0,0,0,0,0
+    0, 0, 0, 0, 0, 0, 0
 };
 
 
@@ -844,7 +844,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
       expr;                                     \
     }                                           \
   } break
-  
+
 #define KEY_FIN(key) case key: g_key_states[key] = false; break
 
     if (action == GLFW_PRESS) {
@@ -1020,22 +1020,6 @@ int main(void) {
     if (!window) {
         goto error;
     }
-  }
-  
-  glfwSetKeyCallback(window, key_callback);
-  glfwSetCursorPosCallback(window, cursor_position_callback);
-  maybe_enable_cursor(window);
-  
-  init_api_data();
-  
-  while (!glfwWindowShouldClose(window)) {
-    g_view(g_move_state);
-    
-    render();
-
-    glfwSwapBuffers(window);
-    glfwPollEvents();
-  }
 
     glfwMakeContextCurrent(window);
 
