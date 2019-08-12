@@ -19,12 +19,15 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 std::vector<type_module*> g_modules;
 
 textures::index_type g_skybox_texture {textures::k_uninit};
 
 GLuint g_vao = 0;
+//
+//
 
 struct move_state {
     uint8_t up : 1;
@@ -44,7 +47,7 @@ struct move_state {
 // of the destination space
 
 struct view_data {
-    mat4_t proj;    // proj: camera to clip space transform
+    mat4_t proj, skyproj;    // proj: camera to clip space transform
 
     mat3_t orient;  // orient: camera orientation
 
@@ -58,8 +61,9 @@ struct view_data {
 
     real_t step;          // step: move step amount
 
+    real_t skynearp;
     real_t nearp;
-
+    real_t skyfarp;
     real_t farp;
 
     uint16_t view_width;
@@ -70,8 +74,10 @@ struct view_data {
         orient(1.0f),
         position(0.0f),
         step(0.01f),
-        nearp(0.1),
-        farp(1000.0),
+        skynearp(10.0f),
+        nearp(1.0f),
+        skyfarp(1000.0f),
+        farp(1000.0f),
         view_width(width),
         view_height(height) {
     }
@@ -82,6 +88,7 @@ struct view_data {
 
     void reset_proj() {
         set_proj_from_fovy(45.0f);
+        skyproj = glm::perspective(120.0f, calc_aspect(), skynearp, skyfarp);
     }
 
     void set_proj_from_fovy(real_t fovy) {
@@ -329,8 +336,9 @@ struct models {
         glm::zero<vec3_t>()
     };
 
-    int modind_tri = 0;
-    int modind_sphere = 1;
+    index_type modind_tri = 0;
+    index_type modind_sphere = 1;
+    index_type modind_skybox = 2;
 
     int new_model(index_type vbo_offset = 0,
                   index_type num_vertices = 0,
@@ -484,13 +492,13 @@ struct models {
         return rot;
     }
 
-    void render(int model, transformorder to) const {
+    void render(index_type model, transformorder to) const {
         if (draw.at(model) == true) {
             mat4_t T = __table[to](model);
             mat4_t mv = g_view.view() * T;
 
             g_programs.up_mat4x4("unif_ModelView", mv);
-            g_programs.up_mat4x4("unif_Projection", g_view.proj);
+            g_programs.up_mat4x4("unif_Projection", model == modind_skybox ? g_view.skyproj : g_view.proj);
 
             auto ofs = vertex_offsets[model];
             auto count = vertex_counts[model];
@@ -501,11 +509,6 @@ struct models {
         }
     }
 } static g_models;
-
-static models::index_type g_skybox_model {models::k_uninit};
-
-
-
 
 static std::vector<models::index_type> g_model_ids;
 
@@ -630,8 +633,8 @@ static void init_api_data() {
 
     g_model_ids.push_back(g_models.modind_sphere);
 
-    g_skybox_model = g_models.new_cube();
-    g_model_ids.push_back(g_skybox_model);
+    g_models.modind_skybox = g_models.new_cube();
+    g_model_ids.push_back(g_models.modind_skybox);
 
     g_vertex_buffer.reset();
 
@@ -646,7 +649,7 @@ static void init_api_data() {
     };
 #undef p
 
-    g_models.scales[g_skybox_model] = vec3_t(500.0f);
+    g_models.scales[g_models.modind_skybox] = vec3_t(500.0f);
 
     g_skybox_texture = g_textures.new_cubemap(paths);
 
@@ -732,7 +735,7 @@ void test_draw_cubemap_reflect() {
 
     g_models.draw[g_models.modind_sphere] = true;
     g_models.draw[g_models.modind_tri] = true;
-    g_models.draw[g_skybox_model] = false;
+    g_models.draw[g_models.modind_skybox] = false;
 
     {
         use_program u(g_programs.sphere_cubemap);
@@ -755,9 +758,7 @@ void test_draw_skybox_scene() {
 
     g_vertex_buffer.bind();
 
-    g_view.set_proj_from_fovy(120.0f);
-
-    g_models.draw[g_skybox_model] = true;
+    g_models.draw[g_models.modind_skybox] = true;
     {
         use_program u(g_programs.skybox);
 
@@ -767,24 +768,22 @@ void test_draw_skybox_scene() {
 
         g_programs.up_int("unif_TexCubeMap", slot);
 
-        g_models.render(g_skybox_model,
+        g_models.render(g_models.modind_skybox,
                         models::transformorder_skybox);
 
         g_textures.unbind(g_skybox_texture, slot);
     }
     g_vertex_buffer.unbind();
-
-    g_view.set_proj_from_fovy(45.0f);
 }
 
 void test_main_0() {
     vec4_t background(0.0f, 0.3f, 0.0f, 1.0f);
 
     GL_FN(glDepthFunc(GL_LESS));
-    g_models.draw[g_skybox_model] = false;
+    g_models.draw[g_models.modind_skybox] = false;
     test_sphere_fbo_pass(background);
 
-    g_models.draw[g_skybox_model] = false;
+    g_models.draw[g_models.modind_skybox] = false;
     SET_CLEAR_COLOR_V4(background);
     CLEAR_COLOR_DEPTH;
 
@@ -799,8 +798,8 @@ static void render() {
     SET_CLEAR_COLOR_V4(background);
     CLEAR_COLOR_DEPTH;
 
-    test_draw_cubemap_reflect();
     test_draw_skybox_scene();
+    test_draw_cubemap_reflect();
 }
 
 static void error_callback(int error, const char* description) {
@@ -933,57 +932,63 @@ struct click_state {
     // The documentation states that the screen coordinates are relative to the upper left
     // of the window's content area (not the entire desktop/viewing area). So, we don't have to perform any additional calculations
     // on the mouse coordinates themselves.
-    void cast_ray() const {
-        vec4_t screen_out( g_cam_orient.prev_xpos, 
+
+    vec3_t screen_out(real_t zplane) const {
+     //   vec4_t ndcplane = g_view.proj * g_view.view() * glm::vec4(0.0f, 0.0f, -zplane, 1.0f);
+
+        real_t depth{};
+
+        GL_FN(glReadBuffer(GL_FRONT));
+        GL_FN(glReadPixels(g_cam_orient.prev_xpos, g_cam_orient.prev_ypos, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth));
+
+        vec4_t mouse( g_cam_orient.prev_xpos, 
                            g_cam_orient.prev_ypos, 
-                           -1.0f, 
-                           1.0f);
+                           -depth,
+                           R(1.0));
 
         // TODO: cache screen_sp and clip_to_ndc, since they're essentially static data
-        mat4_t screen_sp{1.0f};
+        mat4_t screen_sp{R(1.0)};
         screen_sp[0][0] = R(g_view.view_width);
         screen_sp[1][1] = R(g_view.view_height);
 
         // OpenGL viewport origin is lower left, GLFW's is upper left.
-        screen_out.y = screen_sp[1][1] - screen_out.y;
+        mouse.y = screen_sp[1][1] - mouse.y;
 
-        screen_out.x /= screen_sp[0][0];
-        screen_out.y /= screen_sp[1][1];
+        mouse.x /= screen_sp[0][0];
+        mouse.y /= screen_sp[1][1];
 
-        screen_out.x = R(2.0) * screen_out.x - R(1.0);
-        screen_out.y = R(2.0) * screen_out.y - R(1.0);
+          // In screen space the range is is [0, width] and [0, height],
+        // so after normalization we're in [0, 1].
+        // NDC is in [-1, 1], so we scale from [0, 1] to [-1, 1],
+        // to complete the NDC transform
+        mouse.x = R(2.0) * mouse.x - R(1.0);
+        mouse.y = R(2.0) * mouse.y - R(1.0);
 
-        mat4_t clip{g_view.proj};
-        
-        //real_t w = (clip[2][3] * (-g_view.farp));
+        return glm::inverse(g_view.proj * g_view.view()) * mouse;
+    }
+    
+    void cast_ray() const {
+        vec3_t nearp = screen_out(g_view.nearp);
+        geom::ray world_raycast{}; 
+        world_raycast.dir = glm::normalize(nearp - g_view.position);
+        world_raycast.orig = g_view.position;
 
-        //screen_out.x *= w;
-        //screen_out.y *= w;
+        auto bvol = g_models.bound_volumes[g_models.modind_sphere];
 
-        mat4_t i_clip{glm::inverse(clip)};
-        
-        mat4_t view_sp{g_view.view()};
-        
-        vec4_t view_out{i_clip * screen_out};
-        view_out.x *= view_out.w;
-        view_out.y *= view_out.w;
-        
-        const auto& bvol = g_models.bound_volumes[g_models.modind_sphere];
-        
-        geom::bvol view_bvol;
-        view_bvol.center = vec3_t(view_sp * vec4_t(bvol.center, R(1.0)));
-        view_bvol.radius = bvol.radius;
-        view_bvol.type = geom::bvol::type_sphere;
-        
-        geom::ray viewraycast;
-        viewraycast.dir = vec3_t(R(0.0), R(0.0), R(-1.0));
-        viewraycast.orig = vec3_t(view_out.x, view_out.y, R(0.0));
+        //bvol.center = MAT4V3(g_view.view(), bvol.center);
 
-        if (g_geom.test_ray_sphere(viewraycast, view_bvol)) {
-            std::cout << "HIT" << std::endl;
+        if (g_geom.test_ray_sphere(world_raycast, bvol)) {
+            std::cout << "HIT\n";
         } else {
-            std::cout << "NO HIT" << std::endl;
+            std::cout << "NO HIT\n";
         }
+      
+        
+        std::cout << AS_STRING_GLM_SS(nearp) << "\n";
+        std::cout << AS_STRING_GLM_SS(world_raycast.orig) << "\n";
+        std::cout << AS_STRING_GLM_SS(world_raycast.dir) << "\n";
+
+        std::cout << std::endl;
     }
 } g_click_state;
 

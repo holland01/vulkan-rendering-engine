@@ -9,6 +9,13 @@ namespace fs = std::experimental::filesystem;
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
+// Assumes that v is an ADT with a to_string(std::string) method,
+// and the string parameter for that method acts as a prefix
+#define AS_STRING(v) v.to_string(#v)
+#define AS_STRING_GLM_SS(v) #v << ": " << glm::to_string(v) 
+
+#define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
+
 using vec2_t = glm::vec2;
 using vec3_t = glm::vec3;
 using vec4_t = glm::vec4;
