@@ -1097,8 +1097,8 @@ private:
 
         GL_FN(glReadBuffer(prev_read_buffer));
 
-        //        out_xoff = min_depth_xoff;
-        //        out_yoff = min_depth_yoff;
+        out_xoff = min_depth_xoff;
+        out_yoff = min_depth_yoff;
         
         return min_depth;
     }
