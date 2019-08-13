@@ -474,15 +474,15 @@ struct models {
         return new_model(offset, 36, position, scale);
     }
 
-    mat4_t scale(int model) const {
+    mat4_t scale(index_type model) const {
         return glm::scale(mat4_t(1.0f), scales.at(model));
     }
 
-    mat4_t translate(int model) const {
+    mat4_t translate(index_type model) const {
         return glm::translate(mat4_t(1.0f), positions.at(model));
     }
 
-    mat4_t rotate(int model) const {
+    mat4_t rotate(index_type model) const {
         mat4_t rot(1.0f);
 
         rot = glm::rotate(mat4_t(1.0f), angles.at(model).x, vec3_t(1.0f, 0.0f, 0.0f));

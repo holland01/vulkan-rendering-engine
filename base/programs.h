@@ -34,7 +34,7 @@ struct programs : public type_module {
       {
         0,
         3,
-        GL_FLOAT,
+        OPENGL_REAL,
         GL_FALSE,
         sizeof(vertex),
         (void*) offsetof(vertex, position)
@@ -48,7 +48,7 @@ struct programs : public type_module {
       {
         1,
         4,
-        GL_FLOAT,
+        OPENGL_REAL,
         GL_FALSE,
         sizeof(vertex),
         (void*) offsetof(vertex, color)

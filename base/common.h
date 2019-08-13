@@ -27,6 +27,8 @@ using real_t = float;
 
 #define R(x) static_cast<real_t>(x)
 
+#define OPENGL_REAL GL_FLOAT
+
 struct vertex {
   vec3_t position;
   vec4_t color;
