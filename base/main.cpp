@@ -921,18 +921,16 @@ struct click_state {
     //
     // cast_ray - used for mouse picking
     //
-    // Creates an inverse transform, designed to map coordinates in screen_space back to viewspace. The coordinates
+    // Creates an inverse transform, designed to map coordinates in screen_space back to worldspace. The coordinates
     // being mapped are the current coordinates of the mouse cursor.
     //
-    // From there, we use viewspace as a driver to determine whether or not the mouse has selected any 
-    // corresponding objects within the viewing frame, by casting a ray within viewspace infinitely out into the z-axis.
-    // Any intersection tests that pass for any objects in view space will be added to a selection list.
+    // A raycast is used to determine whether or not an intersection has occurred
     //
     // See https://www.glfw.org/docs/latest/input_guide.html#cursor_pos:
     // The documentation states that the screen coordinates are relative to the upper left
     // of the window's content area (not the entire desktop/viewing area). So, we don't have to perform any additional calculations
     // on the mouse coordinates themselves.
-
+    
     vec3_t screen_out(real_t zplane) const {
      //   vec4_t ndcplane = g_view.proj * g_view.view() * glm::vec4(0.0f, 0.0f, -zplane, 1.0f);
 
