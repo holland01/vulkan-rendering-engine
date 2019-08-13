@@ -18,7 +18,7 @@
 #define GL_FN(expr)                                     \
   do {                                                  \
   expr;                                                 \
-  report_gl_error(__LINE__, __func__, __FILE__, #expr); \
+  report_gl_error(glGetError(), __LINE__, __func__, __FILE__, #expr); \
  } while (0)
 
 #define ASSERT(cond) assert_impl((cond), __LINE__, __func__, __FILE__, #cond)
@@ -49,11 +49,9 @@ static inline void logf_impl( int line, const char* func, const char* file,
 
 std::vector<std::string> g_gl_err_msg_cache;
 
-  static inline void report_gl_error(int line, const char* func, const char* file,
+  static inline void report_gl_error(GLenum err, int line, const char* func, const char* file,
     const char* expr)
 {
-  GLenum err = glGetError();
-
   if (err != GL_NO_ERROR) {
     char msg[256];
     memset(msg, 0, sizeof(msg));
