@@ -21,6 +21,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+
+#define OBJECT_SELECT_MOVE_STEP real_t(0.01)
+
 std::vector<type_module*> g_modules;
 
 textures::index_type g_skybox_texture {textures::k_uninit};
@@ -37,10 +40,15 @@ struct move_state {
     uint8_t front : 1;
     uint8_t back : 1;
     uint8_t __rem : 2;
-} static  g_move_state = {
+};
+
+static move_state  g_cam_move_state = {
     0, 0, 0, 0, 0, 0, 0
 };
 
+static move_state  g_select_move_state = {
+    0, 0, 0, 0, 0, 0, 0
+};
 
 // key facts about transformations:
 // - a matrix transform represents the source space from the perspective
@@ -325,6 +333,7 @@ struct models {
     std::vector<index_type> vertex_counts;
     std::vector<geom::bvol> bound_volumes;
     std::vector<bool> draw;
+    
 
     struct {
         vec3_t eye;
@@ -340,6 +349,8 @@ struct models {
     index_type modind_sphere = 1;
     index_type modind_skybox = 2;
 
+    index_type modind_selected = k_uninit;
+    
     int new_model(index_type vbo_offset = 0,
                   index_type num_vertices = 0,
                   vec3_t position = glm::zero<vec3_t>(),
@@ -362,6 +373,40 @@ struct models {
 
         return id;
     }
+
+    void clear_select_model_state() {
+        if (modind_selected != k_uninit) {
+            // TODO: cleanup select state for previous model here
+        }
+
+        modind_selected = k_uninit;
+    }
+    
+    void set_select_model_state(index_type model) {
+        clear_select_model_state();
+
+        modind_selected = model;
+    }
+
+    bool has_select_model_state() const {
+        return modind_selected != k_uninit;
+    }
+
+#define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)\
+    if (g_select_move_state.dir) { ASSERT(has_select_model_state()); positions[modind_selected].axis += amount; }
+    
+    void update_select_model_state() {
+        MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
+        MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
+
+        MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
+        MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
+
+        MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
+        MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
+    }
+    
+#undef MAP_UPDATE_SELECT_MODEL_STATE
 
     auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1)) {
         auto offset = g_vertex_buffer.num_vertices();
@@ -835,9 +880,24 @@ void maybe_enable_cursor(GLFWwindow* w) {
     }
 }
 
+// this callback is a slew of macros to make changes and adaptations easier
+// to materialize: much of this is likely to be altered as new needs are met,
+// and there are many situations that call for redundant expressions that may
+// as well be abstracted away
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-#define map_move_t(key, dir) case key: g_move_state.dir = true; break
-#define map_move_f(key, dir) case key: g_move_state.dir = false; break
+#define MAP_MOVE_STATE_TRUE(key, dir) case key: g_cam_move_state.dir = true; break
+#define MAP_MOVE_STATE_FALSE(key, dir) case key: g_cam_move_state.dir = false; break
+
+#define MAP_MOVE_SELECT_STATE_TRUE(key, dir)    \
+    case key: {                                 \
+        if (g_models.has_select_model_state()){ \
+            g_select_move_state.dir = true;     \
+        }                                       \
+    } break
+
+#define MAP_MOVE_SELECT_STATE_FALSE(key, dir) case key: g_select_move_state.dir = false; break
+
+    
 #define KEY_BLOCK(key, expr)                    \
   case key: {                                   \
     if (!g_key_states[key]) {                   \
@@ -846,7 +906,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     }                                           \
   } break
 
-#define KEY_FIN(key) case key: g_key_states[key] = false; break
+#define KEY_RELEASE(key) case key: g_key_states[key] = false; break
 
     if (action == GLFW_PRESS) {
         switch (key) {
@@ -856,37 +916,55 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 
             KEY_BLOCK(GLFW_KEY_F1,
                       g_cam_orient.active = !g_cam_orient.active;
-            maybe_enable_cursor(window));
+                      maybe_enable_cursor(window));
 
-            map_move_t(GLFW_KEY_W, front);
-            map_move_t(GLFW_KEY_S, back);
-            map_move_t(GLFW_KEY_A, left);
-            map_move_t(GLFW_KEY_D, right);
-            map_move_t(GLFW_KEY_SPACE, up);
-            map_move_t(GLFW_KEY_LEFT_SHIFT, down);
+            MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
+            MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
+            MAP_MOVE_STATE_TRUE(GLFW_KEY_A, left);
+            MAP_MOVE_STATE_TRUE(GLFW_KEY_D, right);
+            MAP_MOVE_STATE_TRUE(GLFW_KEY_SPACE, up);
+            MAP_MOVE_STATE_TRUE(GLFW_KEY_LEFT_SHIFT, down);
 
+            // These select movement key binds will eventually
+            // be replaced with a more user friendly movement scheme involving
+            // mouse drag selection. For  now, the goal is simply to
+            // have a driver that allows for ease of testing.
+            MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_UP, front);
+            MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_DOWN, back);
+            MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT, right);
+            MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_LEFT, left);
+            MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT_SHIFT, up);
+            MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT_CONTROL, down);
+            
         default:
             break;
         }
     }
     else if (action == GLFW_RELEASE) {
         switch (key) {
-            KEY_FIN(GLFW_KEY_F1);
+            KEY_RELEASE(GLFW_KEY_F1);
 
-            map_move_f(GLFW_KEY_W, front);
-            map_move_f(GLFW_KEY_S, back);
-            map_move_f(GLFW_KEY_A, left);
-            map_move_f(GLFW_KEY_D, right);
-            map_move_f(GLFW_KEY_SPACE, up);
-            map_move_f(GLFW_KEY_LEFT_SHIFT, down);
+            MAP_MOVE_STATE_FALSE(GLFW_KEY_W, front);
+            MAP_MOVE_STATE_FALSE(GLFW_KEY_S, back);
+            MAP_MOVE_STATE_FALSE(GLFW_KEY_A, left);
+            MAP_MOVE_STATE_FALSE(GLFW_KEY_D, right);
+            MAP_MOVE_STATE_FALSE(GLFW_KEY_SPACE, up);
+            MAP_MOVE_STATE_FALSE(GLFW_KEY_LEFT_SHIFT, down);
+
+            MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_UP, front);
+            MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_DOWN, back);
+            MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT, right);
+            MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_LEFT, left);
+            MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT_SHIFT, up);
+            MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT_CONTROL, down);
 
         default:
             break;
         }
     }
 
-#undef map_move_t
-#undef map_move_f
+#undef MAP_MOVE_STATE_TRUE
+#undef MAP_MOVE_STATE_FALSE
 }
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
@@ -1090,14 +1168,13 @@ public:
 
         auto bvol = g_models.bound_volumes[g_models.modind_sphere];
 
-        //bvol.center = MAT4V3(g_view.view(), bvol.center);
-
         if (g_geom.test_ray_sphere(world_raycast, bvol)) {
             std::cout << "HIT\n";
+            g_models.set_select_model_state(g_models.modind_sphere);
         } else {
             std::cout << "NO HIT\n";
+            g_models.clear_select_model_state();
         }
-      
         
         std::cout << AS_STRING_GLM_SS(nearp) << "\n";
         std::cout << AS_STRING_GLM_SS(world_raycast.orig) << "\n";
@@ -1161,8 +1238,10 @@ int main(void) {
     init_api_data();
 
     while (!glfwWindowShouldClose(window)) {
-        g_view(g_move_state);
+        g_view(g_cam_move_state);
 
+        g_models.update_select_model_state();
+        
         render();
 
         glfwSwapBuffers(window);
