@@ -822,6 +822,8 @@ struct camera_orientation {
     false
 };
 
+// approximately 400 virtual key identifiers
+// defined by GLFW
 static std::array<bool, 400> g_key_states;
 
 void maybe_enable_cursor(GLFWwindow* w) {
