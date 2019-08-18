@@ -312,11 +312,21 @@ struct models {
         transformorder_count
     };
 
-    using transform_fn_type = std::function<mat4_t(int model)>;
-    using index_type = int16_t;
+    enum model_type {
+        model_unknown = 0,
+        model_tri,
+        model_sphere,
+        model_cube
+    };
 
+    using index_type = int16_t;
+    using transform_fn_type = std::function<mat4_t(index_type model)>;
+    using index_list_type = std::vector<index_type>;
+    using predicate_fn_type = std::function<bool(const index_type&)>;
+    
     static const inline index_type k_uninit = -1;
 
+    
     std::array<transform_fn_type, transformorder_count> __table = {
         [this](int model) { return scale(model) * rotate(model) * translate(model); },
         [this](int model) { return glm::inverse(g_view.view())
@@ -329,6 +339,7 @@ struct models {
     std::vector<vec3_t> positions;
     std::vector<vec3_t> scales;
     std::vector<vec3_t> angles;
+    std::vector<model_type> model_types;
     std::vector<index_type> vertex_offsets;
     std::vector<index_type> vertex_counts;
     std::vector<geom::bvol> bound_volumes;
@@ -353,16 +364,18 @@ struct models {
 
     index_type modind_selected = k_uninit;
     
-    int new_model(index_type vbo_offset = 0,
-                  index_type num_vertices = 0,
-                  vec3_t position = glm::zero<vec3_t>(),
-                  vec3_t scale = vec3_t(1.0f),
-                  vec3_t angle = vec3_t(0.0f),
-                  geom::bvol bvol = geom::bvol()) {
+    auto new_model(model_type mt,
+                   index_type vbo_offset = 0,
+                   index_type num_vertices = 0,
+                   vec3_t position = glm::zero<vec3_t>(),
+                   vec3_t scale = vec3_t(1.0f),
+                   vec3_t angle = vec3_t(0.0f),
+                   geom::bvol bvol = geom::bvol()) {
 
-        int id = static_cast<int>(positions.size());
         index_type id = static_cast<index_type>(model_count);
 
+        model_types.push_back(mt);
+        
         positions.push_back(position);
         scales.push_back(scale);
         angles.push_back(angle);
@@ -463,12 +476,13 @@ struct models {
         bvol.radius = scale;
         bvol.center = position;
 
-        return new_model(offset,
-                                    count,
-                                    position,
-                                    vec3_t(scale),
-                                    glm::zero<vec3_t>(),
-                                    bvol);
+        return new_model(model_sphere,
+                         offset,
+                         count,
+                         position,
+                         vec3_t(scale),
+                         glm::zero<vec3_t>(),
+                         bvol);
     }
 
     auto new_cube(const vec3_t& position = glm::zero<vec3_t>(), const vec3_t& scale = vec3_t(1.0f), const vec4_t& color = vec4_t(1.0f)) {
@@ -529,7 +543,11 @@ struct models {
                                          c, color);
         }
 
-        return new_model(offset, 36, position, scale);
+        return new_model(model_cube,
+                         offset,
+                         36,
+                         position,
+                         scale);
     }
 
     mat4_t scale(index_type model) const {
@@ -566,8 +584,23 @@ struct models {
                                count));
         }
     }
-} static g_models;
 
+    index_list_type select(predicate_fn_type func) const {
+        index_list_type members;
+
+        for (auto i = 0; i < model_count; ++i) {
+            if (func(i)) {
+                members.push_back(i);
+            }
+        }
+
+        return members;
+    }
+
+    model_type type(index_type i) const {
+        return model_types[i];
+    }
+} static g_models;
 
 struct gl_depth_func {
     GLint prev_depth;
@@ -682,7 +715,7 @@ static void init_api_data() {
                                                    vec4_t(0.0f, 0.0f, 1.0f, 1.0f));
 
 
-        g_models.modind_tri = g_models.new_model(offset, 3);
+        g_models.modind_tri = g_models.new_model(models::model_tri, offset, 3);
     }
 
     g_models.modind_sphere = g_models.new_sphere(vec3_t(0.0f, 5.0f, -10.0f));
