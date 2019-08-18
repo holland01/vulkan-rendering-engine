@@ -307,6 +307,7 @@ struct models {
         // on purpose, since mathematically this is how transforms work with the current
         // conventions used.
         transformorder_srt = 0,
+        transformorder_trs, 
         transformorder_lookat,
         transformorder_skybox,
         transformorder_count
@@ -329,6 +330,7 @@ struct models {
     
     std::array<transform_fn_type, transformorder_count> __table = {
         [this](int model) { return scale(model) * rotate(model) * translate(model); },
+        [this](int model) { return translate(model) * rotate(model) * scale(model); },
         [this](int model) { return glm::inverse(g_view.view())
         * glm::lookAt(look_at.eye, look_at.center, look_at.up); },
         [this](int model) {
@@ -835,7 +837,7 @@ void test_draw_cubemap_reflect() {
         g_programs.up_mat4x4("unif_InverseView", glm::inverse(g_view.view()));
         g_programs.up_vec3("unif_CameraPosition", g_view.position);
 
-        DRAW_MODELS(models::transformorder_srt);
+        DRAW_MODELS(models::transformorder_trs);
     }
 
     g_vertex_buffer.unbind();
