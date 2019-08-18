@@ -345,6 +345,8 @@ struct models {
         glm::zero<vec3_t>()
     };
 
+    index_type model_count = 0;
+    
     index_type modind_tri = 0;
     index_type modind_sphere = 1;
     index_type modind_skybox = 2;
@@ -359,6 +361,7 @@ struct models {
                   geom::bvol bvol = geom::bvol()) {
 
         int id = static_cast<int>(positions.size());
+        index_type id = static_cast<index_type>(model_count);
 
         positions.push_back(position);
         scales.push_back(scale);
@@ -367,13 +370,15 @@ struct models {
         vertex_offsets.push_back(vbo_offset);
         vertex_counts.push_back(num_vertices);
 
-        draw.push_back(true);
+        draw.push_back(true);       
 
         bound_volumes.push_back(bvol);
 
-        return id;
-    }
+        model_count++;
 
+        return id;
+    }    
+    
     void clear_select_model_state() {
         if (modind_selected != k_uninit) {
             // TODO: cleanup select state for previous model here
@@ -555,7 +560,6 @@ struct models {
     }
 } static g_models;
 
-static std::vector<models::index_type> g_model_ids;
 
 struct gl_depth_func {
     GLint prev_depth;
@@ -671,15 +675,12 @@ static void init_api_data() {
 
 
         g_models.modind_tri = g_models.new_model(offset, 3);
-        g_model_ids.push_back(g_models.modind_tri);
     }
 
     g_models.modind_sphere = g_models.new_sphere(vec3_t(0.0f, 5.0f, -10.0f));
 
-    g_model_ids.push_back(g_models.modind_sphere);
 
     g_models.modind_skybox = g_models.new_cube();
-    g_model_ids.push_back(g_models.modind_skybox);
 
     g_vertex_buffer.reset();
 
@@ -706,7 +707,7 @@ static void init_api_data() {
     GL_FN(glClearDepth(1.0f));
 }
 
-#define DRAW_MODELS(transform_order) for (auto id: g_model_ids) { g_models.render(id, transform_order); }
+#define DRAW_MODELS(transform_order) for (auto i = 0; i < g_models.model_count; ++i) { g_models.render(i, transform_order); }
 
 #define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
 #define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
