@@ -485,11 +485,11 @@ struct models {
 
         auto count = 0;
 
-        auto cart = [&scale](real_t phi, real_t theta) {
+        auto cart = [](real_t phi, real_t theta) {
             vec3_t ret;
-            ret.x = scale * glm::cos(theta) * glm::cos(phi);
-            ret.y = scale * glm::sin(phi);
-            ret.z = scale * glm::sin(theta) * glm::cos(phi);
+            ret.x = glm::cos(theta) * glm::cos(phi);
+            ret.y = glm::sin(phi);
+            ret.z = glm::sin(theta) * glm::cos(phi);
             return ret;
         };
 
@@ -762,9 +762,16 @@ static void init_api_data() {
         g_models.modind_tri = g_models.new_model(models::model_tri, offset, 3);
     }
 
-    g_models.modind_sphere = g_models.new_sphere(vec3_t(0.0f, 5.0f, -10.0f));
+    g_models.modind_sphere = g_models.new_sphere(vec3_t(0.0f, 5.0f, -10.0f), R(1.5));
 
+    auto sb = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
+    auto sc = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
+    auto sd = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
 
+    g_models.place_above(sb, g_models.modind_sphere);
+    g_models.place_above(sc, sb);
+    g_models.place_above(sd, sc);
+    
     g_models.modind_skybox = g_models.new_cube();
 
     g_vertex_buffer.reset();
