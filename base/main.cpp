@@ -16,6 +16,7 @@
 #include "util.h"
 #include "programs.h"
 #include "geom.h"
+#include "frame.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -23,6 +24,8 @@
 
 
 #define OBJECT_SELECT_MOVE_STEP real_t(0.01)
+
+frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
 
 std::vector<type_module*> g_modules;
 
@@ -1022,6 +1025,9 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
                       g_cam_orient.active = !g_cam_orient.active;
                       maybe_enable_cursor(window));
 
+            KEY_BLOCK(GLFW_KEY_F2,
+                      g_frame.screenshot());
+            
             MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
             MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
             MAP_MOVE_STATE_TRUE(GLFW_KEY_A, left);
