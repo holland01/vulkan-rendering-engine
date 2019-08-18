@@ -973,6 +973,21 @@ void maybe_enable_cursor(GLFWwindow* w) {
     }
 }
 
+// we only check once here since
+// a keydown can trigger an action,
+// and most of the time we don't want
+// that action to repeat for
+// the entire duration of the key press
+bool keydown_if_not(int key) {
+    bool isnotdown = !g_key_states[key];
+
+    if (isnotdown) {
+        g_key_states[key] = true;
+    }
+
+    return isnotdown;
+}
+
 // this callback is a slew of macros to make changes and adaptations easier
 // to materialize: much of this is likely to be altered as new needs are met,
 // and there are many situations that call for redundant expressions that may
@@ -989,17 +1004,13 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     } break
 
 #define MAP_MOVE_SELECT_STATE_FALSE(key, dir) case key: g_select_move_state.dir = false; break
-
     
 #define KEY_BLOCK(key, expr)                    \
   case key: {                                   \
-    if (!g_key_states[key]) {                   \
-      g_key_states[key] = true;                 \
-      expr;                                     \
-    }                                           \
+      if (keydown_if_not(key)) {                \
+          expr;                                 \
+      }                                         \
   } break
-
-#define KEY_RELEASE(key) case key: g_key_states[key] = false; break
 
     if (action == GLFW_PRESS) {
         switch (key) {
@@ -1030,13 +1041,13 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
             MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT_CONTROL, down);
             
         default:
+            keydown_if_not(key);
             break;
         }
     }
     else if (action == GLFW_RELEASE) {
-        switch (key) {
-            KEY_RELEASE(GLFW_KEY_F1);
-
+        switch (key) {                        
+            
             MAP_MOVE_STATE_FALSE(GLFW_KEY_W, front);
             MAP_MOVE_STATE_FALSE(GLFW_KEY_S, back);
             MAP_MOVE_STATE_FALSE(GLFW_KEY_A, left);
@@ -1052,6 +1063,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
             MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT_CONTROL, down);
 
         default:
+            g_key_states[key] = false;          
             break;
         }
     }
