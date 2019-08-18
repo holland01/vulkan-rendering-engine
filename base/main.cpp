@@ -1135,6 +1135,7 @@ public:
         
         real_t depth{};
 
+        // This will read from GL_BACK by default
         GL_FN(glReadPixels(static_cast<int32_t>(g_cam_orient.prev_xpos),
                            static_cast<int32_t>(g_cam_orient.prev_ypos),
                            1, 1,
@@ -1202,7 +1203,6 @@ public:
             g_models.select([](const models::index_type& id) -> bool {
                     return g_models.type(id) == models::model_sphere;
                 });
-        
         
         for (auto id: filtered) {
             if (cast_ray(id)) {
