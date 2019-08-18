@@ -320,7 +320,7 @@ struct models {
         model_cube
     };
 
-    using index_type = int16_t;
+    using index_type = int32_t;
     using transform_fn_type = std::function<mat4_t(index_type model)>;
     using index_list_type = std::vector<index_type>;
     using predicate_fn_type = std::function<bool(const index_type&)>;
@@ -365,7 +365,13 @@ struct models {
     index_type modind_skybox = 2;
 
     index_type modind_selected = k_uninit;
-    
+
+    // It's assumed that vertices
+    // have been already added to the vertex
+    // buffer when this function is called,
+    // so we explicitly reallocate the needed
+    // VBO memory every time we add new
+    // model data with this function.
     auto new_model(model_type mt,
                    index_type vbo_offset = 0,
                    index_type num_vertices = 0,
@@ -388,8 +394,10 @@ struct models {
         draw.push_back(true);       
 
         bound_volumes.push_back(bvol);
-
+        
         model_count++;
+
+        g_vertex_buffer.reset();
 
         return id;
     }    
