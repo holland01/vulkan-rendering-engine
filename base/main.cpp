@@ -1010,108 +1010,6 @@ struct click_state {
 private:
     static const int32_t DEPTH_SCAN_XY_RANGE = 5;
 
-    // FIXME:
-    // This method still needs work. Results DO seem improved with the additional buffer
-    // scans, and using a scan grid on each buffer (that essentially has a perimeter placed
-    // around the x,y position of the mouse) does help in finding lesser depth values.
-    // HOWEVER, we still don't always get hits when we should. It's possible that
-    // using floating point values to drive these calculations is also affecting
-    // accuracy significantly, in which case it would be wise to use dmats/vecs
-    // for this computation.
-    // At some point, this can be tested using doubles. NOTE that the geom modules
-    // will also need to be updated accordingly to accomodate this, so it would be a good idea.
-    // to define templated structures which take a realType template value which gets
-    // forward to glm's tvecN<> declarations. 
-    
-    // scans all available color buffers using the main framebuffer
-    // and covers a pixels in the range -DEPTH_SCAN_XY_RANGE <= xpos, ypos <= DEPTH_SCAN_XY_RANGE.
-    // for each GL_DEPTH_COMPONENT query, the minimum depth is returned
-    real_t find_nearest_depth(int32_t xpos, int32_t ypos, int32_t& out_xoff, int32_t& out_yoff) const {
-        GLint prev_read_buffer;
-        GL_FN(glGetIntegerv(GL_READ_BUFFER, &prev_read_buffer));
-
-        std::array<GLenum, 8> scan = {
-           GL_FRONT_LEFT, GL_FRONT_RIGHT,
-           GL_BACK_LEFT, GL_BACK_RIGHT,
-           GL_FRONT, GL_BACK,
-           GL_LEFT, GL_RIGHT
-        };
-
-        real_t min_depth{R(1.0)};
-
-        int32_t min_depth_xoff;
-        int32_t min_depth_yoff;
-
-        bool threshold_exceeded = false;
-        
-        auto test_depth = [&min_depth,
-                           &min_depth_xoff,
-                           &min_depth_yoff,
-                           &threshold_exceeded,
-                           xpos,
-                           ypos](int32_t xoff, int32_t yoff) {
-            real_t depth{};
-            
-            GL_FN(glReadPixels(xpos + xoff, ypos + yoff,
-                               1, 1,
-                               GL_DEPTH_COMPONENT, OPENGL_REAL,
-                               &depth));
-
-            if (depth < min_depth) {
-                min_depth = depth;
-                min_depth_xoff = xoff;
-                min_depth_yoff = yoff;
-
-                if (depth < R(0.5)) {
-                    //threshold_exceeded = true;
-                }
-            }
-        };
-
-        // GL_INVALID_OPERATION is returned by glGetError() if the device
-        // doesn't have access to the buffer we want to set,
-        // so we want to ignore the GL_INVALID_OPERATION,
-        // but flag any others that may result.
-        for (auto read_buffer: scan) {
-            
-            glReadBuffer(read_buffer);
-
-            GLenum error = glGetError();
-
-            if (error == GL_NO_ERROR) {
-                for (auto offset = 1; offset <= DEPTH_SCAN_XY_RANGE && !threshold_exceeded; ++offset) {
-                
-                    test_depth(0, 0);
-                
-                    test_depth(0, offset);
-                    test_depth(offset, offset);
-                    test_depth(offset, 0);
-
-                    test_depth(0, -offset);
-                    test_depth(-offset, -offset);
-                    test_depth(-offset, 0);
-
-                    test_depth(offset, -offset);
-                    test_depth(-offset, offset);
-                }
-                                
-            } else if (error != GL_INVALID_OPERATION) {
-                report_gl_error(error,
-                                __LINE__,
-                                __func__,
-                                __FILE__,
-                                "glReadBuffer(read_buffer)");
-            }
-        }
-
-        GL_FN(glReadBuffer(prev_read_buffer));
-
-        out_xoff = min_depth_xoff;
-        out_yoff = min_depth_yoff;
-        
-        return min_depth;
-    }
-
 public:
     
     //
@@ -1133,12 +1031,13 @@ public:
         int32_t x_offset = 0;
         int32_t y_offset = 0;
         
-        real_t depth{
-            find_nearest_depth(static_cast<int32_t>(g_cam_orient.prev_xpos),
-                               static_cast<int32_t>(g_cam_orient.prev_ypos),
-                               x_offset,
-                               y_offset)
-                };
+        real_t depth{};
+
+        GL_FN(glReadPixels(static_cast<int32_t>(g_cam_orient.prev_xpos),
+                           static_cast<int32_t>(g_cam_orient.prev_ypos),
+                           1, 1,
+                           GL_DEPTH_COMPONENT, OPENGL_REAL,
+                           &depth));
         
         vec4_t mouse( R(g_cam_orient.prev_xpos) + R(x_offset), 
                       R(g_cam_orient.prev_ypos) + R(y_offset),
