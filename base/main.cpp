@@ -81,7 +81,7 @@ struct view_data {
         : proj(1.0f),
         orient(1.0f),
         position(0.0f),
-        step(0.01f),
+        step(0.1f),
         skynearp(10.0f),
         nearp(1.0f),
         skyfarp(1000.0f),
