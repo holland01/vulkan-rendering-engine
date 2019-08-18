@@ -398,9 +398,15 @@ struct models {
     }
 
 #define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)\
-    if (g_select_move_state.dir) { ASSERT(has_select_model_state()); positions[modind_selected].axis += amount; }
-    
+    if (g_select_move_state.dir) { positions[modind_selected].axis += amount;  }
+
+    // This is continuously called in the main loop,
+    // so it's important that we don't assume
+    // that this function is alaways called when
+    // a valid index hits.
     void update_select_model_state() {
+        ASSERT(has_select_model_state());
+        
         MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
         MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
 
@@ -409,6 +415,8 @@ struct models {
 
         MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
         MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
+
+        bound_volumes[modind_selected].center = positions[modind_selected];
     }
     
 #undef MAP_UPDATE_SELECT_MODEL_STATE
@@ -1241,7 +1249,9 @@ int main(void) {
     while (!glfwWindowShouldClose(window)) {
         g_view(g_cam_move_state);
 
-        g_models.update_select_model_state();
+        if (g_models.has_select_model_state()) {
+            g_models.update_select_model_state();
+        }
         
         render();
 
