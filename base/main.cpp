@@ -420,8 +420,40 @@ struct models {
         return modind_selected != k_uninit;
     }
 
+    enum _move_op {
+        mop_add,
+        mop_sub,
+        mop_set
+    };
+    
+    void move(index_type model, const vec3_t& position, _move_op mop) {
+        switch (mop) {
+        case mop_add: positions[model] += position; break;
+        case mop_sub: positions[model] -= position; break;
+        case mop_set: positions[model] = position; break;
+        }
+
+        bound_volumes[model].center = positions[model];
+    }
+
+    // Place model 'a' ontop of model 'b'.
+    // Right now we only care about bounding spheres
+    void place_above(index_type a, index_type b) {
+        ASSERT(bound_volumes[a].type == geom::bvol::type_sphere);
+        ASSERT(bound_volumes[b].type == geom::bvol::type_sphere);
+
+        vec3_t a_position{positions[b]};
+
+        auto arad = bound_volumes[a].radius;
+        auto brad = bound_volumes[b].radius;
+
+        a_position.y += arad + brad;
+
+        move(a, a_position, mop_set);
+    }
+    
 #define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)\
-    if (g_select_move_state.dir) { positions[modind_selected].axis += amount;  }
+    if (g_select_move_state.dir) { update.axis += amount;  }
 
     // This is continuously called in the main loop,
     // so it's important that we don't assume
@@ -429,6 +461,8 @@ struct models {
     // a valid index hits.
     void update_select_model_state() {
         ASSERT(has_select_model_state());
+
+        vec3_t update{R(0.0)};
         
         MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
         MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
@@ -439,7 +473,7 @@ struct models {
         MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
         MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
 
-        bound_volumes[modind_selected].center = positions[modind_selected];
+        move(modind_selected, update, mop_add);
     }
     
 #undef MAP_UPDATE_SELECT_MODEL_STATE
