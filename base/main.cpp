@@ -1025,6 +1025,9 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
                       g_cam_orient.active = !g_cam_orient.active;
                       maybe_enable_cursor(window));
 
+            KEY_BLOCK(GLFW_KEY_N,
+                      g_models.new_sphere());
+
             KEY_BLOCK(GLFW_KEY_F2,
                       g_frame.screenshot());
             
