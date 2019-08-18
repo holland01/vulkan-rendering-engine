@@ -47,7 +47,7 @@ static inline void logf_impl( int line, const char* func, const char* file,
 
 
 
-std::vector<std::string> g_gl_err_msg_cache;
+extern std::vector<std::string> g_gl_err_msg_cache;
 
   static inline void report_gl_error(GLenum err, int line, const char* func, const char* file,
     const char* expr)
@@ -80,7 +80,7 @@ std::vector<std::string> g_gl_err_msg_cache;
   }
 }
 
-GLuint make_shader(const char* source, GLenum type) {
+static inline GLuint make_shader(const char* source, GLenum type) {
   GLuint shader = 0;
   GL_FN(shader = glCreateShader(type));
 
@@ -108,7 +108,7 @@ GLuint make_shader(const char* source, GLenum type) {
   return shader;
 }
 
-GLuint make_program(std::vector<GLuint> shaders) {
+static inline GLuint make_program(std::vector<GLuint> shaders) {
   GLuint program = 0;
   GL_FN(program = glCreateProgram());
 
@@ -144,7 +144,7 @@ GLuint make_program(std::vector<GLuint> shaders) {
   return program;
 }
                                           
-GLuint make_program(const char* vertex_src, const char* fragment_src) {
+static inline GLuint make_program(const char* vertex_src, const char* fragment_src) {
   std::vector<GLuint> shaders;
 
   shaders.push_back(make_shader(vertex_src, GL_VERTEX_SHADER));
