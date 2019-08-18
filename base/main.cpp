@@ -1101,17 +1101,19 @@ public:
         return glm::inverse(g_view.proj * g_view.view()) * mouse;
     }
     
-    void cast_ray() const {
+    bool cast_ray(models::index_type model) const {
         vec3_t nearp = screen_out(g_view.nearp);
         geom::ray world_raycast{}; 
         world_raycast.dir = glm::normalize(nearp - g_view.position);
         world_raycast.orig = g_view.position;
 
-        auto bvol = g_models.bound_volumes[g_models.modind_sphere];
+        auto bvol = g_models.bound_volumes[model];
 
-        if (g_geom.test_ray_sphere(world_raycast, bvol)) {
+        bool success = g_geom.test_ray_sphere(world_raycast, bvol);
+        
+        if (success) {
             std::cout << "HIT\n";
-            g_models.set_select_model_state(g_models.modind_sphere);
+            g_models.set_select_model_state(model);
         } else {
             std::cout << "NO HIT\n";
             g_models.clear_select_model_state();
@@ -1122,15 +1124,31 @@ public:
         std::cout << AS_STRING_GLM_SS(world_raycast.dir) << "\n";
 
         std::cout << std::endl;
+
+        return success;
+    }
+
+    void scan_object_selection() const {
+        models::index_list_type filtered =
+            g_models.select([](const models::index_type& id) -> bool {
+                    return g_models.type(id) == models::model_sphere;
+                });
+        
+        
+        for (auto id: filtered) {
+            if (cast_ray(id)) {
+                break;
+            }
+        }
     }
 } g_click_state;
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         switch (g_click_state.mode) {
-            case click_state::mode_select:
-                g_click_state.cast_ray();
-                break;
+        case click_state::mode_select: {
+            g_click_state.scan_object_selection();
+        }break;
         }
     }
 }
