@@ -11,6 +11,8 @@
 #include <array>
 #include <string>
 
+#define ASSERT_FMT(fmt) ASSERT(fmt == GL_RGBA || fmt == GL_RGB || fmt == GL_DEPTH_COMPONENT)
+
 struct textures: public type_module {
     std::vector<GLuint> tex_handles;
 
@@ -96,6 +98,106 @@ struct textures: public type_module {
 
     using cubemap_paths_type = std::array<fs::path, 6>;
 
+    void fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data) {
+        ASSERT_FMT(fmt);
+        GLenum ifmt = fmt/* == GL_DEPTH_COMPONENT ? GL_DEPTH_COMPONENT24 : fmt*/; // ok for now as long as fmt is GL_RGBA, GL_RGB, GL_DEPTH_COMPONENT
+        
+        GL_FN(glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(offset),
+                           0,
+                           ifmt,
+                           w,
+                           h,
+                           0,
+                           fmt,
+                           /*fmt == GL_DEPTH_COMPONENT ? GL_FLOAT: */ GL_UNSIGNED_BYTE,
+                           data));
+
+    }
+
+    int channels_from_format(GLenum format) const {
+        int channels = -1;
+
+        switch (format) {
+        case GL_RGBA:
+        case GL_DEPTH_COMPONENT:
+            channels = 4;
+            break;
+        case GL_RGB:
+            channels = 3;
+            break;
+        }
+        
+        ASSERT(channels != -1);
+
+        return channels;
+    }
+
+    GLenum format_from_channels(int channels) const {
+        GLenum format = -1;
+
+        switch (channels) {
+        case 4:
+            format = GL_RGBA;
+            break;
+        case 3:
+            format = GL_RGB;
+            break;
+        }
+        
+        ASSERT(format != -1);
+
+        return format;
+    }
+    
+    // creates a blank cubemap
+    auto new_cubemap(int w, int h, GLenum format) {
+        int channels = channels_from_format(format);
+            
+        auto cmap_id = new_texture(w, h, channels, GL_TEXTURE_CUBE_MAP);
+
+        bind(cmap_id);
+
+        std::vector<uint8_t> blank(w * h * channels, 0);
+
+
+        if (format == GL_RGBA) {        
+            for (auto y = 0; y < h; ++y) {
+                for (auto x = 0; x < w; ++x) {
+                    auto p = (y * w + x) * channels;
+                    blank[p + 0] = (x & 0x1) == 1 ? 0xFF : 0x7f;
+                    blank[p + 1] = 0;
+                    blank[p + 2] = 0;
+                    blank[p + 3] = 0xFF;
+                }
+            }
+        } else if (format == GL_DEPTH_COMPONENT) {
+            for (auto y = 0; y < h; ++y) {
+                for (auto x = 0; x < w; ++x) {
+                    auto p = (y * w + x) * channels;
+                    float* depth = reinterpret_cast<float*>(&blank[p]);
+                    *depth = 1.0f;
+                }
+            }
+        } else if (format == GL_RGB) {
+            for (auto y = 0; y < h; ++y) {
+                for (auto x = 0; x < w; ++x) {
+                    auto p = (y * w + x) * channels;
+                    blank[p + 0] = (x & 0x1) == 1 ? 0xFF : 0x7f;
+                    blank[p + 1] = 0;
+                    blank[p + 2] = 0;
+                }
+            }
+        }
+
+        for (uint32_t i = 0; i < 6; ++i) {
+            fill_cubemap_face(i, w, h, format, &blank[0]);
+        }
+
+        unbind(cmap_id);
+
+        return cmap_id;
+    }
+    
     auto new_cubemap(cubemap_paths_type paths) {
         auto cmap_id = new_texture(0, 0, 0, GL_TEXTURE_CUBE_MAP);
 
@@ -118,29 +220,8 @@ struct textures: public type_module {
             ASSERT(chan <= 4);
 
             if (data != nullptr) {
-                GLenum fmt, ifmt;
-                switch (chan) {
-                case 3:
-                    ifmt = fmt = GL_RGB;
-                    break;
-                case 4:
-                    ifmt = fmt = GL_RGBA;
-                    break;
-                default:
-                    ASSERT(false);
-                    break;
-                }
-
-                GL_FN(glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(offset),
-                                   0,
-                                   ifmt,
-                                   w,
-                                   h,
-                                   0,
-                                   fmt,
-                                   GL_UNSIGNED_BYTE,
-                                   data));
-
+                auto format = format_from_channels(chan);
+                fill_cubemap_face(offset, w, h, format, data);
                 stbi_image_free(data);
             }
             else {
