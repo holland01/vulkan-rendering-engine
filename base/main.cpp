@@ -339,7 +339,17 @@ struct models {
         model_unknown = 0,
         model_tri,
         model_sphere,
-        model_cube
+        model_cube,
+        model_quad
+    };
+
+    enum wall_type {
+        wall_front = 0,
+        wall_left,
+        wall_right,
+        wall_back,
+        wall_top,
+        wall_bottom
     };
 
     using index_type = int32_t;
@@ -549,6 +559,105 @@ struct models {
                          vec3_t(scale),
                          glm::zero<vec3_t>(),
                          bvol);
+    }
+    
+    auto new_wall(const vec3_t& position,
+                  wall_type type,
+                  const vec3_t& scale,
+                  const vec4_t& color = R4(1.0)) {
+
+        // TODO:
+        // rewrite this so that the API
+        // takes planes XY, XZ, and YZ
+        // instead of wall types,
+        // since the scaling that's used
+        // is going to offset the faces
+        // in directions (in terms of translation)
+        // which we don't want them to be offset
+        // in.
+        std::array<real_t, 36 * 3> vertices = {
+            // positions
+            // front
+            -1.0f, 1.0f, 0.0f,
+            -1.0f, -1.0f, 0.0f,
+            1.0f, -1.0f, 0.0f,
+            1.0f, -1.0f, 0.0f,
+            1.0f, 1.0f, 0.0f,
+            -1.0f, 1.0f, 0.0f,
+
+            // left
+            0.0f, -1.0f, 1.0f,
+            0.0f, -1.0f, -1.0f,
+            0.0f, 1.0f, -1.0f,
+            0.0f, 1.0f, -1.0f,
+            0.0f, 1.0f, 1.0f,
+            0.0f, -1.0f, 1.0f,
+
+            // right
+            0.0f, -1.0f, -1.0f,
+            0.0f, -1.0f, 1.0f,
+            0.0f, 1.0f, 1.0f,
+            0.0f, 1.0f, 1.0f,
+            0.0f, 1.0f, -1.0f,
+            0.0f, -1.0f, -1.0f,
+
+            // back
+            -1.0f, -1.0f, 0.0f,
+            -1.0f, 1.0f, 0.0f,
+            1.0f, 1.0f, 0.0f,
+            1.0f, 1.0f, 0.0f,
+            1.0f, -1.0f, 0.0f,
+            -1.0f, -1.0f, 0.0f,
+
+            // top
+            -1.0f, 0.0f, -1.0f,
+            1.0f, 0.0f, -1.0f,
+            1.0f, 0.0f, 1.0f,
+            1.0f, 0.0f, 1.0f,
+            -1.0f, 0.0f, 1.0f,
+            -1.0f, 0.0f, -1.0f,
+
+            // bottom
+            -1.0f, 0.0f, -1.0f,
+            -1.0f, 0.0f, 1.0f,
+            1.0f, 0.0f, -1.0f,
+            1.0f, 0.0f, -1.0f,
+            -1.0f, 0.0f, 1.0f,
+            1.0f, 0.0f, 1.0f
+        };
+
+        auto vbo_offset = g_vertex_buffer.num_vertices();
+        
+        real_t* offset = &vertices[type * 18];
+
+        vec3_t a(offset[0], offset[1], offset[2]);
+        vec3_t b(offset[3], offset[4], offset[5]);
+        vec3_t c(offset[6], offset[7], offset[8]);
+
+        g_vertex_buffer.add_triangle(a, color,
+                                     b, color,
+                                     c, color);
+
+        vec3_t d(offset[9], offset[10], offset[11]);
+        vec3_t e(offset[12], offset[13], offset[14]);
+        vec3_t f(offset[15], offset[16], offset[17]);
+
+        g_vertex_buffer.add_triangle(d, color,
+                                     e, color,
+                                     f, color);
+
+        geom::bvol vol;
+
+        vol.radius = glm::length(scale);
+        vol.center = position;
+        
+        return new_model(model_quad,
+                         vbo_offset,
+                         6, // vertex count
+                         position,
+                         scale,
+                         glm::zero<vec3_t>(),
+                         vol);
     }
 
     auto new_cube(const vec3_t& position = glm::zero<vec3_t>(), const vec3_t& scale = vec3_t(1.0f), const vec4_t& color = vec4_t(1.0f)) {
@@ -796,6 +905,12 @@ static void init_api_data() {
     
     g_models.modind_skybox = g_models.new_cube();
 
+    real_t wall_size = R(15.0);
+    
+    g_models.new_wall(R3(0.0), models::wall_bottom, R3(wall_size), R4v(0.4, 0.2, 0.1, 1.0));
+    g_models.new_wall(R3v(-wall_size, 0.0, 0.0), models::wall_left, R3(wall_size), R4v(0.0, 0.0, 0.3, 1.0));
+    g_models.new_wall(R3v(wall_size, 0.0, 0.0), models::wall_right, R3(wall_size), R4v(0.3, 0.5, 0.0, 1.0));
+    
     g_vertex_buffer.reset();
 
 #define p(path__) fs::path("skybox0") / fs::path(path__ ".jpg")
