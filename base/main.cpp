@@ -912,7 +912,7 @@ void test_draw_skybox_scene() {
         g_models.render(g_models.modind_skybox,
                         models::transformorder_skybox);
 
-        g_textures.unbind(g_skybox_texture, slot);
+        g_textures.unbind(g_skybox_texture);
     }
     g_vertex_buffer.unbind();
 }

@@ -17,7 +17,7 @@ struct textures: public type_module {
     std::vector<uint32_t> widths;
     std::vector<uint32_t> heights;
     std::vector<uint32_t> num_channels;
-
+    mutable std::vector<GLenum> slots;
     std::vector<GLenum> types;
 
     using index_type = int16_t;
@@ -32,15 +32,16 @@ struct textures: public type_module {
     }
 
     void bind(index_type id, int slot = 0) const {
-        GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(slot)));
+        slots[id] = static_cast<GLenum>(slot);
+        GL_FN(glActiveTexture(GL_TEXTURE0 + slots[id]));
         GL_FN(glBindTexture(types[id], tex_handles[id]));
     }
 
-    void unbind(index_type id, int slot = 0) const {
-        GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(slot)));
+    void unbind(index_type id) const {
+        GL_FN(glActiveTexture(GL_TEXTURE0 + slots.at(id)));
         GL_FN(glBindTexture(types[id], 0));
     }
-
+    
     index_type new_texture(uint32_t width, uint32_t height, uint32_t channels, GLenum type) {
         GLuint handle = 0;
         GL_FN(glGenTextures(1, &handle));
@@ -88,6 +89,7 @@ struct textures: public type_module {
         heights.push_back(height);
         num_channels.push_back(channels);
         types.push_back(type);
+        slots.push_back(0);
 
         return index;
     }
