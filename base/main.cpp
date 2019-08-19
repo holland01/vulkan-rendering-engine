@@ -997,7 +997,8 @@ static void init_api_data() {
     GL_FN(glClearDepth(1.0f));
 }
 
-#define DRAW_MODELS(transform_order) for (auto i = 0; i < g_models.model_count; ++i) { g_models.render(i, transform_order); }
+#define DRAW_MODELS(transform_order) g_models.render(transform_order)
+
 
 
 void test_draw_skybox_scene();
