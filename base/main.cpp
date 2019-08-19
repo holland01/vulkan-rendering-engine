@@ -381,9 +381,8 @@ struct models {
     std::vector<index_type> vertex_offsets;
     std::vector<index_type> vertex_counts;
     std::vector<geom::bvol> bound_volumes;
-    std::vector<bool> draw;
+    mutable std::vector<bool> draw;
     
-
     struct {
         vec3_t eye;
         vec3_t center;
@@ -402,6 +401,8 @@ struct models {
 
     index_type modind_selected = k_uninit;
 
+    mutable bool framebuffer_pinned = false;
+    
     // It's assumed that vertices
     // have been already added to the vertex
     // buffer when this function is called,
@@ -761,9 +762,17 @@ struct models {
             GL_FN(glDrawArrays(GL_TRIANGLES,
                                ofs,
                                count));
-        }
+        };
     }
 
+    void maybe_render_cube(index_type model, transformorder to) const;
+
+    void render(transformorder to) const {
+        for (auto i = 0; i < model_count; ++i) {
+            render(i, to);
+        }
+    }
+    
     index_list_type select(predicate_fn_type func) const {
         index_list_type members;
 
@@ -786,6 +795,50 @@ struct models {
         return model_types[i];
     }
 } static g_models;
+
+struct frame_model {    
+    frame::index_type render_cube_id{frame::k_uninit};
+    bool needs_render{true};
+};
+
+std::unordered_map<models::index_type, frame_model> g_frame_model_map{};
+
+void models::maybe_render_cube(index_type model, transformorder to) const {
+    if (!framebuffer_pinned) {    
+        auto search = g_frame_model_map.find(model);
+    
+        if (search != g_frame_model_map.end()) {
+            auto& map = search->second;
+            
+            if (map.needs_render) {
+                framebuffer_pinned = true;
+                draw[model] = false;
+            
+                ASSERT(map.render_cube_id != frame::k_uninit);
+
+                g_frame.rcube->bind(map.render_cube_id);
+
+                bool x = false;
+                
+                for (auto i = 0; i < 6; ++i) {
+                    g_view.bind_view(g_frame.rcube->set_face(map.render_cube_id,
+                                                             static_cast<frame::render_cube::axis>(i)));
+
+                    CLEAR_COLOR_DEPTH;
+                    
+                    render(to);
+                }
+
+                g_frame.rcube->unbind();
+                g_view.unbind_view();
+
+                draw[model] = true;
+                framebuffer_pinned = false;
+                map.needs_render = false;
+            }
+        }
+    }
+}
 
 struct gl_depth_func {
     GLint prev_depth;
