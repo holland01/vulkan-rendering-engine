@@ -515,7 +515,7 @@ struct models {
     
 #undef MAP_UPDATE_SELECT_MODEL_STATE
 
-    auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1)) {
+    auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1), vec4_t color = vec4_t{R(1.0)}) {
         auto offset = g_vertex_buffer.num_vertices();
 
         real_t step = 0.1f;
@@ -532,8 +532,6 @@ struct models {
 
         for (real_t phi = -glm::half_pi<real_t>(); phi <= glm::half_pi<real_t>(); phi += step) {
             for (real_t theta = 0.0f; theta <= glm::two_pi<real_t>(); theta += step) {
-                auto color = vec4_t(1.0f);
-
                 auto a = cart(phi, theta);
                 auto b = cart(phi, theta + step);
                 auto c = cart(phi + step, theta + step);
