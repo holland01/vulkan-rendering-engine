@@ -68,7 +68,7 @@ struct programs : public type_module {
          void main() {
            vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
            gl_Position = clip;             
-           frag_Color = abs(clip / clip.w);
+           frag_Color = in_Color;
          });
 
   
