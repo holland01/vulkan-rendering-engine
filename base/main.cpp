@@ -60,6 +60,8 @@ static move_state  g_select_move_state = {
 struct view_data {
     mat4_t proj, skyproj;    // proj: camera to clip space transform
 
+    mat4_t view_mat;
+
     mat3_t orient;  // orient: camera orientation
 
     vec3_t position;  // position: theoretical position of the camera: technically,
@@ -80,17 +82,22 @@ struct view_data {
     uint16_t view_width;
     uint16_t view_height;
 
+    bool view_bound;
+    
     view_data(uint16_t width, uint16_t height)
-        : proj(1.0f),
-        orient(1.0f),
-        position(0.0f),
-        step(0.1f),
-        skynearp(10.0f),
-        nearp(1.0f),
-        skyfarp(1000.0f),
-        farp(1000.0f),
-        view_width(width),
-        view_height(height) {
+        : proj(1.0f), skyproj(R(1.0)),
+          view_mat(R(1.0)),
+          orient(1.0f),
+          position(0.0f),
+          step(0.1f),
+          skynearp(10.0f),
+          nearp(1.0f),
+          skyfarp(1000.0f),
+          farp(1000.0f),
+          view_width(width),
+          view_height(height),
+          view_bound(false)
+    {
     }
 
     auto calc_aspect() const {
@@ -183,10 +190,22 @@ struct view_data {
     // Thus, we perform the translation _first_, and then orientation second.
     //
     mat4_t view() const {
-        return mat4_t(orient) * glm::translate(mat4_t(1.0f),
-                                                  -position);
+        if (view_bound) {
+            return view_mat;
+        } else {
+            return mat4_t(orient) * glm::translate(mat4_t(1.0f), -position);
+        }
     }
 
+    void bind_view(const mat4_t& view) {
+        view_mat = view;
+        view_bound = true;
+    }
+
+    void unbind_view() {
+        view_bound = false;
+    }
+    
     //
     // operator (): updates position
     //
