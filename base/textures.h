@@ -249,5 +249,23 @@ struct textures: public type_module {
         return cmap_id;
     }
 
+    void set_tex_2d(index_type tid, const uint8_t* pixels) const {
+        bind(tid);
+        GLenum format = format_from_channels(num_channels[tid]);
+        ASSERT_FMT(format);
+        GL_FN(glTexImage2D(GL_TEXTURE_2D,
+                           0,
+                           format,
+                           widths[tid], heights[tid],
+                           0,
+                           format,
+                           GL_UNSIGNED_BYTE,
+                           pixels));
+        unbind(tid);                           
+    }
+    
+    auto handle(index_type i) const {
+        return tex_handles.at(i);
+    }
 } extern g_textures;
 
