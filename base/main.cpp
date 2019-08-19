@@ -22,8 +22,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-
 #define OBJECT_SELECT_MOVE_STEP real_t(0.01)
+
+#define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
+#define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
 
 frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
 
@@ -322,6 +324,8 @@ struct vertex_buffer {
     }
 
 } static g_vertex_buffer;
+
+#define MODLAMSEL(name, return_expr) [](const models::index_type& name) -> bool { return return_expr; }
 
 struct models {
     enum transformorder {
@@ -772,6 +776,12 @@ struct models {
         return members;
     }
 
+    void select_draw(predicate_fn_type func) {
+        for (auto i = 0; i < model_count; ++i) {
+            draw[i] = func(i);
+        }
+    }
+
     model_type type(index_type i) const {
         return model_types[i];
     }
@@ -938,8 +948,6 @@ static void init_api_data() {
 
 #define DRAW_MODELS(transform_order) for (auto i = 0; i < g_models.model_count; ++i) { g_models.render(i, transform_order); }
 
-#define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
-#define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
 
 void test_draw_skybox_scene();
 
