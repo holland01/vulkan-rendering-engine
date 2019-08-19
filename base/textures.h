@@ -160,5 +160,6 @@ struct textures: public type_module {
 
         return cmap_id;
     }
-} g_textures;
+
+} extern g_textures;
 
