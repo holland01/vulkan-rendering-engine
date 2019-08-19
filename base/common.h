@@ -29,6 +29,28 @@ using mat3_t = glm::mat3;
 using real_t = float;
 
 #define R(x) static_cast<real_t>(x)
+#define R2(x) vec2_t{R(x)}
+#define R3(x) vec3_t{R(x)}
+#define R4(x) vec4_t{R(x)}
+
+#define R4v(x,y,z,w) vec4_t{R(x), R(y), R(z), R(w)}
+#define R3v(x,y,z) vec3_t{R(x), R(y), R(z)}
+
+#define V3_UP R3v(0.0, 1.0, 0.0)
+#define V3_DOWN R3v(0.0, -1.0, 0.0)
+
+#define V3_LEFT R3v(-1.0, 0.0, 0.0)
+#define V3_RIGHT R3v(1.0, 0.0, 0.0)
+
+#define V3_FORWARD R3v(0.0, 0.0, -1.0)
+#define V3_BACKWARD R3v(0.0, 0.0, 1.0)
+
+#define SPHERE_UP(radius) V3_UP * R((radius))
+#define SPHERE_DOWN(radius) V3_DOWN * R((radius))
+#define SPHERE_LEFT(radius) V3_LEFT * R((radius))
+#define SPHERE_RIGHT(radius) V3_RIGHT * R((radius))
+#define SPHERE_FORWARD(radius) V3_FORWARD * R((radius))
+#define SPHERE_BACKWARD(radius) V3_BACKWARD * R((radius))
 
 #define OPENGL_REAL GL_FLOAT
 
