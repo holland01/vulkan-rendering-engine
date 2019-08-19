@@ -153,10 +153,12 @@
     <ClCompile Include="frame.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="stb_image.c" />
+    <ClCompile Include="textures.cpp" />
     <ClCompile Include="util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h" />
+    <ClInclude Include="frame.h" />
     <ClInclude Include="geom.h" />
     <ClInclude Include="programs.h" />
     <ClInclude Include="stb_image_write.h" />
