@@ -1237,28 +1237,6 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 #undef MAP_MOVE_STATE_FALSE
 }
 
-static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-    if (g_cam_orient.active) {
-        double scale = 0.01;
-
-        g_cam_orient.dx = xpos - g_cam_orient.prev_xpos;
-        g_cam_orient.dy = g_cam_orient.prev_ypos - ypos;
-
-        g_cam_orient.dx *= scale;
-        g_cam_orient.dy *= scale;
-
-        g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = ypos;
-
-        mat4_t xRot = glm::rotate(mat4_t(1.0f), static_cast<real_t>(g_cam_orient.dy), vec3_t(1.0f, 0.0f, 0.0f));
-        mat4_t yRot = glm::rotate(mat4_t(1.0f), static_cast<real_t>(g_cam_orient.dx), vec3_t(0.0f, 1.0f, 0.0f));
-
-        g_view.orient = mat3_t(yRot * xRot) * g_view.orient;
-    } else {
-        g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = ypos;
-    }
-}
 
 struct click_state {
     enum click_mode {
@@ -1409,6 +1387,39 @@ public:
         select.plane = mat4_t{R(1.0)};
     }
 } g_click_state;
+
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+    if (g_cam_orient.active) {
+        double scale = 0.01;
+
+        g_cam_orient.dx = xpos - g_cam_orient.prev_xpos;
+        g_cam_orient.dy = g_cam_orient.prev_ypos - ypos;
+
+        g_cam_orient.dx *= scale;
+        g_cam_orient.dy *= scale;
+
+        g_cam_orient.prev_xpos = xpos;
+        g_cam_orient.prev_ypos = ypos;
+
+        mat4_t xRot = glm::rotate(mat4_t(1.0f),
+                                  static_cast<real_t>(g_cam_orient.dy),
+                                  vec3_t(1.0f, 0.0f, 0.0f));
+
+        mat4_t yRot = glm::rotate(mat4_t(1.0f),
+                                  static_cast<real_t>(g_cam_orient.dx),
+                                  vec3_t(0.0f, 1.0f, 0.0f));
+
+        g_view.orient = mat3_t(yRot * xRot) * g_view.orient;
+    } else {
+        g_cam_orient.prev_xpos = xpos;
+        g_cam_orient.prev_ypos = ypos;
+
+        if (g_models.has_select_model_state()) {
+            g_models.positions[g_models.modind_selected] = g_click_state.calc_new_selected_position();
+        }
+    } 
+}
+
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
