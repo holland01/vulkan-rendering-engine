@@ -1425,7 +1425,9 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         switch (g_click_state.mode) {
         case click_state::mode_select: {
-            g_click_state.scan_object_selection();
+            if (!g_cam_orient.active) {
+                g_click_state.scan_object_selection();
+            }
         }break;
         }
     }
