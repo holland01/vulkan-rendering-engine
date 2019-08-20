@@ -1285,10 +1285,8 @@ public:
     // The documentation states that the screen coordinates are relative to the upper left
     // of the window's content area (not the entire desktop/viewing area). So, we don't have to perform any additional calculations
     // on the mouse coordinates themselves.
-    
-    vec3_t screen_out(real_t zplane) const {
-     //   vec4_t ndcplane = g_view.proj * g_view.view() * glm::vec4(0.0f, 0.0f, -zplane, 1.0f);
 
+    vec3_t screen_out() const {
         int32_t x_offset = 0;
         int32_t y_offset = 0;
         
@@ -1331,7 +1329,7 @@ public:
     }
     
     bool cast_ray(models::index_type model) const {
-        vec3_t nearp = screen_out(g_view.nearp);
+        vec3_t nearp = screen_out();
         geom::ray world_raycast{}; 
         world_raycast.dir = glm::normalize(nearp - g_view.position);
         world_raycast.orig = g_view.position;
