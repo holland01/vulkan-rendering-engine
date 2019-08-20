@@ -938,26 +938,13 @@ static void init_api_data() {
     GL_FN(glGenVertexArrays(1, &g_vao));
     GL_FN(glBindVertexArray(g_vao));
 
-    {
-        real_t s = 1.0f;
-        real_t t = -3.5f;
+    g_models.modind_sphere = g_models.new_sphere(vec3_t(0.0f, 1.5f, 0.0f), R(1.5));
 
-        // returns 0; used for the model id
-        auto offset = g_vertex_buffer.add_triangle(vec3_t(-s, 0.0f, t), // a
-                                                   vec4_t(1.0f, 0.0f, 0.0f, 1.0f),
-
-                                                   vec3_t(s, 0.0f, t), // b
-                                                   vec4_t(1.0f, 1.0f, 1.0f, 1.0f),
-
-                                                   vec3_t(0.0f, s, t), // c
-                                                   vec4_t(0.0f, 0.0f, 1.0f, 1.0f));
-
-
-        g_models.modind_tri = g_models.new_model(models::model_tri, offset, 3);
-    }
-
-    g_models.modind_sphere = g_models.new_sphere(vec3_t(0.0f, 5.0f, -10.0f), R(1.5));
-
+    frame_model fmod{};
+    fmod.render_cube_id = g_frame.add_render_cube(g_models.positions[g_models.modind_sphere], R(1.5));
+    g_frame_model_map[g_models.modind_sphere] = fmod;
+    
+#if 0
     auto sb = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
     auto sc = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
     auto sd = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
@@ -965,6 +952,7 @@ static void init_api_data() {
     g_models.place_above(sb, g_models.modind_sphere);
     g_models.place_above(sc, sb);
     g_models.place_above(sd, sc);
+#endif
     
     g_models.modind_skybox = g_models.new_cube();
 
@@ -1001,142 +989,103 @@ static void init_api_data() {
 
 #define DRAW_MODELS(transform_order) g_models.render(transform_order)
 
+static std::vector<uint8_t> g_debug_cubemap_buf;
+static textures::index_type g_debug_cm_index{textures::k_uninit};
 
+#define screen_cube_depth(k) (g_frame.width * g_frame.height * 4 * (k))
 
-void test_draw_skybox_scene();
-
-void test_sphere_fbo_pass(const vec4_t& background) {
-    g_capture.bind();
-
-    SET_CLEAR_COLOR_V4(background);
-    CLEAR_COLOR_DEPTH;
-
+// room with a few spheres
+void test_main_1() {
     g_vertex_buffer.bind();
 
-    {
+    auto& fmodel_map = g_frame_model_map[g_models.modind_sphere];
+    fmodel_map.needs_render = true;
+    
+    if (fmodel_map.needs_render) {        
+        g_models.select_draw(MODLAMSEL(m,
+                                       g_models.type(m) == models::model_sphere ||
+                                       g_models.type(m) == models::model_quad));
+        
         use_program u(g_programs.default_fb);
 
-        g_models.look_at.eye = g_models.positions[g_models.modind_sphere];
-        g_models.look_at.center = g_models.positions[g_models.modind_tri];
-        g_models.look_at.up = vec3_t(0.0f, 1.0f, 0.0f);
+        g_programs.up_int("unif_GammaCorrect", static_cast<int>(g_unif_gamma_correct));
 
-        // we're rendering from the sphere's perspective
-        g_models.draw[g_models.modind_sphere] = false;
+        g_frame.rcube->faces[0] = g_frame.rcube->calc_look_at_mats(g_models.positions[g_models.modind_sphere],
+                                                                  R(1.5));
+        
+        g_models.maybe_render_cube(g_models.modind_sphere, models::transformorder_trs);
 
-        DRAW_MODELS(models::transformorder_lookat);
+        
+        #if 0
+        g_debug_cubemap_buf = std::move(g_frame.rcube->get_pixels(fmodel_map.render_cube_id));
+
+        g_debug_cm_index = g_textures.new_texture(g_frame.width,
+                                                  g_frame.height,
+                                                  4,
+                                                  GL_TEXTURE_2D);
+        
+        g_textures.set_tex_2d(g_debug_cm_index, &g_debug_cubemap_buf[screen_cube_depth(0)]);
+        #endif
     }
-    g_vertex_buffer.unbind();
 
-
-    test_draw_skybox_scene();
-
-    g_capture.unbind();
-}
-
-void test_render_to_quad(const vec4_t& background) {
-    SET_CLEAR_COLOR_V4(background);
     CLEAR_COLOR_DEPTH;
-
+    
+    #if 1
     {
-        use_program u(g_programs.default_rtq);
-
-        g_capture.sample_begin("unif_TexSampler", 0);
-
-        GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
-
-        g_capture.sample_end();
-    }
-}
-
-void test_draw_reflect_sphere(const vec4_t& background) {
-
-    g_vertex_buffer.bind();
-    {
-        use_program u(g_programs.default_mir);
-
-        g_capture.sample_begin("unif_TexFramebuffer", 0);
-
-        g_programs.up_vec3("unif_LookCenter", g_models.look_at.center - g_models.look_at.eye);
-
-        g_models.draw[g_models.modind_sphere] = true;
-
-        DRAW_MODELS(models::transformorder_srt);
-
-        g_capture.sample_end();
-    }
-    g_vertex_buffer.unbind();
-}
-
-void test_draw_cubemap_reflect() {
-    g_vertex_buffer.bind();
-
-    g_models.draw[g_models.modind_sphere] = true;
-    g_models.draw[g_models.modind_tri] = true;
-    g_models.draw[g_models.modind_skybox] = false;
-
-    {
+        g_models.select_draw(MODLAMSEL(m, g_models.type(m) == models::model_sphere));
+        
         use_program u(g_programs.sphere_cubemap);
 
+        auto rcube_id = fmodel_map.render_cube_id;
+        auto texture = g_frame.render_cube_color_tex(rcube_id);
+        
         int slot = 0;
 
-        g_textures.bind(g_skybox_texture, slot);
+        g_textures.bind(texture, slot);
         g_programs.up_int("unif_TexCubeMap", slot);
 
         g_programs.up_mat4x4("unif_InverseView", glm::inverse(g_view.view()));
         g_programs.up_vec3("unif_CameraPosition", g_view.position);
 
         DRAW_MODELS(models::transformorder_trs);
+
+        g_textures.unbind(texture);
     }
 
-    g_vertex_buffer.unbind();
-}
-
-void test_draw_skybox_scene() {
-
-    g_vertex_buffer.bind();
-
-    g_models.draw[g_models.modind_skybox] = true;
     {
-        use_program u(g_programs.skybox);
+        g_models.select_draw(MODLAMSEL(m, g_models.type(m) == models::model_quad));
+        
+        use_program u(g_programs.default_fb);
 
-        int slot = 0;
-
-        g_textures.bind(g_skybox_texture, slot);
-
-        g_programs.up_int("unif_TexCubeMap", slot);
-
-        g_models.render(g_models.modind_skybox,
-                        models::transformorder_skybox);
-
-        g_textures.unbind(g_skybox_texture);
+        DRAW_MODELS(models::transformorder_trs);
     }
+    #else
+    {
+        use_program u(g_programs.default_rtq);
+        
+        g_textures.bind(g_debug_cm_index, 0);
+
+        g_programs.up_int("unif_TexSampler", 0);
+
+        GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+
+        g_textures.unbind(g_debug_cm_index);
+    }
+    #endif
+    
     g_vertex_buffer.unbind();
-}
-
-void test_main_0() {
-    vec4_t background(0.0f, 0.3f, 0.0f, 1.0f);
-
-    GL_FN(glDepthFunc(GL_LESS));
-    g_models.draw[g_models.modind_skybox] = false;
-    test_sphere_fbo_pass(background);
-
-    g_models.draw[g_models.modind_skybox] = false;
-    SET_CLEAR_COLOR_V4(background);
-    CLEAR_COLOR_DEPTH;
-
-    test_draw_reflect_sphere(background);
-    test_draw_skybox_scene();
 }
 
 static void render() {
-    vec4_t background(0.0f, 0.3f, 0.0f, 1.0f);
+    vec4_t background(0.0f, 0.0f, 0.0f, 0.0f);
     GL_FN(glDepthFunc(GL_LESS));
 
     SET_CLEAR_COLOR_V4(background);
-    CLEAR_COLOR_DEPTH;
 
-    test_draw_skybox_scene();
-    test_draw_cubemap_reflect();
+    test_main_1();
+    
+    //    test_draw_skybox_scene();
+    //    test_draw_cubemap_reflect();
 }
 
 static void error_callback(int error, const char* description) {
