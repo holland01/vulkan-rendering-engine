@@ -1286,6 +1286,11 @@ public:
     // of the window's content area (not the entire desktop/viewing area). So, we don't have to perform any additional calculations
     // on the mouse coordinates themselves.
 
+    struct  {
+        mat4_t plane{R(1.0)};
+        bool calc{true};
+    } mutable select;
+    
     vec3_t screen_out() const {
         int32_t x_offset = 0;
         int32_t y_offset = 0;
@@ -1355,6 +1360,37 @@ public:
         return success;
     }
 
+    vec3_t calc_new_selected_position() const {
+
+        if (select.calc) {
+            vec3_t Po{g_models.positions[g_models.modind_selected]};
+            vec3_t UPcam{glm::normalize(glm::inverse(g_view.orient)[1])};
+            
+            vec3_t Fo{Po - g_view.position}; // negated z-axis of transform defined by the plane of interest
+            vec3_t Vright{glm::cross(UPcam, Fo)}; // x-axis of transform defined by the plane of interest
+            vec3_t Fup{glm::cross(Fo, Vright)}; // y-axis of transform defined by the plane of interest
+            
+            select.plane = mat4_t(vec4_t{glm::normalize(Vright), R(0.0)}, 
+                                  vec4_t{glm::normalize(Fup), R(0.0)},
+                                  vec4_t{-glm::normalize(Fo), R(0.0)},
+                                  vec4_t{Po, R(1.0)});
+
+            select.calc = false;
+        }
+
+        vec3_t screen_to_world{screen_out()};
+        
+        vec4_t offset{
+            screen_to_world.x - select.plane[3].x,
+                screen_to_world.y - select.plane[3].y,
+                R(0.0),
+                R(1.0)};
+
+        vec3_t new_pos{select.plane * offset};
+
+        return new_pos;
+    }
+
     void scan_object_selection() const {
         models::index_list_type filtered =
             g_models.select([](const models::index_type& id) -> bool {
@@ -1366,6 +1402,11 @@ public:
                 break;
             }
         }
+    }
+
+    void unselect() {
+        select.calc = true;
+        select.plane = mat4_t{R(1.0)};
     }
 } g_click_state;
 
