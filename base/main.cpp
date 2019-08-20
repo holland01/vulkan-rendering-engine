@@ -1143,6 +1143,9 @@ void toggle_framebuffer_srgb() {
         GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
     }
 }
+
+void clear_model_selection();
+
 // this callback is a slew of macros to make changes and adaptations easier
 // to materialize: much of this is likely to be altered as new needs are met,
 // and there are many situations that call for redundant expressions that may
@@ -1175,6 +1178,9 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 
             KEY_BLOCK(GLFW_KEY_F1,
                       g_cam_orient.active = !g_cam_orient.active;
+                      if (g_cam_orient.active) {
+                          clear_model_selection();
+                      }
                       maybe_enable_cursor(window));
 
             KEY_BLOCK(GLFW_KEY_N,
@@ -1326,7 +1332,7 @@ public:
             g_models.set_select_model_state(model);
         } else {
             std::cout << "NO HIT\n";
-            g_models.clear_select_model_state();
+            clear_model_selection();
         }
         
         std::cout << AS_STRING_GLM_SS(nearp) << "\n";
@@ -1387,6 +1393,11 @@ public:
         select.plane = mat4_t{R(1.0)};
     }
 } g_click_state;
+
+void clear_model_selection() {
+    g_models.clear_select_model_state();
+    g_click_state.unselect();
+}
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     if (g_cam_orient.active) {
