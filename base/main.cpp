@@ -33,6 +33,8 @@ std::vector<type_module*> g_modules;
 
 textures::index_type g_skybox_texture {textures::k_uninit};
 
+static bool g_unif_gamma_correct = false;
+
 GLuint g_vao = 0;
 //
 //
@@ -1185,6 +1187,13 @@ bool keydown_if_not(int key) {
     return isnotdown;
 }
 
+void toggle_framebuffer_srgb() {
+    if (g_unif_gamma_correct) {
+        GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
+    } else {
+        GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
+    }
+}
 // this callback is a slew of macros to make changes and adaptations easier
 // to materialize: much of this is likely to be altered as new needs are met,
 // and there are many situations that call for redundant expressions that may
@@ -1224,6 +1233,10 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 
             KEY_BLOCK(GLFW_KEY_F2,
                       g_frame.screenshot());
+
+            KEY_BLOCK(GLFW_KEY_G,
+                      g_unif_gamma_correct = !g_unif_gamma_correct;
+                      toggle_framebuffer_srgb());
             
             MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
             MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
@@ -1459,9 +1472,11 @@ int main(void) {
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     maybe_enable_cursor(window);
-
+    
     init_api_data();
 
+    toggle_framebuffer_srgb();
+    
     while (!glfwWindowShouldClose(window)) {
         g_view(g_cam_move_state);
 

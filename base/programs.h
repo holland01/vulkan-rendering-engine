@@ -81,12 +81,20 @@ struct programs : public type_module {
       vertex_shader_standard,
       GLSL(smooth in vec4 frag_Color;
            out vec4 fb_Color;
+
+           uniform bool unif_GammaCorrect;
+           
            void main() {
-             fb_Color = frag_Color;
+               if (unif_GammaCorrect) {
+                   fb_Color = vec4(pow(frag_Color.xyz, vec3(1.0/ 2.2)), frag_Color.a);
+               } else {
+                   fb_Color = frag_Color;
+               }
            }),
       {
         "unif_ModelView",
-        "unif_Projection"
+        "unif_Projection",
+        "unif_GammaCorrect"
       },
       {
         attrib_layout_position(),
