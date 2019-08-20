@@ -1192,6 +1192,11 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
             KEY_BLOCK(GLFW_KEY_G,
                       g_unif_gamma_correct = !g_unif_gamma_correct;
                       toggle_framebuffer_srgb());
+
+            KEY_BLOCK(GLFW_KEY_R,
+                      if (g_models.has_select_model_state()) {
+                          g_models.positions[g_models.modind_selected] = R3(0.0);
+                      });
             
             MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
             MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
