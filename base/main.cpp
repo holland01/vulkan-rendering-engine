@@ -5,10 +5,11 @@
 #include <GL/glew.h>
 
 #include <GLFW/glfw3.h>
+
 #include <memory>
 #include <functional>
 #include <array>
-
+#include <algorithm>
 #include <iostream>
 
 #include "common.h"
@@ -1362,8 +1363,15 @@ public:
         return success;
     }
 
-    vec3_t calc_new_selected_position() const {
+    auto coeff(real_t d) const {
+        real_t base = R(500);
+        real_t logb_d = glm::log(d) / glm::log(base);
+        return std::min(logb_d, R(1.0));
+    }
+    
+    auto calc_new_selected_position() const {
 
+        
         if (select.calc) {
             vec3_t Po{g_models.positions[g_models.modind_selected]};
             vec3_t UPcam{glm::normalize(glm::inverse(g_view.orient)[1])};
@@ -1389,17 +1397,25 @@ public:
                       << AS_STRING_GLM_SS(select.point) << "\n"
                       << "----------------------" << std::endl;
                 
+                
         }
 
-        vec3_t screen_to_world{screen_out()};
+        real_t cam_dist{g_geom.dist_point_plane(g_view.position,
+                                                select.normal,
+                                                select.point)};
         
-        vec4_t offset{
-            screen_to_world.x - select.plane[3].x,
-                screen_to_world.y - select.plane[3].y,
-                R(0.0),
-                R(1.0)};
+        vec3_t s2w{g_view.view() * vec4_t{screen_out(), R(1)}};
+        s2w.z = R(0.0);
 
-        vec3_t new_pos{select.plane * offset};
+        auto c{coeff(cam_dist)};
+        
+        std::cout << "======CAMSEL INFO======\n" 
+                  << AS_STRING_SS(cam_dist) SEP_SS AS_STRING_GLM_SS(s2w) SEP_SS AS_STRING_SS(c);
+
+        s2w *= std::min(c * cam_dist, R(1000));
+        vec3_t new_pos{select.plane * vec4_t{s2w, 1.0}};
+
+        std::cout SEP_SS AS_STRING_GLM_SS(new_pos) << "----------\n" << std::endl;
 
         return new_pos;
     }
