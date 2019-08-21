@@ -1440,7 +1440,9 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
         g_cam_orient.prev_ypos = ypos;
 
         if (g_models.has_select_model_state()) {
-            g_models.positions[g_models.modind_selected] = g_click_state.calc_new_selected_position();
+            g_models.move(g_models.modind_selected,
+                          g_click_state.calc_new_selected_position(),
+                          models::mop_set);
         }
     } 
 }
