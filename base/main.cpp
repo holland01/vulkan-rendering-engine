@@ -33,7 +33,7 @@ std::vector<type_module*> g_modules;
 
 textures::index_type g_skybox_texture {textures::k_uninit};
 
-static bool g_unif_gamma_correct = false;
+static bool g_unif_gamma_correct = true;
 
 GLuint g_vao = 0;
 //
