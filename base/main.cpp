@@ -395,6 +395,8 @@ struct models {
         glm::zero<vec3_t>()
     };
 
+    vec3_t model_select_reset_pos{glm::zero<vec3_t>()};
+    
     index_type model_count = 0;
     
     index_type modind_tri = 0;
@@ -453,11 +455,45 @@ struct models {
         clear_select_model_state();
 
         modind_selected = model;
+        model_select_reset_pos = positions[model];
     }
 
     bool has_select_model_state() const {
         return modind_selected != k_uninit;
     }
+
+    #define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)\
+    if (g_select_move_state.dir) { update.axis += amount;  }
+
+    // This is continuously called in the main loop,
+    // so it's important that we don't assume
+    // that this function is alaways called when
+    // a valid index hits.
+    void update_select_model_state() {
+        ASSERT(has_select_model_state());
+
+        vec3_t update{R(0.0)};
+        
+        MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
+        MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
+
+        MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
+        MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
+
+        MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
+        MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
+
+        move(modind_selected, update, mop_add);
+    }
+
+    void reset_select_model_state() {
+        if (has_select_model_state()) {
+            move(modind_selected, model_select_reset_pos, mop_set);
+        }
+    }
+    
+#undef MAP_UPDATE_SELECT_MODEL_STATE
+
 
     enum _move_op {
         mop_add,
@@ -491,31 +527,6 @@ struct models {
         move(a, a_position, mop_set);
     }
     
-#define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)\
-    if (g_select_move_state.dir) { update.axis += amount;  }
-
-    // This is continuously called in the main loop,
-    // so it's important that we don't assume
-    // that this function is alaways called when
-    // a valid index hits.
-    void update_select_model_state() {
-        ASSERT(has_select_model_state());
-
-        vec3_t update{R(0.0)};
-        
-        MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
-        MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
-
-        MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
-        MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
-
-        MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
-        MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
-
-        move(modind_selected, update, mop_add);
-    }
-    
-#undef MAP_UPDATE_SELECT_MODEL_STATE
 
     auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1), vec4_t color = vec4_t{R(1.0)}) {
         auto offset = g_vertex_buffer.num_vertices();
@@ -1194,9 +1205,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
                       toggle_framebuffer_srgb());
 
             KEY_BLOCK(GLFW_KEY_R,
-                      if (g_models.has_select_model_state()) {
-                          g_models.positions[g_models.modind_selected] = R3(0.0);
-                      });
+                      g_models.reset_select_model_state());
             
             MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
             MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
