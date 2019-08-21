@@ -1351,12 +1351,13 @@ public:
             std::cout << "NO HIT\n";
             clear_model_selection();
         }
-        
+        #if 0
         std::cout << AS_STRING_GLM_SS(nearp) << "\n";
         std::cout << AS_STRING_GLM_SS(world_raycast.orig) << "\n";
         std::cout << AS_STRING_GLM_SS(world_raycast.dir) << "\n";
 
         std::cout << std::endl;
+        #endif
 
         return success;
     }
