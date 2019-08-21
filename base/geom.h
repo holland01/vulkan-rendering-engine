@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/projection.hpp>
 #include <sstream>
 #include <string>
 
@@ -89,6 +90,11 @@ struct geom {
         r.t1 = t1;
 
         return true;
+    }
+
+    real_t dist_point_plane(const vec3_t& p, const vec3_t& normal, const vec3_t& plane_p) {
+        vec3_t pl2p{p - plane_p};
+        return glm::length(glm::proj(pl2p, normal));        
     }
 
 } g_geom{};
