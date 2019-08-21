@@ -1286,6 +1286,9 @@ public:
 
     struct  {
         mat4_t plane{R(1.0)};
+        vec3_t normal;
+        vec3_t point;
+        real_t d;
         bool calc{true};
     } mutable select;
     
@@ -1373,7 +1376,18 @@ public:
                                   vec4_t{-glm::normalize(Fo), R(0.0)},
                                   vec4_t{Po, R(1.0)});
 
+
+            select.normal = -glm::normalize(Fo);
+            select.d = glm::abs(glm::dot(select.normal, Po));
+            select.point = Po;
             select.calc = false;
+
+            std::cout << "=====PLANE INFO====\n"
+                      << AS_STRING_GLM_SS(select.plane) << "\n"
+                      << AS_STRING_GLM_SS(select.normal) << "\n"
+                      << AS_STRING_GLM_SS(select.point) << "\n"
+                      << "----------------------" << std::endl;
+                
         }
 
         vec3_t screen_to_world{screen_out()};
