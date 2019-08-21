@@ -1368,7 +1368,7 @@ public:
             vec3_t Vright{glm::cross(UPcam, Fo)}; // x-axis of transform defined by the plane of interest
             vec3_t Fup{glm::cross(Fo, Vright)}; // y-axis of transform defined by the plane of interest
             
-            select.plane = mat4_t(vec4_t{glm::normalize(Vright), R(0.0)}, 
+            select.plane = mat4_t(vec4_t{-glm::normalize(Vright), R(0.0)}, 
                                   vec4_t{glm::normalize(Fup), R(0.0)},
                                   vec4_t{-glm::normalize(Fo), R(0.0)},
                                   vec4_t{Po, R(1.0)});
