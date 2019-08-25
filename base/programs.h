@@ -160,21 +160,25 @@ struct programs : public type_module {
              vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
              gl_Position = clip;             
              frag_Color = in_Color; //abs(clip / clip.w);
-
+             
              frag_Normal = in_Position;
-             frag_Position = vec3(unif_InverseView * unif_ModelView * vec4(in_Position, 1.0));
+
+             mat4 noTrans = unif_InverseView;
+             noTrans[3] = vec4(0.0, 0.0, 0.0, 1.0);
+             
+             frag_Position = vec3(noTrans * unif_ModelView * vec4(in_Position, 1.0));
            }),
       
       GLSL(smooth in vec4 frag_Color;
            smooth in vec3 frag_Position;
            smooth in vec3 frag_Normal;
-           
+
            uniform samplerCube unif_TexCubeMap;
            uniform vec3 unif_CameraPosition;
 
            out vec4 fb_Color;
            
-           void main() {             
+           void main() {
              vec3 I = normalize(frag_Position - unif_CameraPosition);
              vec3 R = reflect(I, normalize(frag_Normal));
              fb_Color = vec4(texture(unif_TexCubeMap, R).rgb, 1.0) * frag_Color;
