@@ -63,7 +63,7 @@ static move_state  g_select_move_state = {
 // of the destination space
 
 struct view_data {
-    mat4_t proj, skyproj;    // proj: camera to clip space transform
+    mat4_t proj, skyproj, cubeproj;    // proj: camera to clip space transform
 
     mat4_t view_mat;
 
@@ -90,7 +90,7 @@ struct view_data {
     bool view_bound;
     
     view_data(uint16_t width, uint16_t height)
-        : proj(1.0f), skyproj(R(1.0)),
+        : proj(1.0f), skyproj(R(1.0)), cubeproj(R(1.0)),
           view_mat(R(1.0)),
           orient(1.0f),
           position(0.0f),
@@ -112,6 +112,7 @@ struct view_data {
     void reset_proj() {
         set_proj_from_fovy(45.0f);
         skyproj = glm::perspective(120.0f, calc_aspect(), skynearp, skyfarp);
+        cubeproj = glm::perspective(90.0f, calc_aspect(), nearp, farp);
     }
 
     void set_proj_from_fovy(real_t fovy) {
@@ -766,7 +767,12 @@ struct models {
             mat4_t mv = g_view.view() * T;
 
             g_programs.up_mat4x4("unif_ModelView", mv);
-            g_programs.up_mat4x4("unif_Projection", model == modind_skybox ? g_view.skyproj : g_view.proj);
+            g_programs.up_mat4x4("unif_Projection",
+                                 (model == modind_skybox
+                                  ? g_view.skyproj
+                                  : (framebuffer_pinned
+                                     ? g_view.cubeproj
+                                     : g_view.proj)));
 
             auto ofs = vertex_offsets[model];
             auto count = vertex_counts[model];
