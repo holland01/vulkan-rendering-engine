@@ -19,6 +19,8 @@ namespace fs = std::experimental::filesystem;
 
 #define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
 
+#define NOP ;
+
 using vec2_t = glm::vec2;
 using vec3_t = glm::vec3;
 using vec4_t = glm::vec4;
