@@ -28,6 +28,9 @@
 #define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
 #define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
 
+#define TEST_SPHERE_RADIUS R(5)
+#define TEST_SPHERE_POS R3v(0, 10, 0)
+
 frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
 
 std::vector<type_module*> g_modules;
@@ -956,10 +959,12 @@ static void init_api_data() {
     GL_FN(glGenVertexArrays(1, &g_vao));
     GL_FN(glBindVertexArray(g_vao));
 
-    g_models.modind_sphere = g_models.new_sphere(vec3_t(0.0f, 1.5f, 0.0f), R(1.5));
+   g_models.modind_sphere = g_models.new_sphere(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
 
     frame_model fmod{};
-    fmod.render_cube_id = g_frame.add_render_cube(g_models.positions[g_models.modind_sphere], R(1.5));
+    fmod.render_cube_id = g_frame.add_render_cube(g_models.positions[g_models.modind_sphere],
+                                                  TEST_SPHERE_RADIUS);
+    
     g_frame_model_map[g_models.modind_sphere] = fmod;
     
 #if 0
