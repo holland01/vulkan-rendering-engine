@@ -1017,6 +1017,8 @@ static textures::index_type g_debug_cm_index{textures::k_uninit};
 
 #define screen_cube_depth(k) (g_frame.width * g_frame.height * 4 * (k))
 
+static int screen_cube_index = 0;
+
 // room with a few spheres
 void test_main_1() {
     g_vertex_buffer.bind();
@@ -1039,7 +1041,7 @@ void test_main_1() {
         g_models.maybe_render_cube(g_models.modind_sphere, models::transformorder_trs);
 
         
-        #if 0
+        #ifdef SPHERE_CAM
         g_debug_cubemap_buf = std::move(g_frame.rcube->get_pixels(fmodel_map.render_cube_id));
 
         g_debug_cm_index = g_textures.new_texture(g_frame.width,
@@ -1047,13 +1049,13 @@ void test_main_1() {
                                                   4,
                                                   GL_TEXTURE_2D);
         
-        g_textures.set_tex_2d(g_debug_cm_index, &g_debug_cubemap_buf[screen_cube_depth(0)]);
+        g_textures.set_tex_2d(g_debug_cm_index, &g_debug_cubemap_buf[screen_cube_depth(screen_cube_index)]);
         #endif
     }
 
     CLEAR_COLOR_DEPTH;
     
-    #if 1
+    #ifndef SPHERE_CAM
     {
         g_models.select_draw(MODLAMSEL(m, g_models.type(m) == models::model_sphere));
         
@@ -1199,6 +1201,12 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
             glfwSetWindowShouldClose(window, GL_TRUE);
             break;
 
+            KEY_BLOCK(GLFW_KEY_U,
+                      screen_cube_index = (screen_cube_index + 1) % 6);
+
+            KEY_BLOCK(GLFW_KEY_I,
+                      screen_cube_index = screen_cube_index == 0 ? 5 : screen_cube_index - 1);
+            
             KEY_BLOCK(GLFW_KEY_F1,
                       g_cam_orient.active = !g_cam_orient.active;
                       if (g_cam_orient.active) {
@@ -1375,9 +1383,9 @@ public:
     }
 
     auto coeff(real_t d) const {
-        real_t base = R(500);
+        real_t base = R(250);
         real_t logb_d = glm::log(d) / glm::log(base);
-        return std::min(logb_d, R(1.0));
+        return R(1); //std::min(logb_d, R(1.0));
     }
     
     auto calc_new_selected_position() const {
