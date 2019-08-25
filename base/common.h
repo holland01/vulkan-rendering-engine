@@ -1,7 +1,25 @@
 #pragma once
 
+#include <GL/glew.h>
+#include <GL/glu.h>
+#include <GLFW/glfw3.h>
+
 #include <glm/glm.hpp>
+
+#if defined(_MSC_VER)
+#define OS_WINDOWS
+#elif defined(__linux__)
+#define OS_LINUX
+#else
+#pragma error "Unsupported OS; must be either Windows with the latest MSVC or Ubuntu 18.04 with gcc-7 or later"
+#endif
+
+#if defined(OS_WINDOWS)
 #include <filesystem>
+#else
+#include <experimental/filesystem>
+#endif
+
 #include <vector>
 
 namespace fs = std::experimental::filesystem;

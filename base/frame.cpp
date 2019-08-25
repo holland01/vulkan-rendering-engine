@@ -1,6 +1,5 @@
 #include <string>
 #include <sstream>
-#include <GL/glew.h>
 
 
 #include "frame.h"

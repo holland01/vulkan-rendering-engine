@@ -1,10 +1,8 @@
+#include "common.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-
-#include <GL/glew.h>
-
-#include <GLFW/glfw3.h>
 
 #include <memory>
 #include <functional>
@@ -12,7 +10,7 @@
 #include <algorithm>
 #include <iostream>
 
-#include "common.h"
+
 #include "textures.h"
 #include "util.h"
 #include "programs.h"
