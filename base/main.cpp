@@ -981,7 +981,7 @@ static void init_api_data() {
 
     real_t wall_size = R(15.0);
     
-    g_models.new_wall(R3(0.0), models::wall_bottom, R3(wall_size), R4v(0.4, 0.2, 0.1, 1.0));
+    g_models.new_wall(R3(0.0), models::wall_bottom, R3(wall_size), R4v(0.1, 0.2, 0.3, 1.0));
     g_models.new_wall(R3v(-wall_size, 0.0, 0.0), models::wall_left, R3(wall_size), R4v(0.0, 0.0, 0.3, 1.0));
     g_models.new_wall(R3v(wall_size, 0.0, 0.0), models::wall_right, R3(wall_size), R4v(0.3, 0.5, 0.0, 1.0));
     
