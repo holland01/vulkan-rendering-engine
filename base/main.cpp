@@ -287,24 +287,27 @@ struct vertex_buffer {
         return static_cast<int>(data.size());
     }
 
-    auto add_triangle(const vec3_t& a_position, const vec4_t& a_color, const vec2_t& a_uv,
-                      const vec3_t& b_position, const vec4_t& b_color, const vec2_t& b_uv,
-                      const vec3_t& c_position, const vec4_t& c_color, const vec2_t& c_uv) {
+  auto add_triangle(const vec3_t& a_position, const vec4_t& a_color, const vec3_t& a_normal, const vec2_t& a_uv,
+		    const vec3_t& b_position, const vec4_t& b_color,  const vec3_t& b_normal, const vec2_t& b_uv,
+		    const vec3_t& c_position, const vec4_t& c_color, const vec3_t& c_normal, const vec2_t& c_uv) {
         vertex a = {
             a_position,
             a_color,
+	    a_normal,
             a_uv
         };
 
         vertex b = {
             b_position,
             b_color,
+	    b_normal,
             b_uv
         };
 
         vertex c = {
             c_position,
             c_color,
+	    c_normal,
             c_uv
         };
 
@@ -322,11 +325,23 @@ struct vertex_buffer {
                       const vec3_t& b_position, const vec4_t& b_color,
                       const vec3_t& c_position, const vec4_t& c_color) {
         vec2_t defaultuv(glm::zero<vec2_t>());
-
-        return add_triangle(a_position, a_color, defaultuv,
-                            b_position, b_color, defaultuv,
-                            c_position, c_color, defaultuv);
+	vec3_t defaultnormal(glm::zero<vec3_t>());
+	
+        return add_triangle(a_position, a_color, defaultnormal, defaultuv,
+                            b_position, b_color, defaultnormal, defaultuv,
+                            c_position, c_color, defaultnormal, defaultuv);
     }
+
+  auto add_triangle(const vec3_t& a_position, const vec4_t& a_color, const vec3_t& a_normal, 
+		    const vec3_t& b_position, const vec4_t& b_color, const vec3_t& b_normal,
+		    const vec3_t& c_position, const vec4_t& c_color, const vec3_t& c_normal) {
+    vec2_t defaultuv(glm::zero<vec2_t>());
+    
+    return add_triangle(a_position, a_color, a_normal, defaultuv,
+			b_position, b_color, b_normal, defaultuv,
+			c_position, c_color, c_normal, defaultuv);
+  }
+
 
 } static g_vertex_buffer;
 
@@ -546,21 +561,37 @@ struct models {
             return ret;
         };
 
+	
+	
         for (real_t phi = -glm::half_pi<real_t>(); phi <= glm::half_pi<real_t>(); phi += step) {
             for (real_t theta = 0.0f; theta <= glm::two_pi<real_t>(); theta += step) {
                 auto a = cart(phi, theta);
                 auto b = cart(phi, theta + step);
                 auto c = cart(phi + step, theta + step);
                 auto d = cart(phi + step, theta);
+		
+#if defined(SPHERE_SURFACE_NORMAL)
+		auto n_abc = g_geom.tri_normal(a, b, c);
+		auto n_cda = g_geom.tri_normal(c, d, a);
+		
+		g_vertex_buffer.add_triangle(a, color, n_abc,
+                                             b, color, n_abc,
+                                             c, color, n_abc);
 
-                g_vertex_buffer.add_triangle(a, color,
-                                             b, color,
-                                             c, color);
+                g_vertex_buffer.add_triangle(c, color, n_abc,
+                                             d, color, n_abc,
+                                             a, color, n_abc);
 
-                g_vertex_buffer.add_triangle(c, color,
-                                             d, color,
-                                             a, color);
+#else
+		g_vertex_buffer.add_triangle(a, color, a,
+					     b, color, b,
+                                             c, color, c);
 
+                g_vertex_buffer.add_triangle(c, color, c,
+                                             d, color, d,
+                                             a, color, a);
+
+#endif
                 count += 6;
             }
         }

@@ -77,6 +77,7 @@ using real_t = float;
 struct vertex {
   vec3_t position;
   vec4_t color;
+  vec3_t normal;
   vec2_t uv;
 };
 

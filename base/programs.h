@@ -53,6 +53,20 @@ struct programs : public type_module {
       }
     };
   }
+
+  static attrib_entry_type attrib_layout_normal() {
+    return {
+      "in_Normal",
+	{
+	  2,
+	    3,
+	    OPENGL_REAL,
+	    GL_FALSE,
+	    sizeof(vertex),
+	    (void*) offsetof(vertex, normal)
+	}
+    };
+  }
   
   const char* vertex_shader_standard =
     GLSL(layout(location = 0) in vec3 in_Position;
@@ -144,10 +158,11 @@ struct programs : public type_module {
       "reflection_sphere_cubemap",
       GLSL(layout(location = 0) in vec3 in_Position;
            layout(location = 1) in vec4 in_Color;
+	   layout(location = 2) in vec3 in_Normal;
            
            smooth out vec4 frag_Color;
            smooth out vec3 frag_Position;
-           smooth out vec3 frag_Normal;
+           out vec3 frag_Normal;
            
            uniform mat4 unif_InverseView;
            uniform mat4 unif_ModelView;
@@ -158,8 +173,9 @@ struct programs : public type_module {
              vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
              gl_Position = clip;             
              frag_Color = in_Color; //abs(clip / clip.w);
+	     
+             frag_Normal = in_Normal/*in_Position*/;
              
-             frag_Normal = in_Position;
 
              mat4 noTrans = unif_InverseView;
              noTrans[3] = vec4(0.0, 0.0, 0.0, 1.0);
@@ -169,7 +185,7 @@ struct programs : public type_module {
       
       GLSL(smooth in vec4 frag_Color;
            smooth in vec3 frag_Position;
-           smooth in vec3 frag_Normal;
+           in vec3 frag_Normal;
 
            uniform samplerCube unif_TexCubeMap;
            uniform vec3 unif_CameraPosition;
@@ -191,7 +207,8 @@ struct programs : public type_module {
       },
       {
         attrib_layout_position(),
-        attrib_layout_color()
+        attrib_layout_color(),
+	attrib_layout_normal()
       }
     },
     {
