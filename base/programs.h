@@ -182,15 +182,19 @@ struct programs : public type_module {
            smooth in vec3 frag_Position;
            in vec3 frag_Normal;
 
-           uniform samplerCube unif_TexCubeMap;
+	   uniform samplerCube unif_TexCubeMap;
            uniform vec3 unif_CameraPosition;
 
            out vec4 fb_Color;
            
            void main() {
-             vec3 I = normalize(frag_Position - unif_CameraPosition);
+             vec3 I = frag_Position - unif_CameraPosition;
              vec3 R = reflect(I, normalize(frag_Normal));
-             fb_Color = vec4(texture(unif_TexCubeMap, R).rgb, 1.0) * frag_Color;
+             vec4 x = texture(unif_TexCubeMap, R) * frag_Color;
+
+	     //	     fb_Color = vec4(pow(frag_Color.xyz, vec3(1.0/ 2.2)), frag_Color.a);
+	     fb_Color = vec4(pow(x.xyz, vec3(1.0 / 2.2)), x.a);
+	     //fb_Color = vec4(normalize(frag_Normal));
            }),
 
       {
@@ -306,7 +310,8 @@ struct programs : public type_module {
            uniform samplerCube unif_TexCubeMap;
 
            void main() {
-             fb_Color = frag_Color * texture(unif_TexCubeMap, frag_TexCoord);
+             vec4 x = frag_Color * texture(unif_TexCubeMap, frag_TexCoord);
+	     fb_Color = vec4(pow(x.xyz, vec3(1.0/2.2)), 1.0);
            }),
       {
         "unif_ModelView",
@@ -337,6 +342,8 @@ struct programs : public type_module {
   const std::string default_mir = "reflection_sphere";
   const std::string sphere_cubemap = "reflection_sphere_cubemap";
   const std::string skybox = "cubemap";
+
+  using id_type = std::string;
   
   void free_mem() override {
     GL_FN(glUseProgram(0));
@@ -370,8 +377,20 @@ struct programs : public type_module {
   }
 
   auto uniform(const std::string& name) const {
-    auto id = data.at(current)->uniforms.at(name);
-    ASSERT(id != -1);
+    GLint id = -1;
+    auto it = data.at(current)->uniforms.find(name);
+
+    if (it != data.at(current)->uniforms.end()) {
+      id = it->second;
+      //    ASSERT(id != -1);
+
+      if (id == -1) {
+	write_logf("%s -> unif %s. Not found\n",
+		   current.c_str(),
+		   name.c_str());
+      }
+    }
+    
     return id;
   }
   
