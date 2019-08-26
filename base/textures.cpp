@@ -172,23 +172,24 @@ textures::index_type textures::new_cubemap(int w, int h, GLenum format) {
 
       fill_checkerboard(blank, w, h,  glm::u8vec3(0, 255, 255), 4);
       fill_cubemap_face(5, w, h, format, &blank[0]);
+      
     } else if (format == GL_DEPTH_COMPONENT) {
       for (uint32_t i = 0; i < 6; ++i) {
 	fill_cubemap_face(i, w, h, format, NULL);
       }
     } else if (format == GL_RGB) {
         for (auto y = 0; y < h; ++y) {
-            for (auto x = 0; x < w; ++x) {
-                auto p = (y * w + x) * channels;
-                blank[p + 0] = (x & 0x1) == 1 ? 0xFF : 0x7f;
-                blank[p + 1] = 0;
-                blank[p + 2] = 0;
-            }
+	  for (auto x = 0; x < w; ++x) {
+	    auto p = (y * w + x) * channels;
+	    blank[p + 0] = (x & 0x1) == 1 ? 0xFF : 0x7f;
+	    blank[p + 1] = 0;
+	    blank[p + 2] = 0;
+	  }
         }
-    }
-
-    for (uint32_t i = 0; i < 6; ++i) {
-        fill_cubemap_face(i, w, h, format, &blank[0]);
+	
+	for (uint32_t i = 0; i < 6; ++i) {
+	  fill_cubemap_face(i, w, h, format, &blank[0]);
+	}
     }
 
     unbind(cmap_id);
