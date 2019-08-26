@@ -118,6 +118,25 @@ GLenum textures::format_from_channels(int channels) const {
 
     return format;
 }
+
+void fill_checkerboard(std::vector<uint8_t>& blank, int w, int h, glm::u8vec3 mask, int channels) {
+  for (auto y = 0; y < h; ++y) {
+    for (auto x = 0; x < w; ++x) {
+      auto p = (y * w + x) * channels;
+
+      uint8_t c = ((x + (y & 1)) & 1) == 1 ? 0x0 : 0xFF;
+      
+      blank[p + 0] = c & mask[0];
+      blank[p + 1] = c & mask[1];
+      blank[p + 2] = c & mask[2];
+      
+      if (channels == 4) {
+	blank[p + 3] = 0xFF;
+      }
+    }
+  }
+}
+
 // creates a blank cubemap
 textures::index_type textures::new_cubemap(int w, int h, GLenum format) {
     int channels = channels_from_format(format);
@@ -135,17 +154,24 @@ textures::index_type textures::new_cubemap(int w, int h, GLenum format) {
 
     std::vector<uint8_t> blank(w * h * channels, 0);
 
+    if (format == GL_RGBA) {
+      fill_checkerboard(blank, w, h, glm::u8vec3(255, 0, 0), 4);     
+      fill_cubemap_face(0, w, h, format, &blank[0]);
 
-    if (format == GL_RGBA) {        
-        for (auto y = 0; y < h; ++y) {
-            for (auto x = 0; x < w; ++x) {
-                auto p = (y * w + x) * channels;
-                blank[p + 0] = (x & 0x1) == 1 ? 0xFF : 0x7f;
-                blank[p + 1] = 0;
-                blank[p + 2] = 0;
-                blank[p + 3] = 0xFF;
-            }
-        }
+      fill_checkerboard(blank, w, h, glm::u8vec3(0, 255, 0), 4);
+      fill_cubemap_face(1, w, h, format, &blank[0]);
+
+      fill_checkerboard(blank, w, h, glm::u8vec3(0, 0, 255), 4);
+      fill_cubemap_face(2, w, h, format, &blank[0]);
+
+      fill_checkerboard(blank, w, h, glm::u8vec3(255, 0, 255), 4);
+      fill_cubemap_face(3, w, h, format, &blank[0]);
+
+      fill_checkerboard(blank, w, h, glm::u8vec3(255, 255, 0), 4);
+      fill_cubemap_face(4, w, h, format, &blank[0]);
+
+      fill_checkerboard(blank, w, h,  glm::u8vec3(0, 255, 255), 4);
+      fill_cubemap_face(5, w, h, format, &blank[0]);
     } else if (format == GL_DEPTH_COMPONENT) {
         for (auto y = 0; y < h; ++y) {
             for (auto x = 0; x < w; ++x) {
