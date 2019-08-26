@@ -561,7 +561,7 @@ struct models {
     auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1), vec4_t color = vec4_t{R(1.0)}) {
         auto offset = g_vertex_buffer.num_vertices();
 
-        real_t step = 0.1f;
+        real_t step = 0.05f;
 
         auto count = 0;
 
@@ -1066,8 +1066,10 @@ static void init_api_data() {
     g_skybox_texture = g_textures.new_cubemap(paths);
 
     GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
-
+    GL_FN(glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS));
     GL_FN(glDisable(GL_CULL_FACE));
+    //    GL_FN(glCullFace(GL_BACK));
+    //    GL_FN(glFrontFace(GL_CCW));
     GL_FN(glEnable(GL_DEPTH_TEST));
     GL_FN(glDepthFunc(GL_LEQUAL));
     GL_FN(glClearDepth(1.0f));
