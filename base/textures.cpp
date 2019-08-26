@@ -20,36 +20,32 @@ void textures::unbind(textures::index_type id) const {
     GL_FN(glBindTexture(types[id], 0));
 }
     
-textures::index_type textures::new_texture(uint32_t width, uint32_t height, uint32_t channels, GLenum type) {
+textures::index_type textures::new_texture(uint32_t width,
+					   uint32_t height,
+					   uint32_t channels,
+					   GLenum type,
+					   GLenum min_filter,
+					   GLenum mag_filter) {
     GLuint handle = 0;
     GL_FN(glGenTextures(1, &handle));
     GL_FN(glBindTexture(type, handle));
 
     std::vector<GLenum> texparams;
 
-    switch (type) {
-    case GL_TEXTURE_CUBE_MAP:
-        texparams.insert(texparams.end(), {
-                GL_TEXTURE_MIN_FILTER, GL_LINEAR,
-                    GL_TEXTURE_MAG_FILTER, GL_LINEAR,
-                    GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE,
-                    GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE,
-                    GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE,
-                    GL_TEXTURE_BASE_LEVEL, 0,
-                    GL_TEXTURE_MAX_LEVEL,0
-                    });
-        break;
-    case GL_TEXTURE_2D:
-        texparams.insert(texparams.end(), {
-                GL_TEXTURE_MIN_FILTER, GL_LINEAR,
-                    GL_TEXTURE_MAG_FILTER, GL_LINEAR,
-                    GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE,
-                    GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE,
-                    GL_TEXTURE_BASE_LEVEL, 0,
-                    GL_TEXTURE_MAX_LEVEL,0
+    texparams.insert(texparams.end(), {
+	GL_TEXTURE_MIN_FILTER, min_filter,
+	  GL_TEXTURE_MAG_FILTER, mag_filter,
+	  GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE,
+	  GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE,
+	  GL_TEXTURE_BASE_LEVEL, 0,
+	  GL_TEXTURE_MAX_LEVEL,0
+	  });
 
-                    });
-        break;
+    if (type == GL_TEXTURE_CUBE_MAP) {
+      texparams.insert(texparams.end(),
+		       {
+			 GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE
+			   });
     }
 
     ASSERT((texparams.size() & 1) == 0);
@@ -122,7 +118,6 @@ GLenum textures::format_from_channels(int channels) const {
 
     return format;
 }
-    
 // creates a blank cubemap
 textures::index_type textures::new_cubemap(int w, int h, GLenum format) {
     int channels = channels_from_format(format);

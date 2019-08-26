@@ -31,7 +31,12 @@ struct textures: public type_module {
 
     void unbind(index_type id) const;
     
-    index_type new_texture(uint32_t width, uint32_t height, uint32_t channels, GLenum type);
+    index_type new_texture(uint32_t width,
+			   uint32_t height,
+			   uint32_t channels,
+			   GLenum type,
+			   GLenum min_filter = GL_LINEAR,
+			   GLenum mag_filter = GL_LINEAR);
 
     void fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data);
 
