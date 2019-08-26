@@ -1067,6 +1067,31 @@ static textures::index_type g_debug_cm_index{textures::k_uninit};
 
 static int screen_cube_index = 0;
 
+void draw_walls() {
+  g_models.select_draw(MODLAMSEL(m, g_models.type(m) == models::model_quad));
+        
+  use_program u(g_programs.default_fb);
+
+  DRAW_MODELS(models::transformorder_trs);
+}
+
+void reflect_spheres(textures::index_type reflect) {
+  g_models.select_draw(MODLAMSEL(m, m == g_models.modind_sphere));
+        
+  use_program u(g_programs.sphere_cubemap);
+        
+  int slot = 0;
+
+  g_textures.bind(reflect, slot);
+  g_programs.up_int("unif_TexCubeMap", slot);
+
+  g_programs.up_vec3("unif_CameraPosition", g_view.position);
+
+  DRAW_MODELS(models::transformorder_trs);
+
+  g_textures.unbind(reflect);
+}
+
 // room with a few spheres
 void test_main_1() {
     g_vertex_buffer.bind();
