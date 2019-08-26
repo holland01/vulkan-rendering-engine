@@ -121,8 +121,15 @@ GLenum textures::format_from_channels(int channels) const {
 // creates a blank cubemap
 textures::index_type textures::new_cubemap(int w, int h, GLenum format) {
     int channels = channels_from_format(format);
-            
-    auto cmap_id = new_texture(w, h, channels, GL_TEXTURE_CUBE_MAP);
+
+    GLenum min_mag_filter = format == GL_DEPTH_COMPONENT ? GL_NEAREST : GL_LINEAR;
+    
+    auto cmap_id = new_texture(w,
+			       h,
+			       channels,
+			       GL_TEXTURE_CUBE_MAP,
+			       min_mag_filter,
+			       min_mag_filter);
 
     bind(cmap_id);
 
