@@ -1004,14 +1004,17 @@ static void init_api_data() {
     GL_FN(glGenVertexArrays(1, &g_vao));
     GL_FN(glBindVertexArray(g_vao));
 
-   g_models.modind_sphere = g_models.new_sphere(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
-
+    g_models.modind_sphere = g_models.new_sphere(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
+    g_models.modind_area_sphere = g_models.new_sphere(ROOM_SPHERE_POS, ROOM_SPHERE_RADIUS);    
+    
     frame_model fmod{};
     fmod.render_cube_id = g_frame.add_render_cube(g_models.positions[g_models.modind_sphere],
                                                   TEST_SPHERE_RADIUS);
     
     g_frame_model_map[g_models.modind_sphere] = fmod;
     
+    g_checkerboard_cubemap = g_textures.new_cubemap(256, 256, GL_RGBA);
+
 #if 0
     auto sb = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
     auto sc = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
@@ -1027,8 +1030,8 @@ static void init_api_data() {
     real_t wall_size = R(15.0);
     
     g_models.new_wall(R3(0.0), models::wall_bottom, R3(wall_size), R4v(0.1, 0.2, 0.3, 1.0));
-    g_models.new_wall(R3v(-wall_size, 0.0, 0.0), models::wall_left, R3(wall_size), R4v(0.0, 0.0, 0.3, 1.0));
-    g_models.new_wall(R3v(wall_size, 0.0, 0.0), models::wall_right, R3(wall_size), R4v(0.3, 0.5, 0.0, 1.0));
+    //    g_models.new_wall(R3v(-wall_size, 0.0, 0.0), models::wall_left, R3(wall_size), R4v(0.0, 0.0, 0.3, 1.0));
+    //g_models.new_wall(R3v(wall_size, 0.0, 0.0), models::wall_right, R3(wall_size), R4v(0.3, 0.5, 0.0, 1.0));
     
     g_vertex_buffer.reset();
 
