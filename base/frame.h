@@ -27,6 +27,9 @@ struct frame {
 
         const frame& self;
 
+      uint32_t cwidth;
+      uint32_t cheight;
+
         // According to  https://www.khronos.org/registry/OpenGL/api/GL/glext.h,
         // the GL_TEXTURE_CUBE_MAP_*_(X|Y|Z)
         // enums are provided in consecutive order.
@@ -40,7 +43,10 @@ struct frame {
             neg_z
         };
 
-    render_cube(const frame& f) : self(f) {}
+    render_cube(const frame& f) : self(f),
+	  cwidth(256),
+	  cheight(256){
+    }
 
         auto calc_look_at_mats(const vec3_t& position, real_t radius) {
             real_t offset{R(1.0)};
@@ -75,22 +81,49 @@ struct frame {
 
         }
         
-        auto add(const frame& self, const vec3_t& position, real_t radius) {           
+        auto add(const vec3_t& position, real_t radius) {           
             auto rcubeid = tex_color_handles.size();
-            
-            tex_color_handles.push_back(g_textures.new_cubemap(self.width,
-                                                         self.height,
-                                                         GL_RGBA));
-            
-            tex_depth_handles.push_back(g_textures.new_cubemap(self.width,
-                                                               self.height,
+	    
+            tex_color_handles.push_back(g_textures.new_cubemap(cwidth,
+							       cheight,
+							       GL_RGBA));
+
+#if defined(ENVMAP_CUBE_DEPTH)
+            tex_depth_handles.push_back(g_textures.new_cubemap(cwidth,
+                                                               cheight,
                                                                GL_DEPTH_COMPONENT));
-            
+#else
+	    tex_depth_handles.push_back(g_textures.new_texture(cwidth,
+							       cheight,
+							       1,
+							       GL_TEXTURE_2D,
+							       GL_NEAREST,
+							       GL_NEAREST));
+#endif // ENVMAP_CUBE_DEPTH
+
+#if !defined(ENVMAP_CUBE_DEPTH)
+	    {
+	      auto depth = tex_depth_handles[tex_depth_handles.size() - 1];
+	      g_textures.bind(depth, 0);
+	      
+	      GL_FN(glTexImage2D(GL_TEXTURE_2D,
+				 0,
+				 GL_DEPTH_COMPONENT24,
+				 cwidth, cheight,
+				 0,
+				 GL_DEPTH_COMPONENT,
+				 GL_FLOAT,
+				 NULL));
+
+	      g_textures.unbind(depth);
+	      
+	    }
+#endif // ENVMAP_CUBE_DEPTH
+	    
             positions.push_back(position);
-              
+            
             faces.push_back(calc_look_at_mats(position, radius));
 
-            
             {
                 GLuint fbo = 0;
                 GL_FN(glGenFramebuffers(1, &fbo));
@@ -101,11 +134,17 @@ struct frame {
         }
 
         void bind(index_type cube_id) const {
-            GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbos.at(cube_id)));
+            GL_FN(glBindFramebuffer(GL_FRAMEBUFFER,
+				    fbos.at(cube_id)));
+	    
+	    GL_FN(glViewport(0,
+			     0,
+			     cwidth,
+			     cheight));
         }
 
         std::vector<uint8_t> get_pixels(index_type cube_id) const {
-            auto sz = self.width * self.height * 4 * 6;
+            auto sz = cwidth * cheight * 4 * 6;
             std::vector<uint8_t> all_faces(static_cast<size_t>(sz), 0x7f);
 
             GL_FN(glGetTextureImage(g_textures.handle(tex_color_handles.at(cube_id)),
@@ -119,17 +158,20 @@ struct frame {
         }
         
         glm::mat4 set_face(index_type cube_id, axis face) const {
-
-
             GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
                                          GL_COLOR_ATTACHMENT0,
                                          GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face),
                                          g_textures.handle(tex_color_handles.at(cube_id)),
                                          0));
-
+#ifdef ENVMAP_CUBE_DEPTH
+	    auto target = GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face);
+#else
+	    auto target = GL_TEXTURE_2D;
+#endif
+	    
             GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
                                          GL_DEPTH_ATTACHMENT,
-                                         GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face),
+                                         target,
                                          g_textures.handle(tex_depth_handles.at(cube_id)),
                                          0));
 
@@ -146,6 +188,7 @@ struct frame {
 
         void unbind() {
             GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+	    GL_FN(glViewport(0, 0, self.width, self.height));
         }
     };
     
@@ -162,7 +205,7 @@ struct frame {
     void screenshot();
 
     auto add_render_cube(const vec3_t& position, real_t radius) {
-        return rcube->add(*this, position, radius);
+        return rcube->add(position, radius);
     }
 
     auto render_cube_color_tex(index_type r) const {
