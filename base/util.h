@@ -25,11 +25,6 @@
 
 #define ASSERT(cond) assert_impl((cond), __LINE__, __func__, __FILE__, #cond)
 
-void logf_impl(int line,
-               const char* func,
-               const char* file,
-               const char* fmt, ... );
-
 void assert_impl(bool cond,
                  int line,
                  const char* func,
