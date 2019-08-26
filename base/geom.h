@@ -97,4 +97,23 @@ struct geom {
         return glm::length(glm::proj(pl2p, normal));        
     }
 
+  // a, b, and c are assumed to be
+  // laid out in a counter clockwise ordering.
+  // on the plane which they create. It's also
+  // assumed that, in the counter clock wise direction,
+  // the angular distance D for each vertex to the
+  // start of the axis parellel to the circle's
+  // X-axis holds the relationship D_a < D_b < D_c.
+  // D_c should thus hold the highest angle for the
+  // circle that is formed formed in the plane created by the triangle,
+  // and is large enough to contain the three points.
+  
+  vec3_t tri_normal(const vec3_t& a, const vec3_t& b, const vec3_t& c) {
+    vec3_t v1{glm::normalize(a - b)};
+    vec3_t v0{glm::normalize(c - b)};
+
+    // right hand rule was used here to determine
+    // correct ordering.
+    return glm::normalize(glm::cross(v0, v1));
+  }
 } g_geom{};
