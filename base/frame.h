@@ -61,8 +61,8 @@ struct frame {
                                    position + SPHERE_LEFT(radius + offset),
                                    V3_UP);
 
-            m[pos_y] = glm::lookAt(position + SPHERE_UP(radius * 3),
-                                   position + SPHERE_UP(radius * 5),
+            m[pos_y] = glm::lookAt(position + SPHERE_UP(radius),
+                                   position + SPHERE_UP(radius + R(5.0)),
                                    V3_BACKWARD);
 
             m[neg_y] = glm::lookAt(position + SPHERE_DOWN(radius),
