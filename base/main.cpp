@@ -9,7 +9,7 @@
 #include <array>
 #include <algorithm>
 #include <iostream>
-
+#include <unordered_map>
 
 #include "textures.h"
 #include "util.h"
@@ -243,15 +243,15 @@ struct view_data {
   if ((move).dir == true) {                       \
     this->position += view_##dir() * this->step;  \
   }
-
-    void operator ()(move_state m) {
-        TESTDIR(m, up);
-        TESTDIR(m, down);
-        TESTDIR(m, right);
-        TESTDIR(m, left);
-        TESTDIR(m, front);
-        TESTDIR(m, back);
-    }
+  
+  void operator ()(move_state m) {
+    TESTDIR(m, up);
+    TESTDIR(m, down);
+    TESTDIR(m, right);
+    TESTDIR(m, left);
+    TESTDIR(m, front);
+    TESTDIR(m, back);
+  }
 
 #undef TESTDIR
 };
@@ -259,8 +259,8 @@ struct view_data {
 static view_data g_view(SCREEN_WIDTH, SCREEN_HEIGHT);
 
 struct vertex_buffer {
-
-    std::vector<vertex> data;
+  
+  std::vector<vertex> data;
 
     mutable GLuint vbo;
 
@@ -867,6 +867,139 @@ struct frame_model {
     bool needs_render{true};
 };
 
+struct shader_uniform_backing {  
+  typedef uint8_t buffer_offset_t; 
+  
+  enum uniform_type {
+    uniform_mat4x4 = 0,
+    uniform_vec3,
+    uniform_int
+  };
+
+  std::vector<mat4_t> mat4x4s;
+  std::vector<vec3_t> vec3s;
+  std::vector<int> ints;
+  
+  struct datum {
+    uniform_type uniform_buffer;
+    buffer_offset_t uniform_buffer_offset;
+  };
+
+  std::unordered_map<std::string, datum> datums;
+
+  template <class uniformType,
+	    uniform_type unif_type>
+  void set_uniform(const std::string& name,
+		   const uniformType& v,
+		   std::vector<uniformType>& store) {
+    auto it = datums.find(name);
+
+    if (it == datums.end()) {
+      auto buff_offset = store.size();
+      store.push_back(v);
+     
+      datum d{};
+
+      d.uniform_buffer = unif_type;
+      d.uniform_buffer_offset = static_cast<buffer_offset_t>(buff_offset);
+
+      datums[name] = d;
+    } else {
+      store[it->second.uniform_buffer_offset] = v;
+    }
+  }
+
+#define DECL_SET_UNIF_FN(type, enum_type, storage)		\
+  void set_uniform(const std::string& name, const type& v) {	\
+    set_uniform<type, enum_type>(name, v, storage);		\
+  }
+  
+  DECL_SET_UNIF_FN(mat4_t, uniform_mat4x4, mat4x4s);
+  DECL_SET_UNIF_FN(vec3_t, uniform_vec3, vec3s);
+  DECL_SET_UNIF_FN(int, uniform_int, ints);
+  
+  void upload_uniform(const std::string& name) const {
+    const datum& d = datums.at(name);
+
+    switch (d.uniform_buffer) {
+    case uniform_mat4x4:
+      g_programs.up_mat4x4(name, mat4x4s.at(d.uniform_buffer_offset));
+      break;
+
+    case uniform_vec3:
+      g_programs.up_vec3(name, vec3s.at(d.uniform_buffer_offset));
+      break;
+      
+    case uniform_int:
+      g_programs.up_int(name, ints.at(d.uniform_buffer_offset));
+      break;
+    }
+  }
+};
+
+static std::unique_ptr<shader_uniform_backing> g_uniform_backing{new shader_uniform_backing()};
+
+struct duniform {
+  union {
+    mat4_t m4;
+    vec3_t v3;
+    int i32;
+  };
+
+  std::string name;
+  
+  shader_uniform_backing::uniform_type type;
+};
+
+struct pass_info {
+  using draw_fn_type = std::function<void()>;
+  
+  programs::id_type shader;
+
+  models::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
+  draw_fn_type draw_fn; // invoked after pass has been setup
+
+  std::vector<duniform> uniforms; // cleared after initial upload
+  std::vector<std::string> uniform_names;
+  
+  void apply() {
+    use_program u(shader);
+
+    if (!uniforms.empty()) {
+      for (const auto& unif: uniforms) {
+	switch (unif.type) {
+	case shader_uniform_backing::uniform_mat4x4:
+	  g_uniform_backing->set_uniform(unif.name, unif.m4);
+	  break;
+
+
+	  
+	case shader_uniform_backing::uniform_vec3:
+	  g_uniform_backing->set_uniform(unif.name, unif.v3);
+	  break;
+
+	  
+	case shader_uniform_backing::uniform_int:
+	  g_uniform_backing->set_uniform(unif.name, unif.i32);
+	  break;	  
+	}
+
+	uniform_names.push_back(unif.name);
+      }
+
+      uniforms.clear();
+    }
+
+    for (const auto& name: uniform_names) {
+      g_uniform_backing->upload_uniform(name);
+    }
+
+    g_models.select_draw(select_draw_predicate);
+    
+    draw_fn();
+  }  
+};
+
 std::unordered_map<models::index_type, frame_model> g_frame_model_map{};
 
 void models::maybe_render_cube(index_type model, transformorder to) {
@@ -1009,6 +1142,8 @@ struct capture {
     }
 
 } static g_capture;
+
+
 
 static void init_api_data() {
     g_view.reset_proj();
@@ -1680,7 +1815,7 @@ int main(void) {
     }
 
     glfwDestroyWindow(window);
-
+    
     glfwTerminate();
     exit(EXIT_SUCCESS);
 error:
