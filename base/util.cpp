@@ -2,6 +2,22 @@
 
 static std::vector<std::string> g_gl_err_msg_cache;
 
+static std::vector<std::string> g_msg_cache;
+
+static void maybe_print(std::vector<std::string>& cache, const std::string& msg, int line, const char* func, const char* file) {
+  
+  if (std::find(cache.begin(),
+	        cache.end(),
+		msg)  == cache.end()) {
+
+    fprintf( stdout, "\n[ %s@%s:%i ]: ", func, file, line );
+    printf("%s", msg.c_str());
+    fputs( "\n", stdout );
+    
+    cache.push_back(msg);
+  }
+} 
+
 void logf_impl(int line, const char* func, const char* file,
                               const char* fmt, ... );
 
@@ -18,10 +34,14 @@ void logf_impl( int line, const char* func, const char* file,
     va_list arg;
 
     va_start( arg, fmt );
-    fprintf( stdout, "\n[ %s@%s:%i ]: ", func, file, line );
-    vfprintf( stdout, fmt, arg );
-    fputs( "\n", stdout );
-    va_end( arg );
+
+    char buffer[4096] = {0};
+    vsprintf( buffer, fmt, arg );
+    std::string wrapper(buffer);
+
+    va_end(arg);
+    
+    maybe_print(g_msg_cache, wrapper, line, func, file);
 }
 
 void report_gl_error(GLenum err, int line, const char* func, const char* file,
@@ -33,23 +53,14 @@ void report_gl_error(GLenum err, int line, const char* func, const char* file,
         
     sprintf(
             &msg[0],
-            "GL ERROR (%x) in %s@%s:%i [%s]: %s\n",
+            "GL ERROR (%x) [%s]: %s\n",
             err,
-            func,
-            file,
-            line,
             expr,
             (const char* )gluErrorString(err));
 
     std::string smsg(msg);
 
-    if (std::find(g_gl_err_msg_cache.begin(),
-                  g_gl_err_msg_cache.end(),
-                  smsg)
-        == g_gl_err_msg_cache.end()) {
-      printf("%s", smsg.c_str());
-      g_gl_err_msg_cache.push_back(smsg);
-    }
+    maybe_print(g_gl_err_msg_cache, smsg, line, func, file);
 
     exit(EXIT_FAILURE);
   }
