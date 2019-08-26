@@ -164,10 +164,9 @@ struct programs : public type_module {
            smooth out vec3 frag_Position;
            out vec3 frag_Normal;
            
-           uniform mat4 unif_InverseView;
+           uniform mat4 unif_Model;
            uniform mat4 unif_ModelView;
            uniform mat4 unif_Projection;
-           
            
            void main() {
              vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
@@ -176,11 +175,7 @@ struct programs : public type_module {
 	     
              frag_Normal = in_Normal/*in_Position*/;
              
-
-             mat4 noTrans = unif_InverseView;
-             noTrans[3] = vec4(0.0, 0.0, 0.0, 1.0);
-             
-             frag_Position = vec3(noTrans * unif_ModelView * vec4(in_Position, 1.0));
+             frag_Position = vec3(unif_Model * vec4(in_Position, 1.0));
            }),
       
       GLSL(smooth in vec4 frag_Color;
@@ -199,7 +194,7 @@ struct programs : public type_module {
            }),
 
       {
-        "unif_InverseView",
+        "unif_Model",
         "unif_ModelView",
         "unif_Projection",
         "unif_TexCubeMap",

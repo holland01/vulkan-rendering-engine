@@ -798,6 +798,10 @@ struct models {
             mat4_t T = __table[to](model);
             mat4_t mv = g_view.view() * T;
 
+	    if (g_programs.uniform("unif_Model") != -1) {
+	      g_programs.up_mat4x4("unif_Model", T);
+	    }
+	    
             g_programs.up_mat4x4("unif_ModelView", mv);
             g_programs.up_mat4x4("unif_Projection",
                                  (model == modind_skybox
@@ -1098,7 +1102,6 @@ void test_main_1() {
         g_textures.bind(texture, slot);
         g_programs.up_int("unif_TexCubeMap", slot);
 
-        g_programs.up_mat4x4("unif_InverseView", glm::inverse(g_view.view()));
         g_programs.up_vec3("unif_CameraPosition", g_view.position);
 
         DRAW_MODELS(models::transformorder_trs);
