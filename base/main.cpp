@@ -29,13 +29,25 @@
 #define TEST_SPHERE_RADIUS R(5)
 #define TEST_SPHERE_POS R3v(0, 10, 0)
 
+#define ROOM_SPHERE_RADIUS R(30)
+#define ROOM_SPHERE_POS R3v(0, 0, 0)
+
+#define ROOM_TEST
+
 frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
 
 std::vector<type_module*> g_modules;
 
 textures::index_type g_skybox_texture {textures::k_uninit};
 
+textures::index_type g_checkerboard_cubemap {textures::k_uninit};
+
+static bool g_framemodelmap = true;
+static bool g_reflect = true;
+
 static bool g_unif_gamma_correct = true;
+
+
 
 GLuint g_vao = 0;
 //
@@ -417,10 +429,10 @@ struct models {
     
     index_type model_count = 0;
     
-    index_type modind_tri = 0;
-    index_type modind_sphere = 1;
-    index_type modind_skybox = 2;
-
+    index_type modind_tri = k_uninit;
+    index_type modind_sphere = k_uninit;
+    index_type modind_skybox = k_uninit;
+  index_type modind_area_sphere = k_uninit;
     index_type modind_selected = k_uninit;
 
     mutable bool framebuffer_pinned = false;
