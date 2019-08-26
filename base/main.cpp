@@ -831,7 +831,7 @@ struct models {
         };
     }
 
-    void maybe_render_cube(index_type model, transformorder to) const;
+    void maybe_render_cube(index_type model, transformorder to);
 
     void render(transformorder to) const {
         for (auto i = 0; i < model_count; ++i) {
@@ -869,7 +869,7 @@ struct frame_model {
 
 std::unordered_map<models::index_type, frame_model> g_frame_model_map{};
 
-void models::maybe_render_cube(index_type model, transformorder to) const {
+void models::maybe_render_cube(index_type model, transformorder to) {
     if (!framebuffer_pinned) {    
         auto search = g_frame_model_map.find(model);
     
@@ -878,19 +878,31 @@ void models::maybe_render_cube(index_type model, transformorder to) const {
             
             if (map.needs_render) {
                 framebuffer_pinned = true;
+
+		this->select_draw([this](const index_type& m) { return type(m) == model_sphere;});
+		
                 draw[model] = false;
             
                 ASSERT(map.render_cube_id != frame::k_uninit);
 
                 g_frame.rcube->bind(map.render_cube_id);
 
+		GL_FN(glClearDepth(1.0f));
+		GL_FN(glDepthFunc(GL_LEQUAL));
+		GL_FN(glDepthMask(GL_TRUE));
+		GL_FN(glDepthRange(0.0, 0.5));
+
+		GL_FN(glEnable(GL_CULL_FACE));
+		GL_FN(glCullFace(GL_BACK));
+		GL_FN(glFrontFace(GL_CCW));
+		
                 bool x = false;
                 
                 for (auto i = 0; i < 6; ++i) {
                     g_view.bind_view(g_frame.rcube->set_face(map.render_cube_id,
                                                              static_cast<frame::render_cube::axis>(i)));
 
-                    CLEAR_COLOR_DEPTH;
+		    //                    CLEAR_COLOR_DEPTH;
                     
                     render(to);
                 }
@@ -901,6 +913,9 @@ void models::maybe_render_cube(index_type model, transformorder to) const {
                 draw[model] = true;
                 framebuffer_pinned = false;
                 map.needs_render = false;
+
+		GL_FN(glDepthRange(0.0, 1.0));
+		GL_FN(glDisable(GL_CULL_FACE));
             }
         }
     }
