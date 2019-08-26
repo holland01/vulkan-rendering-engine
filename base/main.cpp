@@ -1096,23 +1096,29 @@ void reflect_spheres(textures::index_type reflect) {
 void test_main_1() {
     g_vertex_buffer.bind();
 
-    auto& fmodel_map = g_frame_model_map[g_models.modind_sphere];
-    fmodel_map.needs_render = true;
+    if (g_framemodelmap) {
+      auto& fmodel_map = g_frame_model_map[g_models.modind_sphere];
+      fmodel_map.needs_render = true;
     
-    if (fmodel_map.needs_render) {        
+      if (fmodel_map.needs_render) {        
         g_models.select_draw(MODLAMSEL(m,
                                        g_models.type(m) == models::model_sphere ||
                                        g_models.type(m) == models::model_quad));
         
-        use_program u(g_programs.default_fb);
+        use_program u(g_programs.skybox);
+	g_programs.up_int("unif_TexCubeMap", 0);
+	g_textures.bind(g_checkerboard_cubemap, 0);
 
-        g_programs.up_int("unif_GammaCorrect", static_cast<int>(g_unif_gamma_correct));
+	//        g_programs.up_int("unif_GammaCorrect", static_cast<int>(g_unif_gamma_correct));
 
-        g_frame.rcube->faces[0] = g_frame.rcube->calc_look_at_mats(g_models.positions[g_models.modind_sphere],
-                                                                  R(1.5));
+        g_frame.rcube->faces[0] =
+	  g_frame.rcube->calc_look_at_mats(g_models.positions[g_models.modind_sphere],
+					   TEST_SPHERE_RADIUS);
         
         g_models.maybe_render_cube(g_models.modind_sphere, models::transformorder_trs);
 
+
+	g_textures.unbind(g_checkerboard_cubemap);
         
         #ifdef SPHERE_CAM
         g_debug_cubemap_buf = std::move(g_frame.rcube->get_pixels(fmodel_map.render_cube_id));
@@ -1125,6 +1131,7 @@ void test_main_1() {
         g_textures.set_tex_2d(g_debug_cm_index, &g_debug_cubemap_buf[screen_cube_depth(screen_cube_index)]);
         #endif
     }
+      } // fmodel_map.needs_render
 
     CLEAR_COLOR_DEPTH;
     
@@ -1169,6 +1176,27 @@ void test_main_1() {
         g_textures.unbind(g_debug_cm_index);
     }
     #endif
+    else { // g_framemodelmap
+      CLEAR_COLOR_DEPTH;
+
+      if (g_reflect) {
+	reflect_spheres(g_checkerboard_cubemap);
+      } else
+	{
+	
+	  use_program u(g_programs.skybox);
+
+	  g_models.select_draw(MODLAMSEL(m, m == g_models.modind_area_sphere));
+	
+	  g_textures.bind(g_checkerboard_cubemap, 0);
+	  g_programs.up_int("unif_TexCubeMap", 0);
+      
+	  DRAW_MODELS(models::transformorder_trs);
+
+	  g_textures.unbind(g_checkerboard_cubemap);
+	}
+
+      draw_walls();
     
     g_vertex_buffer.unbind();
 }
