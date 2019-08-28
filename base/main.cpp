@@ -412,8 +412,10 @@ struct models {
     std::vector<model_type> model_types;
     std::vector<index_type> vertex_offsets;
     std::vector<index_type> vertex_counts;
-    std::vector<geom::bvol> bound_volumes;
     mutable std::vector<bool> draw;
+  std::vector<geom::bvol> bound_volumes;
+  std::vector<textures::index_type> textures;
+  std::vector<int> texture_units;
     
     struct {
         vec3_t eye;
@@ -437,23 +439,22 @@ struct models {
 
     mutable bool framebuffer_pinned = false;
     
-    // It's assumed that vertices
-    // have been already added to the vertex
-    // buffer when this function is called,
-    // so we explicitly reallocate the needed
-    // VBO memory every time we add new
-    // model data with this function.
-    auto new_model(model_type mt,
-                   index_type vbo_offset = 0,
-                   index_type num_vertices = 0,
-                   vec3_t position = glm::zero<vec3_t>(),
-                   vec3_t scale = vec3_t(1.0f),
-                   vec3_t angle = vec3_t(0.0f),
-                   geom::bvol bvol = geom::bvol()) {
+  // It's assumed that vertices
+  // have been already added to the vertex
+  // buffer when this function is called,
+  // so we explicitly reallocate the needed
+  // VBO memory every time we add new
+  // model data with this function.
+  auto new_model(model_type mt,
+		 index_type vbo_offset = 0,
+		 index_type num_vertices = 0,
+		 vec3_t position = glm::zero<vec3_t>(),
+		 vec3_t scale = vec3_t(1.0f),
+		 vec3_t angle = vec3_t(0.0f),
+		 geom::bvol bvol = geom::bvol(),
+		 textures::index_type tex_index = textures::k_uninit,
+		 int tex_unit = 0) {
 
-        index_type id = static_cast<index_type>(model_count);
-
-        model_types.push_back(mt);
         
         positions.push_back(position);
         scales.push_back(scale);
@@ -467,6 +468,9 @@ struct models {
         bound_volumes.push_back(bvol);
         
         model_count++;
+    textures.push_back(tex_index);
+    texture_units.push_back(tex_unit);
+    
 
         g_vertex_buffer.reset();
 
