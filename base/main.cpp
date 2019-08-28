@@ -1025,34 +1025,37 @@ struct pass_info {
   void apply() {
     use_program u(shader);
 
-    if (!uniforms.empty()) {
-      for (const auto& unif: uniforms) {
-	switch (unif.type) {
-	case shader_uniform_backing::uniform_mat4x4:
-	  g_uniform_backing->set_uniform(unif.name, unif.m4);
-	  break;
+      if (!uniforms.empty()) {      
+      
+	for (const auto& unif: uniforms) {
+	  switch (unif.type) {
+	  case shader_uniform_backing::uniform_mat4x4:
+	    g_uniform_backing->set_uniform(unif.name, unif.m4);
+	    break;
 
+	  case shader_uniform_backing::uniform_vec3:
+	    g_uniform_backing->set_uniform(unif.name, unif.v3);
+	    break;
 
-	  
-	case shader_uniform_backing::uniform_vec3:
-	  g_uniform_backing->set_uniform(unif.name, unif.v3);
-	  break;
 	  case shader_uniform_backing::uniform_int32:
 	    g_uniform_backing->set_uniform(unif.name, unif.i32);
 	    break;	  
 	  }
 
+	  uniform_names.push_back(unif.name);
 	}
 
-	uniform_names.push_back(unif.name);
+	uniforms.clear();
+      } else {
+	for (const auto& name: uniform_names) {
+	  g_uniform_backing->upload_uniform(name);
+	}
       }
 
-      uniforms.clear();
-    }
+      for (const auto& name: uniform_names) {
+	g_uniform_backing->upload_uniform(name);
+      }
 
-    for (const auto& name: uniform_names) {
-      g_uniform_backing->upload_uniform(name);
-    }
 
     g_models.select_draw(select_draw_predicate);
     
