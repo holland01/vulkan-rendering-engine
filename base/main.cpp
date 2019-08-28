@@ -880,12 +880,14 @@ struct shader_uniform_backing {
   enum uniform_type {
     uniform_mat4x4 = 0,
     uniform_vec3,
-    uniform_int
+    uniform_int32
   };
 
   std::vector<mat4_t> mat4x4s;
   std::vector<vec3_t> vec3s;
-  std::vector<int> ints;
+  std::vector<int32_t> int32s;
+
+  static const inline size_t MAX_BUFFER_OFFSET = (1 << ( (8 * sizeof(buffer_offset_t)) - 1 ));
   
   struct datum {
     uniform_type uniform_buffer;
@@ -902,7 +904,10 @@ struct shader_uniform_backing {
     auto it = datums.find(name);
 
     if (it == datums.end()) {
-      auto buff_offset = store.size();
+      size_t buff_offset = store.size();
+      
+      ASSERT(buff_offset <= MAX_BUFFER_OFFSET);
+
       store.push_back(v);
      
       datum d{};
@@ -923,7 +928,7 @@ struct shader_uniform_backing {
   
   DECL_SET_UNIF_FN(mat4_t, uniform_mat4x4, mat4x4s);
   DECL_SET_UNIF_FN(vec3_t, uniform_vec3, vec3s);
-  DECL_SET_UNIF_FN(int, uniform_int, ints);
+  DECL_SET_UNIF_FN(int32_t, uniform_int32, int32s);
   
   void upload_uniform(const std::string& name) const {
     const datum& d = datums.at(name);
@@ -937,8 +942,8 @@ struct shader_uniform_backing {
       g_programs.up_vec3(name, vec3s.at(d.uniform_buffer_offset));
       break;
       
-    case uniform_int:
-      g_programs.up_int(name, ints.at(d.uniform_buffer_offset));
+    case uniform_int32:
+      g_programs.up_int(name, int32s.at(d.uniform_buffer_offset));
       break;
     }
   }
@@ -950,7 +955,7 @@ struct duniform {
   union {
     mat4_t m4;
     vec3_t v3;
-    int i32;
+    int32_t i32;
   };
 
   std::string name;
@@ -984,11 +989,11 @@ struct pass_info {
 	case shader_uniform_backing::uniform_vec3:
 	  g_uniform_backing->set_uniform(unif.name, unif.v3);
 	  break;
+	  case shader_uniform_backing::uniform_int32:
+	    g_uniform_backing->set_uniform(unif.name, unif.i32);
+	    break;	  
+	  }
 
-	  
-	case shader_uniform_backing::uniform_int:
-	  g_uniform_backing->set_uniform(unif.name, unif.i32);
-	  break;	  
 	}
 
 	uniform_names.push_back(unif.name);
