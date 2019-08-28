@@ -360,84 +360,84 @@ struct vertex_buffer {
 #define MODLAMSEL(name, return_expr) [](const models::index_type& name) -> bool { return return_expr; }
 
 struct models {
-    enum transformorder {
-        // srt -> translate first, then rotate, then scale. Order is backwards
-        // on purpose, since mathematically this is how transforms work with the current
-        // conventions used.
-        transformorder_srt = 0,
-        transformorder_trs, 
-        transformorder_lookat,
-        transformorder_skybox,
-        transformorder_count
-    };
+  enum transformorder {
+    // srt -> translate first, then rotate, then scale. Order is backwards
+    // on purpose, since mathematically this is how transforms work with the current
+    // conventions used.
+    transformorder_srt = 0,
+    transformorder_trs, 
+    transformorder_lookat,
+    transformorder_skybox,
+    transformorder_count
+  };
 
-    enum model_type {
-        model_unknown = 0,
-        model_tri,
-        model_sphere,
-        model_cube,
-        model_quad
-    };
+  enum model_type {
+    model_unknown = 0,
+    model_tri,
+    model_sphere,
+    model_cube,
+    model_quad
+  };
 
-    enum wall_type {
-        wall_front = 0,
-        wall_left,
-        wall_right,
-        wall_back,
-        wall_top,
-        wall_bottom
-    };
+  enum wall_type {
+    wall_front = 0,
+    wall_left,
+    wall_right,
+    wall_back,
+    wall_top,
+    wall_bottom
+  };
 
-    using index_type = int32_t;
-    using transform_fn_type = std::function<mat4_t(index_type model)>;
-    using index_list_type = std::vector<index_type>;
-    using predicate_fn_type = std::function<bool(const index_type&)>;
+  using index_type = int32_t;
+  using transform_fn_type = std::function<mat4_t(index_type model)>;
+  using index_list_type = std::vector<index_type>;
+  using predicate_fn_type = std::function<bool(const index_type&)>;
     
-    static const inline index_type k_uninit = -1;
+  static const inline index_type k_uninit = -1;
 
     
-    std::array<transform_fn_type, transformorder_count> __table = {
-        [this](int model) { return scale(model) * rotate(model) * translate(model); },
-        [this](int model) { return translate(model) * rotate(model) * scale(model); },
-        [this](int model) { return glm::inverse(g_view.view())
-        * glm::lookAt(look_at.eye, look_at.center, look_at.up); },
-        [this](int model) {
-        return glm::translate(mat4_t(1.0f), g_view.position) * scale(model);
+  std::array<transform_fn_type, transformorder_count> __table = {
+    [this](int model) { return scale(model) * rotate(model) * translate(model); },
+    [this](int model) { return translate(model) * rotate(model) * scale(model); },
+    [this](int model) { return glm::inverse(g_view.view())
+			* glm::lookAt(look_at.eye, look_at.center, look_at.up); },
+    [this](int model) {
+      return glm::translate(mat4_t(1.0f), g_view.position) * scale(model);
     }
-    };
+  };
 
-    std::vector<vec3_t> positions;
-    std::vector<vec3_t> scales;
-    std::vector<vec3_t> angles;
-    std::vector<model_type> model_types;
-    std::vector<index_type> vertex_offsets;
-    std::vector<index_type> vertex_counts;
-    mutable std::vector<bool> draw;
+  std::vector<vec3_t> positions;
+  std::vector<vec3_t> scales;
+  std::vector<vec3_t> angles;
   std::vector<geom::bvol> bound_volumes;
   std::vector<textures::index_type> textures;
   std::vector<int> texture_units;
+  std::vector<model_type> model_types;
+  std::vector<index_type> vertex_offsets;
+  std::vector<index_type> vertex_counts;
+  mutable std::vector<bool> draw;
     
-    struct {
-        vec3_t eye;
-        vec3_t center;
-        vec3_t up;
-    } look_at = {
-        glm::zero<vec3_t>(),
-        glm::zero<vec3_t>(),
-        glm::zero<vec3_t>()
-    };
+  struct {
+    vec3_t eye;
+    vec3_t center;
+    vec3_t up;
+  } look_at = {
+    glm::zero<vec3_t>(),
+    glm::zero<vec3_t>(),
+    glm::zero<vec3_t>()
+  };
 
-    vec3_t model_select_reset_pos{glm::zero<vec3_t>()};
+  vec3_t model_select_reset_pos{glm::zero<vec3_t>()};
     
-    index_type model_count = 0;
+  index_type model_count = 0;
     
-    index_type modind_tri = k_uninit;
-    index_type modind_sphere = k_uninit;
-    index_type modind_skybox = k_uninit;
+  index_type modind_tri = k_uninit;
+  index_type modind_sphere = k_uninit;
+  index_type modind_skybox = k_uninit;
   index_type modind_area_sphere = k_uninit;
-    index_type modind_selected = k_uninit;
+  index_type modind_selected = k_uninit;
 
-    mutable bool framebuffer_pinned = false;
+  mutable bool framebuffer_pinned = false;
     
   // It's assumed that vertices
   // have been already added to the vertex
@@ -455,415 +455,418 @@ struct models {
 		 textures::index_type tex_index = textures::k_uninit,
 		 int tex_unit = 0) {
 
+    index_type id = static_cast<index_type>(model_count);
+
+    model_types.push_back(mt);
         
-        positions.push_back(position);
-        scales.push_back(scale);
-        angles.push_back(angle);
+    positions.push_back(position);
+    scales.push_back(scale);
+    angles.push_back(angle);
 
-        vertex_offsets.push_back(vbo_offset);
-        vertex_counts.push_back(num_vertices);
+    vertex_offsets.push_back(vbo_offset);
+    vertex_counts.push_back(num_vertices);
 
-        draw.push_back(true);       
+    draw.push_back(true);       
 
-        bound_volumes.push_back(bvol);
-        
-        model_count++;
+    bound_volumes.push_back(bvol);
+    
     textures.push_back(tex_index);
     texture_units.push_back(tex_unit);
     
+    model_count++;
 
-        g_vertex_buffer.reset();
+    g_vertex_buffer.reset();
 
-        return id;
-    }    
+    return id;
+  }    
     
-    void clear_select_model_state() {
-        if (modind_selected != k_uninit) {
-            // TODO: cleanup select state for previous model here
-        }
-
-        modind_selected = k_uninit;
+  void clear_select_model_state() {
+    if (modind_selected != k_uninit) {
+      // TODO: cleanup select state for previous model here
     }
+
+    modind_selected = k_uninit;
+  }
     
-    void set_select_model_state(index_type model) {
-        clear_select_model_state();
+  void set_select_model_state(index_type model) {
+    clear_select_model_state();
 
-        modind_selected = model;
-        model_select_reset_pos = positions[model];
-    }
+    modind_selected = model;
+    model_select_reset_pos = positions[model];
+  }
 
-    bool has_select_model_state() const {
-        return modind_selected != k_uninit;
-    }
+  bool has_select_model_state() const {
+    return modind_selected != k_uninit;
+  }
 
-    #define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)\
-    if (g_select_move_state.dir) { update.axis += amount;  }
+#define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)	\
+  if (g_select_move_state.dir) { update.axis += amount;  }
 
-    // This is continuously called in the main loop,
-    // so it's important that we don't assume
-    // that this function is alaways called when
-    // a valid index hits.
-    void update_select_model_state() {
-        ASSERT(has_select_model_state());
+  // This is continuously called in the main loop,
+  // so it's important that we don't assume
+  // that this function is alaways called when
+  // a valid index hits.
+  void update_select_model_state() {
+    ASSERT(has_select_model_state());
 
-        vec3_t update{R(0.0)};
+    vec3_t update{R(0.0)};
         
-        MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
-        MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
 
-        MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
-        MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
 
-        MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
-        MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
 
-        move(modind_selected, update, mop_add);
+    move(modind_selected, update, mop_add);
+  }
+
+  void reset_select_model_state() {
+    if (has_select_model_state()) {
+      move(modind_selected, model_select_reset_pos, mop_set);
     }
-
-    void reset_select_model_state() {
-        if (has_select_model_state()) {
-            move(modind_selected, model_select_reset_pos, mop_set);
-        }
-    }
+  }
     
 #undef MAP_UPDATE_SELECT_MODEL_STATE
 
 
-    enum _move_op {
-        mop_add,
-        mop_sub,
-        mop_set
+  enum _move_op {
+    mop_add,
+    mop_sub,
+    mop_set
+  };
+    
+  void move(index_type model, const vec3_t& position, _move_op mop) {
+    switch (mop) {
+    case mop_add: positions[model] += position; break;
+    case mop_sub: positions[model] -= position; break;
+    case mop_set: positions[model] = position; break;
+    }
+
+    bound_volumes[model].center = positions[model];
+  }
+
+  // Place model 'a' ontop of model 'b'.
+  // Right now we only care about bounding spheres
+  void place_above(index_type a, index_type b) {
+    ASSERT(bound_volumes[a].type == geom::bvol::type_sphere);
+    ASSERT(bound_volumes[b].type == geom::bvol::type_sphere);
+
+    vec3_t a_position{positions[b]};
+
+    auto arad = bound_volumes[a].radius;
+    auto brad = bound_volumes[b].radius;
+
+    a_position.y += arad + brad;
+
+    move(a, a_position, mop_set);
+  }
+    
+
+  auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1), vec4_t color = vec4_t{R(1.0)}) {
+    auto offset = g_vertex_buffer.num_vertices();
+
+    real_t step = 0.05f;
+
+    auto count = 0;
+
+    auto cart = [](real_t phi, real_t theta) {
+      vec3_t ret;
+      ret.x = glm::cos(theta) * glm::cos(phi);
+      ret.y = glm::sin(phi);
+      ret.z = glm::sin(theta) * glm::cos(phi);
+      return ret;
     };
-    
-    void move(index_type model, const vec3_t& position, _move_op mop) {
-        switch (mop) {
-        case mop_add: positions[model] += position; break;
-        case mop_sub: positions[model] -= position; break;
-        case mop_set: positions[model] = position; break;
-        }
-
-        bound_volumes[model].center = positions[model];
-    }
-
-    // Place model 'a' ontop of model 'b'.
-    // Right now we only care about bounding spheres
-    void place_above(index_type a, index_type b) {
-        ASSERT(bound_volumes[a].type == geom::bvol::type_sphere);
-        ASSERT(bound_volumes[b].type == geom::bvol::type_sphere);
-
-        vec3_t a_position{positions[b]};
-
-        auto arad = bound_volumes[a].radius;
-        auto brad = bound_volumes[b].radius;
-
-        a_position.y += arad + brad;
-
-        move(a, a_position, mop_set);
-    }
-    
-
-    auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1), vec4_t color = vec4_t{R(1.0)}) {
-        auto offset = g_vertex_buffer.num_vertices();
-
-        real_t step = 0.05f;
-
-        auto count = 0;
-
-        auto cart = [](real_t phi, real_t theta) {
-            vec3_t ret;
-            ret.x = glm::cos(theta) * glm::cos(phi);
-            ret.y = glm::sin(phi);
-            ret.z = glm::sin(theta) * glm::cos(phi);
-            return ret;
-        };
 
 	
 	
-        for (real_t phi = -glm::half_pi<real_t>(); phi <= glm::half_pi<real_t>(); phi += step) {
-            for (real_t theta = 0.0f; theta <= glm::two_pi<real_t>(); theta += step) {
-                auto a = cart(phi, theta);
-                auto b = cart(phi, theta + step);
-                auto c = cart(phi + step, theta + step);
-                auto d = cart(phi + step, theta);
+    for (real_t phi = -glm::half_pi<real_t>(); phi <= glm::half_pi<real_t>(); phi += step) {
+      for (real_t theta = 0.0f; theta <= glm::two_pi<real_t>(); theta += step) {
+	auto a = cart(phi, theta);
+	auto b = cart(phi, theta + step);
+	auto c = cart(phi + step, theta + step);
+	auto d = cart(phi + step, theta);
 		
 #if defined(SPHERE_SURFACE_NORMAL)
-		auto n_abc = g_geom.tri_normal(a, b, c);
-		auto n_cda = g_geom.tri_normal(c, d, a);
+	auto n_abc = g_geom.tri_normal(a, b, c);
+	auto n_cda = g_geom.tri_normal(c, d, a);
 		
-		g_vertex_buffer.add_triangle(a, color, n_abc,
-                                             b, color, n_abc,
-                                             c, color, n_abc);
+	g_vertex_buffer.add_triangle(a, color, n_abc,
+				     b, color, n_abc,
+				     c, color, n_abc);
 
-                g_vertex_buffer.add_triangle(c, color, n_abc,
-                                             d, color, n_abc,
-                                             a, color, n_abc);
+	g_vertex_buffer.add_triangle(c, color, n_abc,
+				     d, color, n_abc,
+				     a, color, n_abc);
 
 #else
-		g_vertex_buffer.add_triangle(a, color, a,
-					     b, color, b,
-                                             c, color, c);
+	g_vertex_buffer.add_triangle(a, color, a,
+				     b, color, b,
+				     c, color, c);
 
-                g_vertex_buffer.add_triangle(c, color, c,
-                                             d, color, d,
-                                             a, color, a);
+	g_vertex_buffer.add_triangle(c, color, c,
+				     d, color, d,
+				     a, color, a);
 
 #endif
-                count += 6;
-            }
-        }
-
-        geom::bvol bvol {};
-
-        bvol.type = geom::bvol::type_sphere;
-        bvol.radius = scale;
-        bvol.center = position;
-
-        return new_model(model_sphere,
-                         offset,
-                         count,
-                         position,
-                         vec3_t(scale),
-                         glm::zero<vec3_t>(),
-                         bvol);
+	count += 6;
+      }
     }
+
+    geom::bvol bvol {};
+
+    bvol.type = geom::bvol::type_sphere;
+    bvol.radius = scale;
+    bvol.center = position;
+
+    return new_model(model_sphere,
+		     offset,
+		     count,
+		     position,
+		     vec3_t(scale),
+		     glm::zero<vec3_t>(),
+		     bvol);
+  }
     
-    auto new_wall(const vec3_t& position,
-                  wall_type type,
-                  const vec3_t& scale,
-                  const vec4_t& color = R4(1.0)) {
+  auto new_wall(const vec3_t& position,
+		wall_type type,
+		const vec3_t& scale,
+		const vec4_t& color = R4(1.0)) {
 
-        // TODO:
-        // rewrite this so that the API
-        // takes planes XY, XZ, and YZ
-        // instead of wall types,
-        // since the scaling that's used
-        // is going to offset the faces
-        // in directions (in terms of translation)
-        // which we don't want them to be offset
-        // in.
-        std::array<real_t, 36 * 3> vertices = {
-            // positions
-            // front
-            -1.0f, 1.0f, 0.0f,
-            -1.0f, -1.0f, 0.0f,
-            1.0f, -1.0f, 0.0f,
-            1.0f, -1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-            -1.0f, 1.0f, 0.0f,
+    // TODO:
+    // rewrite this so that the API
+    // takes planes XY, XZ, and YZ
+    // instead of wall types,
+    // since the scaling that's used
+    // is going to offset the faces
+    // in directions (in terms of translation)
+    // which we don't want them to be offset
+    // in.
+    std::array<real_t, 36 * 3> vertices = {
+      // positions
+      // front
+      -1.0f, 1.0f, 0.0f,
+      -1.0f, -1.0f, 0.0f,
+      1.0f, -1.0f, 0.0f,
+      1.0f, -1.0f, 0.0f,
+      1.0f, 1.0f, 0.0f,
+      -1.0f, 1.0f, 0.0f,
 
-            // left
-            0.0f, -1.0f, 1.0f,
-            0.0f, -1.0f, -1.0f,
-            0.0f, 1.0f, -1.0f,
-            0.0f, 1.0f, -1.0f,
-            0.0f, 1.0f, 1.0f,
-            0.0f, -1.0f, 1.0f,
+      // left
+      0.0f, -1.0f, 1.0f,
+      0.0f, -1.0f, -1.0f,
+      0.0f, 1.0f, -1.0f,
+      0.0f, 1.0f, -1.0f,
+      0.0f, 1.0f, 1.0f,
+      0.0f, -1.0f, 1.0f,
 
-            // right
-            0.0f, -1.0f, -1.0f,
-            0.0f, -1.0f, 1.0f,
-            0.0f, 1.0f, 1.0f,
-            0.0f, 1.0f, 1.0f,
-            0.0f, 1.0f, -1.0f,
-            0.0f, -1.0f, -1.0f,
+      // right
+      0.0f, -1.0f, -1.0f,
+      0.0f, -1.0f, 1.0f,
+      0.0f, 1.0f, 1.0f,
+      0.0f, 1.0f, 1.0f,
+      0.0f, 1.0f, -1.0f,
+      0.0f, -1.0f, -1.0f,
 
-            // back
-            -1.0f, -1.0f, 0.0f,
-            -1.0f, 1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-            1.0f, -1.0f, 0.0f,
-            -1.0f, -1.0f, 0.0f,
+      // back
+      -1.0f, -1.0f, 0.0f,
+      -1.0f, 1.0f, 0.0f,
+      1.0f, 1.0f, 0.0f,
+      1.0f, 1.0f, 0.0f,
+      1.0f, -1.0f, 0.0f,
+      -1.0f, -1.0f, 0.0f,
 
-            // top
-            -1.0f, 0.0f, -1.0f,
-            1.0f, 0.0f, -1.0f,
-            1.0f, 0.0f, 1.0f,
-            1.0f, 0.0f, 1.0f,
-            -1.0f, 0.0f, 1.0f,
-            -1.0f, 0.0f, -1.0f,
+      // top
+      -1.0f, 0.0f, -1.0f,
+      1.0f, 0.0f, -1.0f,
+      1.0f, 0.0f, 1.0f,
+      1.0f, 0.0f, 1.0f,
+      -1.0f, 0.0f, 1.0f,
+      -1.0f, 0.0f, -1.0f,
 
-            // bottom
-            -1.0f, 0.0f, -1.0f,
-            -1.0f, 0.0f, 1.0f,
-            1.0f, 0.0f, -1.0f,
-            1.0f, 0.0f, -1.0f,
-            -1.0f, 0.0f, 1.0f,
-            1.0f, 0.0f, 1.0f
-        };
+      // bottom
+      -1.0f, 0.0f, -1.0f,
+      -1.0f, 0.0f, 1.0f,
+      1.0f, 0.0f, -1.0f,
+      1.0f, 0.0f, -1.0f,
+      -1.0f, 0.0f, 1.0f,
+      1.0f, 0.0f, 1.0f
+    };
 
-        auto vbo_offset = g_vertex_buffer.num_vertices();
+    auto vbo_offset = g_vertex_buffer.num_vertices();
         
-        real_t* offset = &vertices[type * 18];
+    real_t* offset = &vertices[type * 18];
 
-        vec3_t a(offset[0], offset[1], offset[2]);
-        vec3_t b(offset[3], offset[4], offset[5]);
-        vec3_t c(offset[6], offset[7], offset[8]);
+    vec3_t a(offset[0], offset[1], offset[2]);
+    vec3_t b(offset[3], offset[4], offset[5]);
+    vec3_t c(offset[6], offset[7], offset[8]);
 
-        g_vertex_buffer.add_triangle(a, color,
-                                     b, color,
-                                     c, color);
+    g_vertex_buffer.add_triangle(a, color,
+				 b, color,
+				 c, color);
 
-        vec3_t d(offset[9], offset[10], offset[11]);
-        vec3_t e(offset[12], offset[13], offset[14]);
-        vec3_t f(offset[15], offset[16], offset[17]);
+    vec3_t d(offset[9], offset[10], offset[11]);
+    vec3_t e(offset[12], offset[13], offset[14]);
+    vec3_t f(offset[15], offset[16], offset[17]);
 
-        g_vertex_buffer.add_triangle(d, color,
-                                     e, color,
-                                     f, color);
+    g_vertex_buffer.add_triangle(d, color,
+				 e, color,
+				 f, color);
 
-        geom::bvol vol;
+    geom::bvol vol;
 
-        vol.radius = glm::length(scale);
-        vol.center = position;
+    vol.radius = glm::length(scale);
+    vol.center = position;
         
-        return new_model(model_quad,
-                         vbo_offset,
-                         6, // vertex count
-                         position,
-                         scale,
-                         glm::zero<vec3_t>(),
-                         vol);
+    return new_model(model_quad,
+		     vbo_offset,
+		     6, // vertex count
+		     position,
+		     scale,
+		     glm::zero<vec3_t>(),
+		     vol);
+  }
+
+  auto new_cube(const vec3_t& position = glm::zero<vec3_t>(), const vec3_t& scale = vec3_t(1.0f), const vec4_t& color = vec4_t(1.0f)) {
+    std::array<real_t, 36 * 3> vertices = {
+      // positions          
+      -1.0f, 1.0f, -1.0f,
+      -1.0f, -1.0f, -1.0f,
+      1.0f, -1.0f, -1.0f,
+      1.0f, -1.0f, -1.0f,
+      1.0f, 1.0f, -1.0f,
+      -1.0f, 1.0f, -1.0f,
+
+      -1.0f, -1.0f, 1.0f,
+      -1.0f, -1.0f, -1.0f,
+      -1.0f, 1.0f, -1.0f,
+      -1.0f, 1.0f, -1.0f,
+      -1.0f, 1.0f, 1.0f,
+      -1.0f, -1.0f, 1.0f,
+
+      1.0f, -1.0f, -1.0f,
+      1.0f, -1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, -1.0f,
+      1.0f, -1.0f, -1.0f,
+
+      -1.0f, -1.0f, 1.0f,
+      -1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f,
+      1.0f, -1.0f, 1.0f,
+      -1.0f, -1.0f, 1.0f,
+
+      -1.0f, 1.0f, -1.0f,
+      1.0f, 1.0f, -1.0f,
+      1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f,
+      -1.0f, 1.0f, 1.0f,
+      -1.0f, 1.0f, -1.0f,
+
+      -1.0f, -1.0f, -1.0f,
+      -1.0f, -1.0f, 1.0f,
+      1.0f, -1.0f, -1.0f,
+      1.0f, -1.0f, -1.0f,
+      -1.0f, -1.0f, 1.0f,
+      1.0f, -1.0f, 1.0f
+    };
+
+    auto offset = g_vertex_buffer.num_vertices();
+
+    for (auto i = 0; i < vertices.size(); i += 9) {
+      vec3_t a(vertices[i + 0], vertices[i + 1], vertices[i + 2]);
+      vec3_t b(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
+      vec3_t c(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
+
+      g_vertex_buffer.add_triangle(a, color,
+				   b, color,
+				   c, color);
     }
 
-    auto new_cube(const vec3_t& position = glm::zero<vec3_t>(), const vec3_t& scale = vec3_t(1.0f), const vec4_t& color = vec4_t(1.0f)) {
-        std::array<real_t, 36 * 3> vertices = {
-            // positions          
-            -1.0f, 1.0f, -1.0f,
-            -1.0f, -1.0f, -1.0f,
-            1.0f, -1.0f, -1.0f,
-            1.0f, -1.0f, -1.0f,
-            1.0f, 1.0f, -1.0f,
-            -1.0f, 1.0f, -1.0f,
+    return new_model(model_cube,
+		     offset,
+		     36,
+		     position,
+		     scale);
+  }
 
-            -1.0f, -1.0f, 1.0f,
-            -1.0f, -1.0f, -1.0f,
-            -1.0f, 1.0f, -1.0f,
-            -1.0f, 1.0f, -1.0f,
-            -1.0f, 1.0f, 1.0f,
-            -1.0f, -1.0f, 1.0f,
+  mat4_t scale(index_type model) const {
+    return glm::scale(mat4_t(1.0f), scales.at(model));
+  }
 
-            1.0f, -1.0f, -1.0f,
-            1.0f, -1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,
-            1.0f, 1.0f, -1.0f,
-            1.0f, -1.0f, -1.0f,
+  mat4_t translate(index_type model) const {
+    return glm::translate(mat4_t(1.0f), positions.at(model));
+  }
 
-            -1.0f, -1.0f, 1.0f,
-            -1.0f, 1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,
-            1.0f, -1.0f, 1.0f,
-            -1.0f, -1.0f, 1.0f,
+  mat4_t rotate(index_type model) const {
+    mat4_t rot(1.0f);
 
-            -1.0f, 1.0f, -1.0f,
-            1.0f, 1.0f, -1.0f,
-            1.0f, 1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,
-            -1.0f, 1.0f, 1.0f,
-            -1.0f, 1.0f, -1.0f,
+    rot = glm::rotate(mat4_t(1.0f), angles.at(model).x, vec3_t(1.0f, 0.0f, 0.0f));
+    rot = glm::rotate(mat4_t(1.0f), angles.at(model).y, vec3_t(0.0f, 1.0f, 0.0f)) * rot;
+    rot = glm::rotate(mat4_t(1.0f), angles.at(model).z, vec3_t(0.0f, 0.0f, 1.0f)) * rot;
 
-            -1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f, 1.0f,
-            1.0f, -1.0f, -1.0f,
-            1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f, 1.0f,
-            1.0f, -1.0f, 1.0f
-        };
+    return rot;
+  }
 
-        auto offset = g_vertex_buffer.num_vertices();
+  void render(index_type model, transformorder to) const {
+    if (draw.at(model) == true) {
+      mat4_t T = __table[to](model);
+      mat4_t mv = g_view.view() * T;
 
-        for (auto i = 0; i < vertices.size(); i += 9) {
-            vec3_t a(vertices[i + 0], vertices[i + 1], vertices[i + 2]);
-            vec3_t b(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
-            vec3_t c(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
-
-            g_vertex_buffer.add_triangle(a, color,
-                                         b, color,
-                                         c, color);
-        }
-
-        return new_model(model_cube,
-                         offset,
-                         36,
-                         position,
-                         scale);
-    }
-
-    mat4_t scale(index_type model) const {
-        return glm::scale(mat4_t(1.0f), scales.at(model));
-    }
-
-    mat4_t translate(index_type model) const {
-        return glm::translate(mat4_t(1.0f), positions.at(model));
-    }
-
-    mat4_t rotate(index_type model) const {
-        mat4_t rot(1.0f);
-
-        rot = glm::rotate(mat4_t(1.0f), angles.at(model).x, vec3_t(1.0f, 0.0f, 0.0f));
-        rot = glm::rotate(mat4_t(1.0f), angles.at(model).y, vec3_t(0.0f, 1.0f, 0.0f)) * rot;
-        rot = glm::rotate(mat4_t(1.0f), angles.at(model).z, vec3_t(0.0f, 0.0f, 1.0f)) * rot;
-
-        return rot;
-    }
-
-    void render(index_type model, transformorder to) const {
-        if (draw.at(model) == true) {
-            mat4_t T = __table[to](model);
-            mat4_t mv = g_view.view() * T;
-
-	    if (g_programs.uniform("unif_Model") != -1) {
-	      g_programs.up_mat4x4("unif_Model", T);
-	    }
+      if (g_programs.uniform("unif_Model") != -1) {
+	g_programs.up_mat4x4("unif_Model", T);
+      }
 	    
-            g_programs.up_mat4x4("unif_ModelView", mv);
-            g_programs.up_mat4x4("unif_Projection",
-                                 (model == modind_skybox
-                                  ? g_view.skyproj
-                                  : (framebuffer_pinned
-                                     ? g_view.cubeproj
-                                     : g_view.proj)));
+      g_programs.up_mat4x4("unif_ModelView", mv);
+      g_programs.up_mat4x4("unif_Projection",
+			   (model == modind_skybox
+			    ? g_view.skyproj
+			    : (framebuffer_pinned
+			       ? g_view.cubeproj
+			       : g_view.proj)));
 
-            auto ofs = vertex_offsets[model];
-            auto count = vertex_counts[model];
+      auto ofs = vertex_offsets[model];
+      auto count = vertex_counts[model];
 
-            GL_FN(glDrawArrays(GL_TRIANGLES,
-                               ofs,
-                               count));
-        };
+      GL_FN(glDrawArrays(GL_TRIANGLES,
+			 ofs,
+			 count));
+    };
+  }
+
+  void maybe_render_cube(index_type model, transformorder to);
+
+  void render(transformorder to) const {
+    for (auto i = 0; i < model_count; ++i) {
+      render(i, to);
     }
-
-    void maybe_render_cube(index_type model, transformorder to);
-
-    void render(transformorder to) const {
-        for (auto i = 0; i < model_count; ++i) {
-            render(i, to);
-        }
-    }
+  }
     
-    index_list_type select(predicate_fn_type func) const {
-        index_list_type members;
+  index_list_type select(predicate_fn_type func) const {
+    index_list_type members;
 
-        for (auto i = 0; i < model_count; ++i) {
-            if (func(i)) {
-                members.push_back(i);
-            }
-        }
-
-        return members;
+    for (auto i = 0; i < model_count; ++i) {
+      if (func(i)) {
+	members.push_back(i);
+      }
     }
 
-    void select_draw(predicate_fn_type func) {
-        for (auto i = 0; i < model_count; ++i) {
-            draw[i] = func(i);
-        }
-    }
+    return members;
+  }
 
-    model_type type(index_type i) const {
-        return model_types[i];
+  void select_draw(predicate_fn_type func) {
+    for (auto i = 0; i < model_count; ++i) {
+      draw[i] = func(i);
     }
+  }
+
+  model_type type(index_type i) const {
+    return model_types[i];
+  }
 } static g_models;
 
 struct frame_model {    
