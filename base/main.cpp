@@ -963,6 +963,54 @@ struct duniform {
   shader_uniform_backing::uniform_type type;
 };
 
+// TODO:
+// make these more type safe
+struct gl_state {
+  struct {
+    double range_near{0.0}; // [0, 1.0]
+    double range_far{1.0}; // [0, 1.0] (far can be less than near as well)
+
+    float clear{1.0f};
+    
+    GLenum func{GL_LEQUAL}; // GL_LESS, GL_LEQUAL, GL_GEQUAL, GL_GREATER, GL_ALWAYS, GL_NEVER
+
+    // GL_TRUE -> buffer will be written to if test passes;
+    // GL_FALSE -> no write occurs regardless of the test result
+    GLboolean mask{GL_TRUE};
+
+    bool test_enabled{true};
+    
+  } depth{};
+
+  struct {
+    bool enabled{false};
+    GLenum face{GL_BACK}; // GL_BACK, GL_FRONT, GL_FRONT_AND_BACK
+    GLenum wnd_order{GL_CCW}; // GL_CCW or GL_CW
+  } face_cull{};
+
+  void apply() const {
+    GL_FN(glClearDepth(depth.clear));
+
+    if (depth.test_enabled) {
+      GL_FN(glEnable(GL_DEPTH_TEST));
+      GL_FN(glDepthFunc(depth.func));
+    } else {
+      GL_FN(glDisable(GL_DEPTH_TEST));
+    }
+
+    GL_FN(glDepthMask(depth.mask));
+    GL_FN(glDepthRange(depth.range_near, depth.range_far));
+
+    if (face_cull.enabled) {
+      GL_FN(glEnable(GL_CULL_FACE));
+      GL_FN(glCullFace(face_cull.face));
+      GL_FN(glFrontFace(face_cull.wnd_order));
+    } else {
+      GL_FN(glDisable(GL_CULL_FACE));
+    }
+  }
+};
+
 struct pass_info {
   using draw_fn_type = std::function<void()>;
   
