@@ -1012,18 +1012,36 @@ struct gl_state {
 };
 
 struct pass_info {
+  using ptr_type = std::unique_ptr<pass_info>;
+  
+  enum frame_type {
+    frame_user = 0,
+    frame_envmap
+  };
+  
   using draw_fn_type = std::function<void()>;
+
+  gl_state state{};
+  
+  std::vector<duniform> uniforms; // cleared after initial upload
+
+  frame_type frametype{frame_user};
   
   programs::id_type shader;
 
+  models::transformorder transorder;
+  
   models::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
-  draw_fn_type draw_fn; // invoked after pass has been setup
 
-  std::vector<duniform> uniforms; // cleared after initial upload
-  std::vector<std::string> uniform_names;
+  frame::index_type envmap_id{frame::k_uninit}; // optional
+
+  bool active{true};
+  
+  std::vector<std::string> uniform_names; // no need to set this.
   
   void apply() {
-    use_program u(shader);
+    if (active) {
+      use_program u(shader);
 
       if (!uniforms.empty()) {      
       
@@ -1056,13 +1074,38 @@ struct pass_info {
 	g_uniform_backing->upload_uniform(name);
       }
 
+      g_models.select_draw(select_draw_predicate);
+      
+      switch (frametype) {
+      case frame_user: {
+	GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+	g_models.render(transorder);
+      } break;
 
-    g_models.select_draw(select_draw_predicate);
-    
-    draw_fn();
-  }  
+      case frame_envmap: {
+	ASSERT(envmap_id != frame::k_uninit);
+
+	g_models.framebuffer_pinned = true;
+	
+	for (auto i = 0; i < 6; ++i) {	  
+	  g_view.bind_view(g_frame.rcube->set_face(envmap_id,
+						   static_cast<frame::render_cube::axis>(i)));
+                    
+	  g_models.render(transorder);
+	}
+
+	g_frame.rcube->unbind();
+	
+	g_models.framebuffer_pinned = false;
+
+      }	break;
+      }
+    }
+  }
 };
 
+std::vector<pass_info::ptr_type> g_render_passes{};
+ 
 std::unordered_map<models::index_type, frame_model> g_frame_model_map{};
 
 void models::maybe_render_cube(index_type model, transformorder to) {
@@ -1206,7 +1249,12 @@ struct capture {
 
 } static g_capture;
 
-
+static void init_render_passes() {
+  // main render pass
+  {
+    
+  }
+};
 
 static void init_api_data() {
     g_view.reset_proj();
