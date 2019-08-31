@@ -1,4 +1,4 @@
-#include "common.h"
+#include "common.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,11 +11,11 @@
 #include <iostream>
 #include <unordered_map>
 
-#include "textures.h"
-#include "util.h"
-#include "programs.h"
-#include "geom.h"
-#include "frame.h"
+#include "textures.hpp"
+#include "util.hpp"
+#include "programs.hpp"
+#include "geom.hpp"
+#include "frame.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>

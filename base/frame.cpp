@@ -2,8 +2,8 @@
 #include <sstream>
 
 
-#include "frame.h"
-#include "util.h"
+#include "frame.hpp"
+#include "util.hpp"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"

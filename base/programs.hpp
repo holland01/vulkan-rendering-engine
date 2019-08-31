@@ -1,7 +1,7 @@
 #pragma once
 
-#include "common.h"
-#include "util.h"
+#include "common.hpp"
+#include "util.hpp"
 
 struct programs : public type_module {
   

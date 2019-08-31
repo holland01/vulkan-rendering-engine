@@ -1,8 +1,8 @@
 #pragma once
 
-#include "common.h"
-#include "textures.h"
-#include "util.h"
+#include "common.hpp"
+#include "textures.hpp"
+#include "util.hpp"
 #include <memory>
 #include <array>
 #include <glm/gtc/matrix_transform.hpp>

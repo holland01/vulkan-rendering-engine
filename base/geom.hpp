@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common.h"
+#include "common.hpp"
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/projection.hpp>
 #include <sstream>
