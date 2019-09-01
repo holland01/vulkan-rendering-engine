@@ -74,6 +74,9 @@ static move_state  g_select_move_state = {
     0, 0, 0, 0, 0, 0, 0
 };
 
+
+#define DRAW_MODELS(transform_order) g_models.render(transform_order)
+
 // key facts about transformations:
 // - a matrix transform represents the source space from the perspective
 // of the destination space
