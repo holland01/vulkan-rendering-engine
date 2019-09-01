@@ -48,6 +48,9 @@ using mat3_t = glm::mat3;
 
 using real_t = float;
 
+template <class T>
+using darray = std::vector<T>;
+
 #define R(x) static_cast<real_t>(x)
 #define R2(x) vec2_t{R(x)}
 #define R3(x) vec3_t{R(x)}

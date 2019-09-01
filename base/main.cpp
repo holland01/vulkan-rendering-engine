@@ -37,7 +37,7 @@
 
 frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
 
-std::vector<type_module*> g_modules;
+darray<type_module*> g_modules;
 
 programs::ptr_type g_programs{new programs()};
 
@@ -266,7 +266,7 @@ static view_data g_view(SCREEN_WIDTH, SCREEN_HEIGHT);
 
 struct vertex_buffer {
   
-  std::vector<vertex> data;
+  darray<vertex> data;
 
     mutable GLuint vbo;
 
@@ -396,7 +396,7 @@ struct models {
 
   using index_type = int32_t;
   using transform_fn_type = std::function<mat4_t(index_type model)>;
-  using index_list_type = std::vector<index_type>;
+  using index_list_type = darray<index_type>;
   using predicate_fn_type = std::function<bool(const index_type&)>;
     
   static const inline index_type k_uninit = -1;
@@ -412,14 +412,14 @@ struct models {
     }
   };
 
-  std::vector<vec3_t> positions;
-  std::vector<vec3_t> scales;
-  std::vector<vec3_t> angles;
-  std::vector<geom::bvol> bound_volumes;
-  std::vector<model_type> model_types;
-  std::vector<index_type> vertex_offsets;
-  std::vector<index_type> vertex_counts;
-  mutable std::vector<bool> draw;
+  darray<vec3_t> positions;
+  darray<vec3_t> scales;
+  darray<vec3_t> angles;
+  darray<geom::bvol> bound_volumes;
+  darray<model_type> model_types;
+  darray<index_type> vertex_offsets;
+  darray<index_type> vertex_counts;
+  mutable darray<bool> draw;
     
   struct {
     vec3_t eye;
@@ -888,9 +888,9 @@ struct pass_info {
   
   gl_state state{};
   
-  std::vector<duniform> uniforms; // cleared after initial upload
+  darray<duniform> uniforms; // cleared after initial upload
 
-  std::vector<bind_texture> tex_bindings;
+  darray<bind_texture> tex_bindings;
   
   frame_type frametype{frame_user};
   
@@ -906,7 +906,7 @@ struct pass_info {
 
   bool active{true};
   
-  std::vector<std::string> uniform_names; // no need to set this.
+  darray<std::string> uniform_names; // no need to set this.
   
   void apply() {
     if (active) {
@@ -990,8 +990,7 @@ struct pass_info {
   }
 };
 
-std::vector<pass_info::ptr_type> g_render_passes{};
- 
+darray<pass_info> g_render_passes{};
 std::unordered_map<models::index_type, frame_model> g_frame_model_map{};
 
 void models::maybe_render_cube(index_type model, transformorder to) {
@@ -1091,13 +1090,13 @@ static void init_render_passes() {
     state.depth.range_far = 0.5;
     state.face_cull.enabled = true;
     
-    std::vector<duniform> unifs;
+    darray<duniform> unifs;
 		 
     unifs.push_back(DUNIFINT(unif_TexCubeMap, 0));
     unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
 
-    std::vector<bind_texture> tex_bindings = {
+    darray<bind_texture> tex_bindings = {
       { g_checkerboard_cubemap, 0 }
     };
 
@@ -1152,7 +1151,7 @@ static void init_render_passes() {
     state.clear_buffers.depth = true;
     state.clear_buffers.color = true;
     
-    std::vector<duniform> unifs;
+    darray<duniform> unifs;
 
     unifs.push_back(DUNIFINT(unif_GammaCorrect, true));
     unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
@@ -1199,14 +1198,14 @@ static void init_render_passes() {
     //state.clear_buffers.color = true;
     //state.clear_buffers.depth = true;
     
-    std::vector<duniform> unifs;
+    darray<duniform> unifs;
 		 
     unifs.push_back(DUNIFINT(unif_TexCubeMap, 0));
     unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
     unifs.push_back(DUNIFVEC3_XYZ(unif_CameraPosition, 0.0, 0.0, 0.0));
 
-    std::vector<bind_texture> tex_bindings = {
+    darray<bind_texture> tex_bindings = {
       {
 	g_frame.render_cube_color_tex(g_frame_model_map[g_models.modind_sphere].render_cube_id),
 	0
@@ -1254,13 +1253,13 @@ static void init_render_passes() {
   {
     gl_state state{};
     
-    std::vector<duniform> unifs;
+    darray<duniform> unifs;
 		 
     unifs.push_back(DUNIFINT(unif_TexCubeMap, 0));
     unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
 
-    std::vector<bind_texture> tex_bindings = {
+    darray<bind_texture> tex_bindings = {
       { g_checkerboard_cubemap, 0 }
     };
     
@@ -1371,7 +1370,7 @@ static void init_api_data() {
 
 
 
-static std::vector<uint8_t> g_debug_cubemap_buf;
+static darray<uint8_t> g_debug_cubemap_buf;
 static textures::index_type g_debug_cm_index{textures::k_uninit};
 
 #define screen_cube_depth(k) (g_frame.width * g_frame.height * 4 * (k))
