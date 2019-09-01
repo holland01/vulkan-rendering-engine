@@ -1058,10 +1058,6 @@ struct pass_info {
 	}
 
 	uniforms.clear();
-      } else {
-	for (const auto& name: uniform_names) {
-	  g_uniform_backing->upload_uniform(name);
-	}
       }
 
       for (const auto& name: uniform_names) {
