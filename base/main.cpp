@@ -412,8 +412,6 @@ struct models {
   std::vector<vec3_t> scales;
   std::vector<vec3_t> angles;
   std::vector<geom::bvol> bound_volumes;
-  std::vector<textures::index_type> textures;
-  std::vector<int> texture_units;
   std::vector<model_type> model_types;
   std::vector<index_type> vertex_offsets;
   std::vector<index_type> vertex_counts;
@@ -453,8 +451,7 @@ struct models {
 		 vec3_t position = glm::zero<vec3_t>(),
 		 vec3_t scale = vec3_t(1.0f),
 		 vec3_t angle = vec3_t(0.0f),
-		 geom::bvol bvol = geom::bvol(),
-		 textures::index_type tex_index = textures::k_uninit,
+		 geom::bvol bvol = geom::bvol(),		
 		 int tex_unit = 0) {
 
     index_type id = static_cast<index_type>(model_count);
@@ -471,9 +468,6 @@ struct models {
     draw.push_back(true);       
 
     bound_volumes.push_back(bvol);
-    
-    textures.push_back(tex_index);
-    texture_units.push_back(tex_unit);
     
     model_count++;
 
@@ -581,9 +575,7 @@ struct models {
       ret.z = glm::sin(theta) * glm::cos(phi);
       return ret;
     };
-
-	
-	
+      	
     for (real_t phi = -glm::half_pi<real_t>(); phi <= glm::half_pi<real_t>(); phi += step) {
       for (real_t theta = 0.0f; theta <= glm::two_pi<real_t>(); theta += step) {
 	auto a = cart(phi, theta);
@@ -830,7 +822,7 @@ struct models {
 			    : (framebuffer_pinned
 			       ? g_view.cubeproj
 			       : g_view.proj)));
-
+      
       auto ofs = vertex_offsets[model];
       auto count = vertex_counts[model];
 
@@ -1188,68 +1180,8 @@ struct gl_clear_depth {
     }
 };
 
-struct capture {
-    GLuint fbo, tex, rbo;
-    int width, height;
-
-    capture()
-        :
-        fbo(0),
-        tex(0),
-        rbo(0),
-        width(SCREEN_WIDTH),
-        height(SCREEN_HEIGHT){
-    }
-
-    void load() {
-        GL_FN(glGenFramebuffers(1, &fbo));
-        bind();
-
-        GL_FN(glGenTextures(1, &tex));
-        GL_FN(glBindTexture(GL_TEXTURE_2D, tex));
-        GL_FN(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL));
-        GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-        GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-        GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
-        GL_FN(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
 
 
-        GL_FN(glBindTexture(GL_TEXTURE_2D, 0));
-
-        // attach it to currently bound framebuffer object
-        GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0));
-
-        GL_FN(glGenRenderbuffers(1, &rbo));
-        GL_FN(glBindRenderbuffer(GL_RENDERBUFFER, rbo));
-        GL_FN(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height));
-        GL_FN(glBindRenderbuffer(GL_RENDERBUFFER, 0));
-
-        GL_FN(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo));
-
-        ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
-        unbind();
-    }
-
-    void bind() const {
-        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
-    }
-
-    void unbind() const {
-        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
-    }
-
-    void sample_begin(const std::string& sampler, int slot = 0) const {
-        GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<decltype(GL_TEXTURE0)>(slot)));
-        GL_FN(glBindTexture(GL_TEXTURE_2D, tex));
-        g_programs.up_int(sampler, slot);
-    }
-
-    void sample_end(int slot = 0) const {
-        GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<decltype(GL_TEXTURE0)>(slot)));
-        GL_FN(glBindTexture(GL_TEXTURE_2D, 0));
-    }
-
-} static g_capture;
 
 static void init_render_passes() {
   // main render pass
@@ -1261,7 +1193,6 @@ static void init_render_passes() {
 static void init_api_data() {
     g_view.reset_proj();
 
-    g_capture.load();
     g_programs->load();
 
     GL_FN(glGenVertexArrays(1, &g_vao));
