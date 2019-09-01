@@ -1,7 +1,7 @@
 #include "textures.hpp"
 #include "stb_image.h"
 
-textures g_textures;
+textures g_textures{};
 
 void textures::free_mem() {
     if (!tex_handles.empty()) {

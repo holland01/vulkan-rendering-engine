@@ -14,7 +14,7 @@ struct frame {
     uint32_t width;
     uint32_t height;
 
-    using face_mats_type = std::array<glm::mat4, 6>;
+    using face_mats_type = std::array<mat4_t, 6>;
 
     static const inline index_type k_uninit = -1;
     
