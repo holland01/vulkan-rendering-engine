@@ -1112,7 +1112,10 @@ static void init_api_data() {
 
     real_t wall_size = R(15.0);
     
-    g_models.new_wall(R3(0.0), models::wall_bottom, R3(wall_size), R4v(0.1, 0.2, 0.3, 1.0));
+    g_models.new_wall(R3(0.0),
+		      models::wall_bottom,
+		      R3(wall_size),
+		      R4v(0.1, 0.2, 0.3, 1.0));
     //    g_models.new_wall(R3v(-wall_size, 0.0, 0.0), models::wall_left, R3(wall_size), R4v(0.0, 0.0, 0.3, 1.0));
     //g_models.new_wall(R3v(wall_size, 0.0, 0.0), models::wall_right, R3(wall_size), R4v(0.3, 0.5, 0.0, 1.0));
     
@@ -1143,7 +1146,7 @@ static void init_api_data() {
     GL_FN(glClearDepth(1.0f));
 }
 
-#define DRAW_MODELS(transform_order) g_models.render(transform_order)
+
 
 static std::vector<uint8_t> g_debug_cubemap_buf;
 static textures::index_type g_debug_cm_index{textures::k_uninit};
@@ -1204,25 +1207,25 @@ void test_main_1() {
         
         g_models.maybe_render_cube(g_models.modind_sphere, models::transformorder_trs);
 
-
 	g_textures.unbind(g_checkerboard_cubemap);
         
 #ifdef SPHERE_CAM
         g_debug_cubemap_buf = std::move(g_frame.rcube->get_pixels(fmodel_map.render_cube_id));
-
+	
         g_debug_cm_index = g_textures.new_texture(g_frame.width,
                                                   g_frame.height,
                                                   4,
                                                   GL_TEXTURE_2D);
         
-        g_textures.set_tex_2d(g_debug_cm_index, &g_debug_cubemap_buf[screen_cube_depth(screen_cube_index)]);
+        g_textures.set_tex_2d(g_debug_cm_index,
+			      &g_debug_cubemap_buf[screen_cube_depth(screen_cube_index)]);
 #endif // SPHERE_CAM
       } // fmodel_map.needs_render
 
       CLEAR_COLOR_DEPTH;
     
-#ifndef SPHERE_CAM
       draw_walls();
+#if !defined(SPHERE_CAM)
       
       reflect_spheres(g_frame.render_cube_color_tex(fmodel_map.render_cube_id));
 #else
@@ -1247,20 +1250,23 @@ void test_main_1() {
 	reflect_spheres(g_checkerboard_cubemap);
       } else
 #endif
+       
 	{
 	  
 	  use_program u(g_programs->skybox);
 
 	  g_models.select_draw(MODLAMSEL(m, m == g_models.modind_area_sphere));
-	
+	  
 	  g_textures.bind(g_checkerboard_cubemap, 0);
 	  g_programs->up_int("unif_TexCubeMap", 0);
+	  
 	  DRAW_MODELS(models::transformorder_trs);
 
 	  g_textures.unbind(g_checkerboard_cubemap);
 	}
 
       draw_walls();
+      
 
 #ifndef ROOM_TEST
     }
@@ -1282,7 +1288,7 @@ static void render() {
 }
 
 static void error_callback(int error, const char* description) {
-    fputs(description, stdout);
+  fputs(description, stdout);
 }
 
 // origin for coordinates is the top left
