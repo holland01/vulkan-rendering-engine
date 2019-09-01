@@ -881,15 +881,21 @@ struct pass_info {
   
   using draw_fn_type = std::function<void()>;
 
+  std::string name;
+  
   gl_state state{};
   
   std::vector<duniform> uniforms; // cleared after initial upload
 
+  std::vector<bind_texture> tex_bindings;
+  
   frame_type frametype{frame_user};
   
   programs::id_type shader;
 
   models::transformorder transorder;
+
+  std::function<void()> init_fn;
   
   models::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
 
@@ -901,8 +907,12 @@ struct pass_info {
   
   void apply() {
     if (active) {
+      g_vertex_buffer.bind();
       use_program u(shader);
-
+      
+      for (const auto& bind: tex_bindings) {
+	g_textures.bind(bind.id, bind.slot);
+      }
       if (!uniforms.empty()) {      
       
 	for (const auto& unif: uniforms) {
@@ -926,6 +936,7 @@ struct pass_info {
 	uniforms.clear();
       }
 
+      init_fn();
       for (const auto& name: uniform_names) {
 	g_uniform_storage->upload_uniform(name);
       }
@@ -956,6 +967,11 @@ struct pass_info {
 
       }	break;
       }
+
+      for (const auto& bind: tex_bindings) {
+	g_textures.unbind(bind.id);
+      }
+      g_vertex_buffer.unbind();
     }
   }
 };
