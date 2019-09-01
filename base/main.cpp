@@ -17,6 +17,7 @@
 #include "geom.hpp"
 #include "frame.hpp"
 
+#include "render_pipeline.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -868,142 +869,7 @@ struct frame_model {
     bool needs_render{true};
 };
 
-struct shader_uniform_backing {  
-  typedef uint8_t buffer_offset_t; 
-  
-  enum uniform_type {
-    uniform_mat4x4 = 0,
-    uniform_vec3,
-    uniform_int32
-  };
-
-  std::vector<mat4_t> mat4x4s;
-  std::vector<vec3_t> vec3s;
-  std::vector<int32_t> int32s;
-
-  static const inline size_t MAX_BUFFER_OFFSET = (1 << ( (8 * sizeof(buffer_offset_t)) - 1 ));
-  
-  struct datum {
-    uniform_type uniform_buffer;
-    buffer_offset_t uniform_buffer_offset;
-  };
-
-  std::unordered_map<std::string, datum> datums;
-
-  template <class uniformType,
-	    uniform_type unif_type>
-  void set_uniform(const std::string& name,
-		   const uniformType& v,
-		   std::vector<uniformType>& store) {
-    auto it = datums.find(name);
-
-    if (it == datums.end()) {
-      size_t buff_offset = store.size();
-      
-      ASSERT(buff_offset <= MAX_BUFFER_OFFSET);
-
-      store.push_back(v);
-     
-      datum d{};
-
-      d.uniform_buffer = unif_type;
-      d.uniform_buffer_offset = static_cast<buffer_offset_t>(buff_offset);
-
-      datums[name] = d;
-    } else {
-      store[it->second.uniform_buffer_offset] = v;
-    }
-  }
-
-#define DECL_SET_UNIF_FN(type, enum_type, storage)		\
-  void set_uniform(const std::string& name, const type& v) {	\
-    set_uniform<type, enum_type>(name, v, storage);		\
-  }
-  
-  DECL_SET_UNIF_FN(mat4_t, uniform_mat4x4, mat4x4s);
-  DECL_SET_UNIF_FN(vec3_t, uniform_vec3, vec3s);
-  DECL_SET_UNIF_FN(int32_t, uniform_int32, int32s);
-  
-  void upload_uniform(const std::string& name) const {
-    const datum& d = datums.at(name);
-
-    switch (d.uniform_buffer) {
-    case uniform_mat4x4:
-      g_programs.up_mat4x4(name, mat4x4s.at(d.uniform_buffer_offset));
-      break;
-
-    case uniform_vec3:
-      g_programs.up_vec3(name, vec3s.at(d.uniform_buffer_offset));
-      break;
-      
-    case uniform_int32:
-      g_programs.up_int(name, int32s.at(d.uniform_buffer_offset));
-      break;
-    }
-  }
-};
-
-static std::unique_ptr<shader_uniform_backing> g_uniform_backing{new shader_uniform_backing()};
-
-struct duniform {
-  union {
-    mat4_t m4;
-    vec3_t v3;
-    int32_t i32;
-  };
-
-  std::string name;
-  
-  shader_uniform_backing::uniform_type type;
-};
-
-// TODO:
-// make these more type safe
-struct gl_state {
-  struct {
-    double range_near{0.0}; // [0, 1.0]
-    double range_far{1.0}; // [0, 1.0] (far can be less than near as well)
-
-    float clear{1.0f};
-    
-    GLenum func{GL_LEQUAL}; // GL_LESS, GL_LEQUAL, GL_GEQUAL, GL_GREATER, GL_ALWAYS, GL_NEVER
-
-    // GL_TRUE -> buffer will be written to if test passes;
-    // GL_FALSE -> no write occurs regardless of the test result
-    GLboolean mask{GL_TRUE};
-
-    bool test_enabled{true};
-    
-  } depth{};
-
-  struct {
-    bool enabled{false};
-    GLenum face{GL_BACK}; // GL_BACK, GL_FRONT, GL_FRONT_AND_BACK
-    GLenum wnd_order{GL_CCW}; // GL_CCW or GL_CW
-  } face_cull{};
-
-  void apply() const {
-    GL_FN(glClearDepth(depth.clear));
-
-    if (depth.test_enabled) {
-      GL_FN(glEnable(GL_DEPTH_TEST));
-      GL_FN(glDepthFunc(depth.func));
-    } else {
-      GL_FN(glDisable(GL_DEPTH_TEST));
-    }
-
-    GL_FN(glDepthMask(depth.mask));
-    GL_FN(glDepthRange(depth.range_near, depth.range_far));
-
-    if (face_cull.enabled) {
-      GL_FN(glEnable(GL_CULL_FACE));
-      GL_FN(glCullFace(face_cull.face));
-      GL_FN(glFrontFace(face_cull.wnd_order));
-    } else {
-      GL_FN(glDisable(GL_CULL_FACE));
-    }
-  }
-};
+static std::unique_ptr<shader_uniform_storage> g_uniform_storage{new shader_uniform_storage()};
 
 struct pass_info {
   using ptr_type = std::unique_ptr<pass_info>;
@@ -1041,16 +907,16 @@ struct pass_info {
       
 	for (const auto& unif: uniforms) {
 	  switch (unif.type) {
-	  case shader_uniform_backing::uniform_mat4x4:
-	    g_uniform_backing->set_uniform(unif.name, unif.m4);
+	  case shader_uniform_storage::uniform_mat4x4:
+	    g_uniform_storage->set_uniform(unif.name, unif.m4);
 	    break;
 
-	  case shader_uniform_backing::uniform_vec3:
-	    g_uniform_backing->set_uniform(unif.name, unif.v3);
+	  case shader_uniform_storage::uniform_vec3:
+	    g_uniform_storage->set_uniform(unif.name, unif.v3);
 	    break;
 
-	  case shader_uniform_backing::uniform_int32:
-	    g_uniform_backing->set_uniform(unif.name, unif.i32);
+	  case shader_uniform_storage::uniform_int32:
+	    g_uniform_storage->set_uniform(unif.name, unif.i32);
 	    break;	  
 	  }
 
@@ -1061,7 +927,7 @@ struct pass_info {
       }
 
       for (const auto& name: uniform_names) {
-	g_uniform_backing->upload_uniform(name);
+	g_uniform_storage->upload_uniform(name);
       }
 
       g_models.select_draw(select_draw_predicate);
