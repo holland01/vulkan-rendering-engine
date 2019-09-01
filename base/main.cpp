@@ -19,6 +19,7 @@
 #include "frame.hpp"
 
 #include "render_pipeline.hpp"
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -35,6 +36,8 @@
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
 #define ROOM_TEST
+
+#define USE_SCENE_GRAPH
 
 frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
 
@@ -529,7 +532,6 @@ struct models {
     
 #undef MAP_UPDATE_SELECT_MODEL_STATE
 
-
   enum _move_op {
     mop_add,
     mop_sub,
@@ -562,7 +564,6 @@ struct models {
     move(a, a_position, mop_set);
   }
     
-
   auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1), vec4_t color = vec4_t{R(1.0)}) {
     auto offset = g_vertex_buffer.num_vertices();
 
@@ -1187,6 +1188,7 @@ void scene_graph::select_draw(predicate_fn_type func) {
 }
 
 static std::unique_ptr<scene_graph> g_graph{nullptr};
+
 static std::unique_ptr<shader_uniform_storage> g_uniform_storage{new shader_uniform_storage()};
 
 struct pass_info {
@@ -1214,17 +1216,31 @@ struct pass_info {
   models::transformorder transorder;
 
   std::function<void()> init_fn;
-  
-  models::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
+
+#if defined (USE_SCENE_GRAPH)
+  scene_graph::
+#else
+  models::
+#endif
+  predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
 
   frame::index_type envmap_id{frame::k_uninit}; // optional
 
   bool active{true};
   
   darray<std::string> uniform_names; // no need to set this.
+
+  void draw() const {
+#if defined(USE_SCENE_GRAPH)
+    g_graph->draw_all();
+#else
+    g_models.render(transorder);
+#endif
+  }
   
   void apply() {
     if (active) {
+      write_logf("pass: %s", name.c_str());
       
       g_vertex_buffer.bind();
       use_program u(shader);
@@ -1261,8 +1277,13 @@ struct pass_info {
       for (const auto& name: uniform_names) {
 	g_uniform_storage->upload_uniform(name);
       }
-      
-      g_models.select_draw(select_draw_predicate);
+
+#if defined(USE_SCENE_GRAPH)
+      g_graph->
+#else
+      g_models.
+#endif
+	select_draw(select_draw_predicate);
       
       switch (frametype) {
       case frame_user: {
@@ -1270,7 +1291,7 @@ struct pass_info {
 
 	state.apply();
 	
-	g_models.render(transorder);
+	draw();
       } break;
 
       case frame_envmap: {
@@ -1286,7 +1307,7 @@ struct pass_info {
 	  g_view.bind_view(g_frame.rcube->set_face(envmap_id,
 						   static_cast<frame::render_cube::axis>(i)));
                     
-	  g_models.render(transorder);
+	  draw();
 	}
 
 	g_frame.rcube->unbind();
@@ -1306,6 +1327,7 @@ struct pass_info {
 };
 
 darray<pass_info> g_render_passes{};
+
 std::unordered_map<models::index_type, frame_model> g_frame_model_map{};
 
 void models::maybe_render_cube(index_type model, transformorder to) {
@@ -1431,10 +1453,14 @@ static void init_render_passes() {
       g_frame_model_map[g_models.modind_sphere].needs_render = true;
 
     };
-    
+
+#if defined(USE_SCENE_GRAPH)
+    auto select = scene_graph_select(n, n != g_graph->test_indices.sphere);
+#else
     auto select = [](const models::index_type& m) -> bool {
       return m != g_models.modind_sphere;
     };
+#endif
 
     auto envmap_id = g_frame_model_map[g_models.modind_sphere].render_cube_id;
     
@@ -1477,10 +1503,16 @@ static void init_render_passes() {
     auto transform_order = models::transformorder_trs;
 
     auto init = []() {};
-    
+
+#if defined(USE_SCENE_GRAPH)
+    auto select = scene_graph_select(n,
+				     g_models.type(g_graph->model_indices[n]) ==
+				     models::model_quad);
+#else
     auto select = [](const models::index_type& m) -> bool {
       return g_models.type(m) == models::model_quad;
     };
+#endif
 
     auto envmap_id = frame::k_uninit;
     
@@ -1533,10 +1565,16 @@ static void init_render_passes() {
     auto init = []() {
       g_uniform_storage->set_uniform("unif_CameraPosition", g_view.position);
     };
+
     
+#if defined(USE_SCENE_GRAPH)
+    auto select = scene_graph_select(n,
+				     n == g_graph->test_indices.sphere);
+#else
     auto select = [](const models::index_type& m) -> bool {
       return m == g_models.modind_sphere;
     };
+#endif
 
     auto envmap_id = frame::k_uninit;
     
@@ -1579,12 +1617,14 @@ static void init_render_passes() {
 
     auto transform_order = models::transformorder_trs;
 
-    auto init = []() {
-    };
+    auto init = []() {};
     
+#if defined(USE_SCENE_GRAPH)
+    auto select = scene_graph_select(n, n == g_graph->test_indices.area_sphere);
+#else
     auto select = [](const models::index_type& m) -> bool {
-      return m == g_models.modind_area_sphere;
-    };
+      return m == g_models.modind_area_sphere; };
+#endif
 
     auto envmap_id = frame::k_uninit;
     
@@ -1666,6 +1706,51 @@ static void init_api_data() {
 
     g_skybox_texture = g_textures.new_cubemap(paths);
 
+    g_graph.reset(new scene_graph{});
+
+    {
+      scene_graph::init_info sphere;
+
+      sphere.position = vec3_t{ROOM_SPHERE_POS};
+      sphere.scale = vec3_t{ROOM_SPHERE_RADIUS};
+      sphere.angle = vec3_t{0};
+
+      sphere.model = g_models.modind_area_sphere;
+      sphere.parent = 0;
+      
+      g_graph->test_indices.area_sphere = g_graph->new_node(sphere);
+    }
+    
+    {
+      scene_graph::init_info sphere;
+
+      sphere.position = vec3_t{TEST_SPHERE_POS};
+      sphere.scale = vec3_t{TEST_SPHERE_RADIUS};
+      sphere.angle = vec3_t{0};
+
+      sphere.model = g_models.modind_sphere;
+      sphere.parent = g_graph->test_indices.area_sphere;
+      
+      g_graph->test_indices.sphere = g_graph->new_node(sphere);
+    }
+    
+    {
+      scene_graph::init_info floor;
+
+      floor.position = vec3_t{0};
+      floor.scale = R3(wall_size);
+      floor.angle = vec3_t{0};
+
+      floor.model = g_models.new_wall(R3(0.0),
+		      models::wall_bottom,
+		      R3(wall_size),
+		      R4v(0.1, 0.2, 0.3, 1.0));
+      
+      floor.parent = g_graph->test_indices.area_sphere;
+      
+      g_graph->test_indices.floor = g_graph->new_node(floor);
+    }
+    
     GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
     GL_FN(glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS));
     GL_FN(glDisable(GL_CULL_FACE));
@@ -1675,8 +1760,6 @@ static void init_api_data() {
     GL_FN(glDepthFunc(GL_LEQUAL));
     GL_FN(glClearDepth(1.0f));
 }
-
-
 
 static darray<uint8_t> g_debug_cubemap_buf;
 static textures::index_type g_debug_cm_index{textures::k_uninit};
