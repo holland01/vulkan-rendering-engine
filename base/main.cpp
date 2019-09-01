@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <iostream>
 #include <unordered_map>
+#include <limits>
 
 #include "textures.hpp"
 #include "util.hpp"
@@ -810,6 +811,29 @@ struct models {
     return rot;
   }
 
+  void render(index_type model, const mat4_t& world) const {
+    mat4_t mv = g_view.view() * world;
+
+    if (g_programs->uniform("unif_Model") != -1) {
+      g_programs->up_mat4x4("unif_Model", world);
+    }
+	    
+    g_programs->up_mat4x4("unif_ModelView", mv);
+    g_programs->up_mat4x4("unif_Projection",
+			  (model == modind_skybox
+			   ? g_view.skyproj
+			   : (framebuffer_pinned
+			      ? g_view.cubeproj
+			      : g_view.proj)));
+      
+    auto ofs = vertex_offsets[model];
+    auto count = vertex_counts[model];
+
+    GL_FN(glDrawArrays(GL_TRIANGLES,
+		       ofs,
+		       count));
+  }
+  
   void render(index_type model, transformorder to) const {
     if (draw.at(model) == true) {
       mat4_t T = __table[to](model);
@@ -872,6 +896,300 @@ struct frame_model {
     bool needs_render{true};
 };
 
+struct node_id;
+
+#define scene_graph_select(n, expr) [](const scene_graph::index_type& n) -> bool { return expr; }
+
+struct scene_graph {
+  using index_type = int16_t;
+
+  using predicate_fn_type = std::function<bool(const index_type& n)>;
+  
+  darray<darray<index_type>> child_lists;
+  darray<vec3_t> positions;
+  darray<vec3_t> angles;
+  darray<vec3_t> scales;
+  darray<boolvec3_t> accum; // x -> pos, y -> orient, z -> scale
+  darray<node_id> node_ids;
+  darray<models::index_type> model_indices;
+  darray<index_type> parent_nodes;
+  darray<bool> draw;
+
+  struct test_indices_s {
+    index_type sphere{unset<index_type>()};
+    index_type skybox{unset<index_type>()};
+    index_type area_sphere{unset<index_type>()};
+    index_type floor{unset<index_type>()};
+  };
+
+  test_indices_s test_indices;
+  
+  struct init_info {
+    vec3_t position, angle, scale;
+    boolvec3_t accum;
+    models::index_type model;
+    index_type parent;
+    bool draw;
+
+    init_info()
+      : position(R(0)), angle(R(0)), scale(R(1)),
+	accum(true, true, false),
+	model(unset<models::index_type>()),
+	parent(0),
+	draw(true)
+    {}
+  };
+
+  scene_graph();
+
+  index_type new_node(const scene_graph::init_info& info);
+  
+  bool is_root(index_type node) const { return parent_nodes[node] == unset<index_type>(); }
+  
+  void make_node_id(index_type node, int depth);
+
+  mat4_t scale(index_type node) const;
+
+  mat4_t translate(index_type node) const;
+
+  mat4_t rotate(index_type node) const;
+
+  mat4_t model_transform(scene_graph::index_type node) const;
+
+  mat4_t modaccum_transform(scene_graph::index_type node) const;
+  
+  void draw_node(index_type node);
+
+  void draw_node(scene_graph::index_type draw_node,
+	    scene_graph::index_type traverse_node,
+	    node_id* id,
+	    const mat4_t& world);
+
+  void draw_all(index_type current, const mat4_t& world) const;
+  
+  void draw_all() const;
+
+  int depth(index_type node) const;
+
+  void select_draw(predicate_fn_type func);
+};
+
+struct node_id {
+  using offset_type = scene_graph::index_type;
+  using index_type = uint8_t;
+  
+  darray<offset_type> levels; // levels[0] = child node of graph root
+  index_type ptr;
+  bool root;
+  
+  node_id()
+    : ptr{0},
+      root(true)
+  {}
+  
+  node_id(int depth)
+    : levels(depth, unset<offset_type>()),
+      ptr{0},
+      root(false)
+  {}
+
+  bool finished() const {
+    ASSERT(levels.size() < std::numeric_limits<index_type>::max());
+    return ptr == levels.size();
+  }
+
+  offset_type peek() const {
+    ASSERT(ptr < levels.size());
+    return levels[ptr];
+  }
+  
+  void pop() {
+    ASSERT(!finished());
+    ptr++;
+  }
+
+  void reset() {
+    ptr = 0;
+  }
+};
+
+scene_graph::scene_graph()
+  : test_indices()
+{
+  // root initialization
+  child_lists.push_back(darray<index_type>());
+  positions.push_back(vec3_t{R(0)});
+  scales.push_back(vec3_t{R(1)});
+  angles.push_back(vec3_t{R(0)});
+  accum.push_back(boolvec3_t{false});
+  node_ids.push_back(node_id());
+  model_indices.push_back(unset<models::index_type>());
+  parent_nodes.push_back(unset<index_type>());
+  draw.push_back(false);
+
+  #if 0
+  test_indices.sphere = unset<index_type>();
+  test_indices.area_sphere = unset<index_type>();
+  test_indices.skybox = unset<index_type>();
+  #endif
+}
+
+scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info) {
+  auto index = child_lists.size();
+
+  child_lists.push_back(darray<index_type>());
+  positions.push_back(info.position);
+  scales.push_back(info.scale);
+  angles.push_back(info.angle);
+  accum.push_back(info.accum);
+  node_ids.push_back(node_id());
+  model_indices.push_back(info.model);
+  parent_nodes.push_back(info.parent);
+  draw.push_back(info.draw);
+
+  ASSERT(info.parent != unset<index_type>());
+  ASSERT(info.parent < child_lists.size());
+
+  child_lists[info.parent].push_back(index);
+  
+  make_node_id(index, depth(index));
+
+  return index;
+} 
+
+void scene_graph::make_node_id(scene_graph::index_type node, int depth) {
+  ASSERT(!is_root(node));
+  
+  node_id nid(depth);
+  int counter = depth - 1;
+
+  auto inode = node;
+  
+  while (!is_root(inode)) {
+    ASSERT(counter >= 0);
+
+    auto parent = parent_nodes[inode]; 
+    
+    auto offset = 0;
+    {
+      const auto& children = child_lists[parent];
+      while (offset < children.size() && children[offset] != inode) offset++;
+      ASSERT(children[offset] == inode);
+    }
+    nid.levels[counter] = offset;
+
+    inode = parent;
+    counter--;
+  }
+
+  node_ids[node] = std::move(nid);
+}
+
+mat4_t scene_graph::scale(index_type node) const {
+  return glm::scale(mat4_t(1.0f), scales.at(node));
+}
+
+mat4_t scene_graph::translate(index_type node) const {
+  return glm::translate(mat4_t(1.0f), positions.at(node));
+}
+
+mat4_t scene_graph::rotate(index_type node) const {
+  mat4_t rot(1.0f);
+
+  rot = glm::rotate(mat4_t(1.0f), angles.at(node).x, vec3_t(1.0f, 0.0f, 0.0f));
+  rot = glm::rotate(mat4_t(1.0f), angles.at(node).y, vec3_t(0.0f, 1.0f, 0.0f)) * rot;
+  rot = glm::rotate(mat4_t(1.0f), angles.at(node).z, vec3_t(0.0f, 0.0f, 1.0f)) * rot;
+
+  return rot;
+}
+
+mat4_t scene_graph::model_transform(scene_graph::index_type node) const {
+  return translate(node) * rotate(node) * scale(node);
+}
+
+mat4_t scene_graph::modaccum_transform(scene_graph::index_type node) const {
+  mat4_t m{m4i()};
+  
+  if (accum[node][0]) m *= translate(node);
+  if (accum[node][1]) m *= rotate(node);
+  if (accum[node][2]) m *= scale(node);
+
+  return m;
+}
+
+void scene_graph::draw_node(scene_graph::index_type node,
+			    scene_graph::index_type traverse_node,
+			    node_id* id,
+			    const mat4_t& world) {  
+  if (id->finished()) {
+    ASSERT(traverse_node == node);
+    
+    mat4_t world_accum{world * model_transform(node)};
+    
+    g_models.render(model_indices[node], world_accum);
+    
+  } else {
+    mat4_t world_accum{world * modaccum_transform(traverse_node)};
+    
+    auto traverse_next = child_lists[traverse_node][id->peek()];
+    id->pop();
+
+    draw_node(node, traverse_next, id, world_accum);
+  }
+}
+
+void scene_graph::draw_node(scene_graph::index_type node) {
+  if (draw[node]) {
+    node_id* id = node_ids.data() + node;
+    ASSERT(id->ptr == 0);
+  
+    auto traverse = child_lists[0][id->peek()];
+    id->pop();
+
+    draw_node(node, traverse, id, modaccum_transform(0));
+  
+    id->reset();
+  }
+}
+
+void scene_graph::draw_all(index_type current, const mat4_t& world) const {
+  mat4_t accum{world * modaccum_transform(current)};
+
+  if (draw[current]) {
+    mat4_t raccum{world * model_transform(current)};
+    g_models.render(model_indices[current], raccum);
+  }
+
+  for (auto child: child_lists[current]) {
+    draw_all(child, accum);
+  }
+}
+  
+void scene_graph::draw_all() const {
+  draw_all(0, m4i());
+}
+
+int scene_graph::depth(index_type node) const {
+  ASSERT(!is_root(node));
+  
+  int d = 0;
+  auto n = node;
+
+  while (!is_root(n)) {
+    n = parent_nodes[n];
+    d++;
+  }
+
+  return d;
+}
+
+void scene_graph::select_draw(predicate_fn_type func) {
+  for (auto i = 0; i < child_lists.size(); ++i) {
+    draw[i] = func(i);
+  }
+}
+
+static std::unique_ptr<scene_graph> g_graph{nullptr};
 static std::unique_ptr<shader_uniform_storage> g_uniform_storage{new shader_uniform_storage()};
 
 struct pass_info {
