@@ -954,6 +954,9 @@ struct pass_info {
 	ASSERT(envmap_id != frame::k_uninit);
 
 	g_models.framebuffer_pinned = true;
+
+	g_frame.rcube->bind(envmap_id);
+
 	state.apply();
 	
 	for (auto i = 0; i < 6; ++i) {	  
@@ -964,6 +967,7 @@ struct pass_info {
 	}
 
 	g_frame.rcube->unbind();
+	g_view.unbind_view();
 	
 	g_models.framebuffer_pinned = false;
 
