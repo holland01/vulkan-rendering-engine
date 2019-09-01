@@ -1069,13 +1069,233 @@ struct gl_clear_depth {
     }
 };
 
+#define DUNIFINT(name, value) \
+  duniform(static_cast<int32_t>(value), #name, shader_uniform_storage::uniform_int32)
 
+#define DUNIFMAT4X4_R(name, value) \
+  duniform(mat4_t(R(value)), #name, shader_uniform_storage::uniform_mat4x4)
 
+#define DUNIFVEC3_XYZ(name, x, y, z) \
+  duniform(vec3_t(R(x), R(y), R(z)), #name, shader_uniform_storage::uniform_vec3)
 
 static void init_render_passes() {
-  // main render pass
+  
+  // environment map pass
   {
+    gl_state state{};
+    state.clear_buffers.depth = false;
+    state.clear_buffers.color = false;
+    state.depth.range_far = 0.5;
+    state.face_cull.enabled = true;
     
+    std::vector<duniform> unifs;
+		 
+    unifs.push_back(DUNIFINT(unif_TexCubeMap, 0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+
+    std::vector<bind_texture> tex_bindings = {
+      { g_checkerboard_cubemap, 0 }
+    };
+
+    write_logf("envmap %s", tex_bindings[0].to_string().c_str());
+    
+    auto ft = pass_info::frame_envmap;
+
+    auto shader = g_programs->skybox;
+
+    auto transform_order = models::transformorder_trs;
+
+    auto init = []() {
+      g_frame.rcube->faces[0] =
+      g_frame.rcube->calc_look_at_mats(g_models.positions[g_models.modind_sphere],
+				       TEST_SPHERE_RADIUS);
+
+      g_frame_model_map[g_models.modind_sphere].needs_render = true;
+
+    };
+    
+    auto select = [](const models::index_type& m) -> bool {
+      return m != g_models.modind_sphere;
+    };
+
+    auto envmap_id = g_frame_model_map[g_models.modind_sphere].render_cube_id;
+    
+    auto active = true;
+    
+    pass_info::ptr_type envmap(
+      new pass_info{
+	"envmap",
+	state,
+	  unifs,
+	  tex_bindings,
+	  ft,
+	  shader,
+	  transform_order,
+	  init,
+	  select,
+	  envmap_id,
+	  active
+       }
+      );
+
+    g_render_passes.push_back(std::move(envmap));
+  }
+
+  // wall render pass
+  {
+    gl_state state{};
+
+    state.clear_buffers.depth = true;
+    state.clear_buffers.color = true;
+    
+    std::vector<duniform> unifs;
+
+    unifs.push_back(DUNIFINT(unif_GammaCorrect, true));
+    unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+
+    auto ft = pass_info::frame_user;
+
+    auto shader = g_programs->default_fb;
+
+    auto transform_order = models::transformorder_trs;
+
+    auto init = []() {};
+    
+    auto select = [](const models::index_type& m) -> bool {
+      return g_models.type(m) == models::model_quad;
+    };
+
+    auto envmap_id = frame::k_uninit;
+    
+    auto active = true;
+    
+    pass_info::ptr_type main(
+      new pass_info{
+	"floor",
+	state,
+	  unifs,
+	  {}, // textures
+	  ft,
+	  shader,
+	  transform_order,
+	  init,
+	  select,
+	  envmap_id,
+	  active
+       });
+    
+    g_render_passes.push_back(std::move(main));
+  }
+
+  // reflect pass
+  {
+    gl_state state{};
+
+    //state.clear_buffers.color = true;
+    //state.clear_buffers.depth = true;
+    
+    std::vector<duniform> unifs;
+		 
+    unifs.push_back(DUNIFINT(unif_TexCubeMap, 0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+    unifs.push_back(DUNIFVEC3_XYZ(unif_CameraPosition, 0.0, 0.0, 0.0));
+
+    std::vector<bind_texture> tex_bindings = {
+      {
+	g_frame.render_cube_color_tex(g_frame_model_map[g_models.modind_sphere].render_cube_id),
+	0
+      }
+    };
+
+    auto ft = pass_info::frame_user;
+
+    auto shader = g_programs->sphere_cubemap;
+
+    auto transform_order = models::transformorder_trs;
+
+    auto init = []() {
+      g_uniform_storage->set_uniform("unif_CameraPosition", g_view.position);
+    };
+    
+    auto select = [](const models::index_type& m) -> bool {
+      return m == g_models.modind_sphere;
+    };
+
+    auto envmap_id = frame::k_uninit;
+    
+    auto active = true;
+    
+    pass_info::ptr_type reflect(
+      new pass_info{
+	"reflect",
+	state,
+	  unifs,
+	  tex_bindings,
+	  ft,
+	  shader,
+	  transform_order,
+	  init,
+	  select,
+	  envmap_id,
+	  active
+       }
+      );
+
+    g_render_passes.push_back(std::move(reflect));
+  }
+
+  // room pass
+  {
+    gl_state state{};
+    
+    std::vector<duniform> unifs;
+		 
+    unifs.push_back(DUNIFINT(unif_TexCubeMap, 0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+
+    std::vector<bind_texture> tex_bindings = {
+      { g_checkerboard_cubemap, 0 }
+    };
+    
+    auto ft = pass_info::frame_user;
+
+    auto shader = g_programs->skybox;
+
+    auto transform_order = models::transformorder_trs;
+
+    auto init = []() {
+    };
+    
+    auto select = [](const models::index_type& m) -> bool {
+      return m == g_models.modind_area_sphere;
+    };
+
+    auto envmap_id = frame::k_uninit;
+    
+    auto active = true;
+    
+    pass_info::ptr_type room(
+      new pass_info{
+	"room",
+	state,
+	  unifs,
+	  tex_bindings,
+	  ft,
+	  shader,
+	  transform_order,
+	  init,
+	  select,
+	  envmap_id,
+	  active
+       }
+      );
+
+    g_render_passes.push_back(std::move(room));
+
   }
 };
 
@@ -1276,15 +1496,23 @@ void test_main_1() {
 }
 
 static void render() {
-    vec4_t background(0.0f, 0.0f, 0.0f, 0.0f);
-    GL_FN(glDepthFunc(GL_LESS));
+  vec4_t background(0.0f, 0.5f, 0.3f, 1.0f);
 
-    SET_CLEAR_COLOR_V4(background);
+  SET_CLEAR_COLOR_V4(background);
 
-    test_main_1();
-    
-    //    test_draw_skybox_scene();
-    //    test_draw_cubemap_reflect();
+  #if 1
+  for (auto& pass: g_render_passes) {
+    pass->apply();
+  }
+
+  g_render_passes[0]->active = false;
+  
+  #else
+
+  GL_FN(glDepthFunc(GL_LEQUAL));
+  test_main_1();
+
+  #endif
 }
 
 static void error_callback(int error, const char* description) {
@@ -1732,7 +1960,8 @@ int main(void) {
     maybe_enable_cursor(window);
     
     init_api_data();
-
+    init_render_passes();
+    
     toggle_framebuffer_srgb();
     
     while (!glfwWindowShouldClose(window)) {
