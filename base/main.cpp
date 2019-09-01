@@ -38,6 +38,8 @@ frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
 
 std::vector<type_module*> g_modules;
 
+programs::ptr_type g_programs{new programs()};
+
 textures::index_type g_skybox_texture {textures::k_uninit};
 
 textures::index_type g_checkerboard_cubemap {textures::k_uninit};
@@ -817,12 +819,12 @@ struct models {
       mat4_t T = __table[to](model);
       mat4_t mv = g_view.view() * T;
 
-      if (g_programs.uniform("unif_Model") != -1) {
-	g_programs.up_mat4x4("unif_Model", T);
+      if (g_programs->uniform("unif_Model") != -1) {
+	g_programs->up_mat4x4("unif_Model", T);
       }
 	    
-      g_programs.up_mat4x4("unif_ModelView", mv);
-      g_programs.up_mat4x4("unif_Projection",
+      g_programs->up_mat4x4("unif_ModelView", mv);
+      g_programs->up_mat4x4("unif_Projection",
 			   (model == modind_skybox
 			    ? g_view.skyproj
 			    : (framebuffer_pinned
@@ -1259,8 +1261,8 @@ static void init_render_passes() {
 static void init_api_data() {
     g_view.reset_proj();
 
-    g_programs.load();
     g_capture.load();
+    g_programs->load();
 
     GL_FN(glGenVertexArrays(1, &g_vao));
     GL_FN(glBindVertexArray(g_vao));
@@ -1333,7 +1335,7 @@ static int screen_cube_index = 0;
 void draw_walls() {
   g_models.select_draw(MODLAMSEL(m, g_models.type(m) == models::model_quad));
         
-  use_program u(g_programs.default_fb);
+  use_program u(g_programs->default_fb);
 
   DRAW_MODELS(models::transformorder_trs);
 }
@@ -1341,14 +1343,14 @@ void draw_walls() {
 void reflect_spheres(textures::index_type reflect) {
   g_models.select_draw(MODLAMSEL(m, m == g_models.modind_sphere));
         
-  use_program u(g_programs.sphere_cubemap);
+  use_program u(g_programs->sphere_cubemap);
         
   int slot = 0;
 
   g_textures.bind(reflect, slot);
-  g_programs.up_int("unif_TexCubeMap", slot);
+  g_programs->up_int("unif_TexCubeMap", slot);
 
-  g_programs.up_vec3("unif_CameraPosition", g_view.position);
+  g_programs->up_vec3("unif_CameraPosition", g_view.position);
 
   DRAW_MODELS(models::transformorder_trs);
 
@@ -1370,11 +1372,11 @@ void test_main_1() {
                                        g_models.type(m) == models::model_sphere ||
                                        g_models.type(m) == models::model_quad));
         
-        use_program u(g_programs.skybox);
-	g_programs.up_int("unif_TexCubeMap", 0);
+        use_program u(g_programs->skybox);
+	g_programs->up_int("unif_TexCubeMap", 0);
 	g_textures.bind(g_checkerboard_cubemap, 0);
 
-	//        g_programs.up_int("unif_GammaCorrect", static_cast<int>(g_unif_gamma_correct));
+	//        g_programs->up_int("unif_GammaCorrect", static_cast<int>(g_unif_gamma_correct));
 
         g_frame.rcube->faces[0] =
 	  g_frame.rcube->calc_look_at_mats(g_models.positions[g_models.modind_sphere],
@@ -1405,11 +1407,11 @@ void test_main_1() {
       reflect_spheres(g_frame.render_cube_color_tex(fmodel_map.render_cube_id));
 #else
       {
-        use_program u(g_programs.default_rtq);
+        use_program u(g_programs->default_rtq);
         
         g_textures.bind(g_debug_cm_index, 0);
 
-        g_programs.up_int("unif_TexSampler", 0);
+        g_programs->up_int("unif_TexSampler", 0);
 
         GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
 
@@ -1426,14 +1428,13 @@ void test_main_1() {
       } else
 #endif
 	{
-	
-	  use_program u(g_programs.skybox);
+	  
+	  use_program u(g_programs->skybox);
 
 	  g_models.select_draw(MODLAMSEL(m, m == g_models.modind_area_sphere));
 	
 	  g_textures.bind(g_checkerboard_cubemap, 0);
-	  g_programs.up_int("unif_TexCubeMap", 0);
-      
+	  g_programs->up_int("unif_TexCubeMap", 0);
 	  DRAW_MODELS(models::transformorder_trs);
 
 	  g_textures.unbind(g_checkerboard_cubemap);
@@ -1866,7 +1867,7 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
 int main(void) {
     g_key_states.fill(false);
 
-    g_programs.registermod();
+    g_programs->registermod();
     g_textures.registermod();
 
     GLFWwindow* window;

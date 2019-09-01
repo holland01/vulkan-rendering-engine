@@ -4,6 +4,8 @@
 #include "util.hpp"
 
 struct programs : public type_module {
+
+  using ptr_type = std::unique_ptr<programs>;
   
   struct attrib_layout {
     GLint index;
@@ -434,7 +436,9 @@ struct programs : public type_module {
     }
   }
   
-} static g_programs;
+};
+
+extern programs::ptr_type g_programs;
 
 // Make sure the VBO is bound BEFORE
 // this is initialized
@@ -442,17 +446,19 @@ struct use_program {
   GLuint prog;
 
   use_program(const std::string& name)
-    : prog(g_programs.get(name)->handle){
+    : prog(g_programs->get(name)->handle){
 
-    g_programs.make_current(name);
-    g_programs.load_layout();
+    g_programs->make_current(name);
+    g_programs->load_layout();
     
     GL_FN(glUseProgram(prog));
   }
 
   ~use_program() {
 
-    g_programs.unload_layout();
+    g_programs->unload_layout();
     GL_FN(glUseProgram(0));
   }
 };
+
+
