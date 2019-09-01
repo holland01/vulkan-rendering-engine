@@ -51,8 +51,6 @@ static bool g_reflect = true;
 
 static bool g_unif_gamma_correct = true;
 
-
-
 GLuint g_vao = 0;
 //
 //
@@ -401,8 +399,7 @@ struct models {
   using predicate_fn_type = std::function<bool(const index_type&)>;
     
   static const inline index_type k_uninit = -1;
-
-    
+  
   std::array<transform_fn_type, transformorder_count> __table = {
     [this](int model) { return scale(model) * rotate(model) * translate(model); },
     [this](int model) { return translate(model) * rotate(model) * scale(model); },
@@ -1443,23 +1440,21 @@ static void init_render_passes() {
     
     auto active = true;
     
-    pass_info::ptr_type envmap(
-      new pass_info{
-	"envmap",
+    pass_info envmap{
+      "envmap",
 	state,
-	  unifs,
-	  tex_bindings,
-	  ft,
-	  shader,
-	  transform_order,
-	  init,
-	  select,
-	  envmap_id,
-	  active
-       }
-      );
+	unifs,
+	tex_bindings,
+	ft,
+	shader,
+	transform_order,
+	init,
+	select,
+	envmap_id,
+	active
+	};
 
-    g_render_passes.push_back(std::move(envmap));
+    g_render_passes.push_back(envmap);
   }
 
   // wall render pass
@@ -1491,22 +1486,21 @@ static void init_render_passes() {
     
     auto active = true;
     
-    pass_info::ptr_type main(
-      new pass_info{
-	"floor",
+    pass_info main{
+      "floor",
 	state,
-	  unifs,
+	unifs,
 	  {}, // textures
-	  ft,
+	ft,
 	  shader,
 	  transform_order,
 	  init,
 	  select,
 	  envmap_id,
 	  active
-       });
+	  };
     
-    g_render_passes.push_back(std::move(main));
+    g_render_passes.push_back(main);
   }
 
   // reflect pass
@@ -1548,23 +1542,21 @@ static void init_render_passes() {
     
     auto active = true;
     
-    pass_info::ptr_type reflect(
-      new pass_info{
-	"reflect",
+    pass_info reflect{
+      "reflect",
 	state,
-	  unifs,
-	  tex_bindings,
-	  ft,
-	  shader,
-	  transform_order,
-	  init,
-	  select,
-	  envmap_id,
-	  active
-       }
-      );
+	unifs,
+	tex_bindings,
+	ft,
+	shader,
+	transform_order,
+	init,
+	select,
+	envmap_id,
+	active
+	};
 
-    g_render_passes.push_back(std::move(reflect));
+    g_render_passes.push_back(reflect);
   }
 
   // room pass
@@ -1598,23 +1590,21 @@ static void init_render_passes() {
     
     auto active = true;
     
-    pass_info::ptr_type room(
-      new pass_info{
-	"room",
+    pass_info room{
+      "room",
 	state,
-	  unifs,
-	  tex_bindings,
-	  ft,
-	  shader,
-	  transform_order,
-	  init,
-	  select,
-	  envmap_id,
-	  active
-       }
-      );
+	unifs,
+	tex_bindings,
+	ft,
+	shader,
+	transform_order,
+	init,
+	select,
+	envmap_id,
+	active
+	};
 
-    g_render_passes.push_back(std::move(room));
+    g_render_passes.push_back(room);
 
   }
 };
@@ -1822,10 +1812,10 @@ static void render() {
 
   #if 1
   for (auto& pass: g_render_passes) {
-    pass->apply();
+    pass.apply();
   }
 
-  g_render_passes[0]->active = false;
+  g_render_passes[0].active = false;
   
   #else
 
