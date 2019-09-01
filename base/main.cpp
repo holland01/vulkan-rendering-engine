@@ -946,6 +946,7 @@ struct pass_info {
       switch (frametype) {
       case frame_user: {
 	GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+	state.apply();
 	g_models.render(transorder);
       } break;
 
@@ -953,6 +954,7 @@ struct pass_info {
 	ASSERT(envmap_id != frame::k_uninit);
 
 	g_models.framebuffer_pinned = true;
+	state.apply();
 	
 	for (auto i = 0; i < 6; ++i) {	  
 	  g_view.bind_view(g_frame.rcube->set_face(envmap_id,
