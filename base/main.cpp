@@ -907,12 +907,14 @@ struct pass_info {
   
   void apply() {
     if (active) {
+      
       g_vertex_buffer.bind();
       use_program u(shader);
       
       for (const auto& bind: tex_bindings) {
 	g_textures.bind(bind.id, bind.slot);
       }
+      
       if (!uniforms.empty()) {      
       
 	for (const auto& unif: uniforms) {
@@ -937,16 +939,19 @@ struct pass_info {
       }
 
       init_fn();
+      
       for (const auto& name: uniform_names) {
 	g_uniform_storage->upload_uniform(name);
       }
-
+      
       g_models.select_draw(select_draw_predicate);
       
       switch (frametype) {
       case frame_user: {
 	GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+
 	state.apply();
+	
 	g_models.render(transorder);
       } break;
 
