@@ -41,6 +41,7 @@ namespace fs = std::experimental::filesystem;
 
 using vec2_t = glm::vec2;
 using vec3_t = glm::vec3;
+using boolvec3_t = glm::bvec3;
 using vec4_t = glm::vec4;
 
 using mat4_t = glm::mat4;
@@ -94,3 +95,12 @@ struct type_module {
     g_modules.push_back(this);
   }
 };
+
+template <typename numType>
+static inline numType unset() {
+  return static_cast<numType>(-1);
+}
+
+static inline mat4_t m4i() {
+  return mat4_t{R(1)};
+}
