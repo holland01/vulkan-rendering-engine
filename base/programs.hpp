@@ -3,6 +3,51 @@
 #include "common.hpp"
 #include "util.hpp"
 
+#define GLSL_INL(code) #code
+#define GLSL_L(code) #code "\n"
+#define GLSL_TL(code) "\t" #code "\n"
+#define GLSL_T(code) "\t" #code
+
+enum {
+  vshader_in_normal = 1 << 0,
+  vshader_in_texcoord = 1 << 1,
+  vshader_frag_position = 1 << 2,
+  vshader_frag_color = 1 << 3,
+  vshader_frag_normal = 1 << 4,
+  vshader_frag_texcoord = 1 << 5,
+  vshader_unif_model = 1 << 6
+};
+
+enum {
+  fshader_frag_position = 1 << 0,
+  fshader_frag_color = 1 << 1,
+  fshader_frag_normal = 1 << 2,
+  fshader_frag_texcoord = 1 << 3,
+  fshader_unif_texcubemap = 1 << 4,
+  fshader_reflect = 1 << 5
+};
+
+#define GLSL_LIGHTING_DECL(num_lights) \
+  GLSL_INL(			       \
+     struct light {	       \
+       vec3 position;	       \
+       vec3 color;	       \
+     }			       \
+     uniform light lights[num_lights])
+
+#define GLSL_LIGHTING_PASS(num_lights, output, input_position, input_normal, input_color) \
+  GLSL_INL(								                      \
+     vec3 output;							\
+     for (int i = 0; i < num_lights; ++i) {			\
+       vec3 lightDir = normalize(lights[i].position - input_position); \
+       float diff = max(dot(lightDir, input_normal), 0.0);	\
+       vec3 diffuse = lights[i].color * diff * input_color;	\
+       vec3 result = diffuse;					\
+       float distance = length(input_position - lights[i].position); \
+       result *= 1.0 / (distance * distance);			\
+       output += result;					\
+     })
+
 struct programs : public type_module {
 
   using ptr_type = std::unique_ptr<programs>;
@@ -21,8 +66,8 @@ struct programs : public type_module {
   
   struct programdef {
     std::string name;
-    const char* vertex;
-    const char* fragment;
+    std::string vertex;
+    std::string fragment;
 
     std::vector<std::string> uniforms;
     attrib_map_type attribs;
@@ -59,56 +104,153 @@ struct programs : public type_module {
   static attrib_entry_type attrib_layout_normal() {
     return {
       "in_Normal",
-	{
-	  2,
-	    3,
-	    OPENGL_REAL,
-	    GL_FALSE,
-	    sizeof(vertex),
-	    (void*) offsetof(vertex, normal)
-	}
+  {
+    2,
+      3,
+      OPENGL_REAL,
+      GL_FALSE,
+      sizeof(vertex),
+      (void*) offsetof(vertex, normal)
+  }
     };
   }
-  
-  const char* vertex_shader_standard =
-    GLSL(layout(location = 0) in vec3 in_Position;
-         layout(location = 1) in vec4 in_Color;
-           
-         smooth out vec4 frag_Color;          
-           
-         uniform mat4 unif_ModelView;
-         uniform mat4 unif_Projection;
-           
-         void main() {
-           vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
-           gl_Position = clip;             
-           frag_Color = in_Color;
-         });
 
-  
-  
+  static std::string gen_vshader(uint32_t flags) {
+    std::stringstream ss;
+
+    bool in_normal = flags & vshader_in_normal;
+    bool in_texcoord = flags & vshader_in_texcoord;
+    bool frag_position = flags & vshader_frag_position; 
+    bool frag_color = flags & vshader_frag_color;
+    bool frag_normal = flags & vshader_frag_normal;
+    bool frag_texcoord = flags & vshader_frag_texcoord;
+    bool unif_model = flags & vshader_unif_model;
+
+    ss << GLSL_L(#version 450 core)
+       << GLSL_L(layout(location = 0) in vec3 in_Position;)
+       << GLSL_L(layout(location = 1) in vec4 in_Color;);
+
+    if (in_normal) ss << GLSL_L(layout(location = 2) in vec3 in_Normal;);
     
+    if (in_texcoord) ss << GLSL_L(layout(location = 3) in vec2 in_TexCoord;);
+
+    if (frag_position) ss << GLSL_L(smooth out vec3 frag_Position;);
+    if (frag_color) ss << GLSL_L(out vec4 frag_Color;);
+    if (frag_normal) ss << GLSL_L(smooth out vec3 frag_Normal;);
+    
+    if (frag_texcoord) { 
+      ss << (in_texcoord 
+            ? GLSL_L(out vec2 frag_TexCoord;) 
+            : GLSL_L(out vec3 frag_TexCoord;));
+    }
+
+    if (unif_model) ss << GLSL_L(uniform mat4 unif_Model;);
+    
+    ss << GLSL_L(uniform mat4 unif_ModelView;); 
+    ss << GLSL_L(uniform mat4 unif_Projection;);
+    ss << GLSL_L(void main() {);
   
+    if (frag_position) {
+      ss << GLSL_T(frag_Position = )
+         << (unif_model 
+                ? GLSL_L(vec3(unif_Model * vec4(in_Position, 1.0));) 
+                : GLSL_L(in_Position;)); 
+    }
+  
+    if (frag_normal) {
+      ss << GLSL_T(frag_Normal = in_Normal;);
+    }
+
+    if (frag_texcoord) {
+      ss << GLSL_T(frag_TexCoord = )
+         << (in_texcoord 
+              ? GLSL_L(normalize(in_TexCoord);) 
+              : GLSL_L(normalize(in_Position);));
+    }
+
+    if (frag_color) {
+      ss << GLSL_TL(frag_Color = in_Color;); 
+    }
+
+    #undef ASSIGN_FRAG
+
+    ss  << GLSL_TL(vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);)
+        << GLSL_TL(gl_Position = clip;);
+
+    ss << GLSL_L(});
+
+    return ss.str();
+  }
+
+  static std::string gen_fshader(uint32_t flags) {
+    std::stringstream ss;
+
+    bool frag_position = flags & fshader_frag_position;
+    bool frag_color = flags & fshader_frag_color;
+    bool frag_normal = flags & fshader_frag_normal;
+    bool frag_texcoord = flags & fshader_frag_texcoord;
+    bool unif_texcubemap = flags & fshader_unif_texcubemap;
+    bool reflect = flags & fshader_reflect;
+
+    if (reflect) {
+      ASSERT(!frag_texcoord);
+      ASSERT(frag_position);
+      ASSERT(frag_normal);
+      ASSERT(unif_texcubemap);
+    }
+
+    if (frag_texcoord) {
+      ASSERT(!reflect);
+      ASSERT(unif_texcubemap); // no 2d sampling currently, so this is all that's available
+    }
+
+    ss << GLSL_L(#version 450 core);
+
+    if (frag_position) ss << GLSL_L(smooth in vec3 frag_Position;);
+    if (frag_color) ss << GLSL_L(smooth in vec4 frag_Color;);
+    if (frag_normal) ss << GLSL_L(smooth in vec3 frag_Normal;);
+    if (frag_texcoord) ss << GLSL_L(in vec3 frag_TexCoord;);
+
+    if (unif_texcubemap) ss << GLSL_L(uniform samplerCube unif_TexCubeMap;);
+
+    if (reflect) ss << GLSL_L(uniform vec3 unif_CameraPosition;);
+
+    ss << GLSL_L(out vec4 fb_Color;)
+       << GLSL_L(void main() {)
+       << GLSL_TL(vec4 out_color;);
+
+    if (!frag_color) {
+      ss << GLSL_TL(vec4 frag_Color = vec4(1.0););
+    }
+
+    if (reflect) {
+       ss << GLSL_TL(vec3 I = frag_Position - unif_CameraPosition;)
+          << GLSL_TL(vec3 R = reflect(I, normalize(frag_Normal));)
+          << GLSL_TL(out_color = texture(unif_TexCubeMap, R) * frag_Color;);
+    }
+    
+    if (frag_texcoord) {
+      ss << GLSL_TL(out_color = frag_Color * texture(unif_TexCubeMap, frag_TexCoord););
+    }
+
+    if (!(reflect || frag_texcoord)) {
+      ss << GLSL_TL(out_color = frag_Color;);
+    }
+
+    ss << GLSL_TL(fb_Color = out_color;)
+       << GLSL_L(});
+
+    return ss.str();
+  }
+
   std::vector<programdef> defs = {
     {
       "main",
-      vertex_shader_standard,
-      GLSL(smooth in vec4 frag_Color;
-           out vec4 fb_Color;
-
-           uniform bool unif_GammaCorrect;
-           
-           void main() {
-               if (unif_GammaCorrect) {
-                   fb_Color = vec4(pow(frag_Color.xyz, vec3(1.0/ 2.2)), frag_Color.a);
-               } else {
-                   fb_Color = frag_Color;
-               }
-           }),
+      gen_vshader(vshader_frag_color),
+      gen_fshader(fshader_frag_color),
       {
         "unif_ModelView",
-        "unif_Projection",
-        "unif_GammaCorrect"
+        "unif_Projection"
       },
       {
         attrib_layout_position(),
@@ -148,146 +290,15 @@ struct programs : public type_module {
            uniform sampler2D unif_TexSampler;
            
            void main() {
-             //             fb_Color = vec4(frag_TexCoord.x, 0.0, frag_TexCoord.y, 1.0);
              fb_Color = vec4(texture(unif_TexSampler, frag_TexCoord).rgb, 1.0);
-               /** vec4(frag_TexCoord.x, 0.0, frag_TexCoord.y, 1.0);*/
            }),
       {
         "unif_TexSampler"
       }
     },
-    {
-      "reflection_sphere_cubemap",
-      GLSL(layout(location = 0) in vec3 in_Position;
-           layout(location = 1) in vec4 in_Color;
-	   layout(location = 2) in vec3 in_Normal;
-           
-           smooth out vec4 frag_Color;
-           smooth out vec3 frag_Position;
-           out vec3 frag_Normal;
-           
-           uniform mat4 unif_Model;
-           uniform mat4 unif_ModelView;
-           uniform mat4 unif_Projection;
-           
-           void main() {
-             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
-             gl_Position = clip;             
-             frag_Color = in_Color; //abs(clip / clip.w);
-	     
-             frag_Normal = in_Normal/*in_Position*/;
-             
-             frag_Position = vec3(unif_Model * vec4(in_Position, 1.0));
-           }),
-      
-      GLSL(smooth in vec4 frag_Color;
-           smooth in vec3 frag_Position;
-           in vec3 frag_Normal;
-
-	   uniform samplerCube unif_TexCubeMap;
-           uniform vec3 unif_CameraPosition;
-
-           out vec4 fb_Color;
-           
-           void main() {
-             vec3 I = frag_Position - unif_CameraPosition;
-             vec3 R = reflect(I, normalize(frag_Normal));
-             vec4 x = texture(unif_TexCubeMap, R) * frag_Color;
-
-	     //	     fb_Color = vec4(pow(frag_Color.xyz, vec3(1.0/ 2.2)), frag_Color.a);
-	     fb_Color = vec4(pow(x.xyz, vec3(1.0 / 2.2)), x.a);
-	     //fb_Color = vec4(normalize(frag_Normal));
-           }),
-
-      {
-        "unif_Model",
-        "unif_ModelView",
-        "unif_Projection",
-        "unif_TexCubeMap",
-        "unif_CameraPosition"
-      },
-      {
-        attrib_layout_position(),
-        attrib_layout_color(),
-	attrib_layout_normal()
-      }
-    },
-    {
-      "reflection_sphere",
-      GLSL(layout(location = 0) in vec3 in_Position;
-           layout(location = 1) in vec4 in_Color;
-           
-           smooth out vec4 frag_Color;          
-           smooth out vec3 frag_ModelPosition;
-          
-           uniform mat4 unif_ModelView;
-           uniform mat4 unif_Projection;
-           
-           void main() {
-             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
-             gl_Position = clip;             
-             frag_Color = in_Color; //abs(clip / clip.w);
-
-             frag_ModelPosition = in_Position;
-           }),
-      
-      GLSL(smooth in vec3 frag_ModelPosition; /* interpolated somewhere between tri vertices */
-           smooth in vec4 frag_Color;
-
-           const float PI = 3.1415926535897932384626433832795;
-           const float PI_2 = 1.57079632679489661923;
-           const float PI_4 = 0.785398163397448309616;
-           
-           uniform sampler2D unif_TexFramebuffer;
-           uniform vec3 unif_LookCenter;
-
-           out vec4 fb_Color;
-
-           vec2 sphereFromCart(vec3 positionNormalized) {
-             float phi = asin(positionNormalized.y);
-             float theta = acos(positionNormalized.x / cos(phi));
-             return vec2(theta, phi);
-           }
-           
-           void main() {             
-             vec3 lookCenterNorm = normalize(unif_LookCenter);
-             vec3 modelPosNorm = normalize(frag_ModelPosition);
-
-             if (dot(lookCenterNorm, modelPosNorm) < 0) {
-               fb_Color = frag_Color;
-            
-             } else {
-               vec2 tpLook = sphereFromCart(lookCenterNorm);
-               vec2 tpModel = sphereFromCart(modelPosNorm);
-
-               float u = (tpModel.x - tpLook.x) / PI_2;
-               u *= 0.5;
-
-               float v = (tpModel.y - tpLook.y) / PI_2;
-               v *= 0.5;
-               
-               vec2 base = vec2(0.5);
-               
-               vec4 mirror = vec4(texture(unif_TexFramebuffer, base + vec2(u, v)).rgb, 1.0);
-               
-               fb_Color = mirror * frag_Color;
-             }
-           }),
-      {
-        "unif_TexFramebuffer",
-        "unif_LookCenter",
-        
-        "unif_ModelView",
-        "unif_Projection"
-      },
-      {
-        attrib_layout_position(),
-        attrib_layout_color()
-      }
-    },
-    {
+     {
       "cubemap",
-
+#if 0
       GLSL(layout(location = 0) in vec3 in_Position;
            layout(location = 1) in vec4 in_Color;           
            
@@ -304,7 +315,12 @@ struct programs : public type_module {
              frag_TexCoord = normalize(in_Position);
              frag_Color = in_Color;
            }),
+#else
+      gen_vshader(vshader_frag_color | 
+                  vshader_frag_texcoord),
+#endif
 
+#if 0
       GLSL(in vec3 frag_TexCoord;
            in vec4 frag_Color;
            out vec4 fb_Color;
@@ -313,8 +329,13 @@ struct programs : public type_module {
 
            void main() {
              vec4 x = frag_Color * texture(unif_TexCubeMap, frag_TexCoord);
-	     fb_Color = vec4(pow(x.xyz, vec3(1.0/2.2)), 1.0);
+	          fb_Color = vec4(pow(x.xyz, vec3(1.0/2.2)), 1.0);
            }),
+#else
+      gen_fshader(fshader_frag_color | 
+                  fshader_frag_texcoord | 
+                  fshader_unif_texcubemap),
+#endif
       {
         "unif_ModelView",
         "unif_Projection",
@@ -325,8 +346,75 @@ struct programs : public type_module {
         attrib_layout_position(),
         attrib_layout_color()
       }
-    }
-  };
+    },
+    {
+      "reflection_sphere_cubemap",
+#if 0
+      GLSL(layout(location = 0) in vec3 in_Position;
+           layout(location = 1) in vec4 in_Color;
+            layout(location = 2) in vec3 in_Normal;
+           
+           smooth out vec4 frag_Color;
+           smooth out vec3 frag_Position;
+           out vec3 frag_Normal;
+           
+           uniform mat4 unif_Model;
+           uniform mat4 unif_ModelView;
+           uniform mat4 unif_Projection;
+           
+           void main() {
+             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
+             gl_Position = clip;             
+             frag_Color = in_Color; //abs(clip / clip.w);
+       
+             frag_Normal = in_Normal/*in_Position*/;
+             
+             frag_Position = vec3(unif_Model * vec4(in_Position, 1.0));
+           }),
+#else
+      gen_vshader(vshader_in_normal | 
+                  vshader_frag_position | 
+                  vshader_frag_color |
+                  vshader_frag_normal |
+                  vshader_unif_model),
+#endif           
+
+#if 0      
+      GLSL( smooth in vec4 frag_Color;
+            smooth in vec3 frag_Position;
+            in vec3 frag_Normal;
+
+            uniform samplerCube unif_TexCubeMap;
+            uniform vec3 unif_CameraPosition;
+
+            out vec4 fb_Color;
+           
+            void main() {
+              vec3 I = frag_Position - unif_CameraPosition;
+              vec3 R = reflect(I, normalize(frag_Normal));
+              vec4 x = texture(unif_TexCubeMap, R) * frag_Color;
+              fb_Color = x;
+            }),
+#else
+      gen_fshader(fshader_frag_position |
+                  fshader_frag_color | 
+                  fshader_frag_normal |
+                  fshader_unif_texcubemap |
+                  fshader_reflect),
+#endif
+      {
+        "unif_Model",
+        "unif_ModelView",
+        "unif_Projection",
+        "unif_TexCubeMap",
+        "unif_CameraPosition"
+      },
+      {
+        attrib_layout_position(),
+        attrib_layout_color(),
+        attrib_layout_normal()
+      }
+    }};
   
   struct program {
     std::unordered_map<std::string, GLint> uniforms;
@@ -363,7 +451,7 @@ struct programs : public type_module {
     for (const auto& def: defs) {
       auto p = std::make_unique<program>();
 
-      p->handle = make_program(def.vertex, def.fragment);
+      p->handle = make_program(def.vertex.c_str(), def.fragment.c_str());
       
       for (auto unif: def.uniforms) {
         GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle, unif.c_str()));
@@ -387,9 +475,9 @@ struct programs : public type_module {
       //    ASSERT(id != -1);
 
       if (id == -1) {
-	write_logf("%s -> unif %s. Not found\n",
-		   current.c_str(),
-		   name.c_str());
+  write_logf("%s -> unif %s. Not found\n",
+       current.c_str(),
+       name.c_str());
       }
     }
     
@@ -406,6 +494,13 @@ struct programs : public type_module {
 
   void up_vec3(const std::string& name, const vec3_t& v) const {
     GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
+  }
+
+  void up_plight(const std::string& name,
+          const vec3_t& position,
+          const vec3_t& color) {
+    GL_FN(glUniform3fv(uniform(name + ".position"), 1, &position[0]));
+    GL_FN(glUniform3fv(uniform(name + ".color"), 1, &color[0]));    
   }
   
   auto fetch_attrib(const std::string& program, const std::string& attrib) const {
