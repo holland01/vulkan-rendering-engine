@@ -355,21 +355,33 @@ struct programs : public type_module {
      {
       "cubemap",
 
-      gen_vshader(vshader_frag_color | 
-                  vshader_frag_texcoord),
+      gen_vshader(vshader_in_normal |
+                  vshader_frag_color | 
+                  vshader_frag_position |
+                  vshader_frag_normal |
+                  vshader_frag_texcoord |
+                  vshader_unif_model),
 
       gen_fshader(fshader_frag_color | 
                   fshader_frag_texcoord | 
-                  fshader_unif_texcubemap),
+                  fshader_unif_texcubemap |
+                  fshader_lights | 
+                  fshader_frag_normal | 
+                  fshader_frag_position),
       {
         "unif_ModelView",
         "unif_Projection",
-        "unif_TexCubeMap"
+        "unif_TexCubeMap",
+        "unif_Lights[0].position",
+        "unif_Lights[0].color",
+        "unif_Model"
+     //   "unif_lights[1].position",
+       // "unif_lights[1].color"
       },
-      
       {
         attrib_layout_position(),
-        attrib_layout_color()
+        attrib_layout_color(),
+        attrib_layout_normal()
       }
     },
     {

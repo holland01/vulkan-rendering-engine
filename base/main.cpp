@@ -345,11 +345,10 @@ struct vertex_buffer {
                       const vec3_t& b_position, const vec4_t& b_color,
                       const vec3_t& c_position, const vec4_t& c_color) {
         vec2_t defaultuv(glm::zero<vec2_t>());
-	vec3_t defaultnormal(glm::zero<vec3_t>());
 	
-        return add_triangle(a_position, a_color, defaultnormal, defaultuv,
-                            b_position, b_color, defaultnormal, defaultuv,
-                            c_position, c_color, defaultnormal, defaultuv);
+        return add_triangle(a_position, a_color, a_position, defaultuv,
+                            b_position, b_color, b_position, defaultuv,
+                            c_position, c_color, c_position, defaultuv);
     }
 
   auto add_triangle(const vec3_t& a_position, const vec4_t& a_color, const vec3_t& a_normal, 
@@ -1595,6 +1594,14 @@ static void init_render_passes() {
     unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
 
+    {
+      mat4_t model{g_graph->model_transform(g_graph->test_indices.area_sphere)};
+      unifs.push_back(duniform(model,
+                               "unif_Model"));
+    }
+
+    unifs.push_back(duniform(dpointlight{R3v(0, 0, 0), R3v(1, 0, 0)}, "lights[0]"));
+    //unifs.push_back(duniform(dpointlight{R3v(0, 0, 0), R3v(0, 0, 1)}, "lights[1]"));
     darray<bind_texture> tex_bindings = {
       { g_checkerboard_cubemap, 0 }
     };
