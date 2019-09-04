@@ -178,7 +178,11 @@ struct programs : public type_module {
     }
   
     if (frag_normal) {
-      ss << GLSL_T(frag_Normal = in_Normal;);
+      ASSERT(in_normal);
+      ss << GLSL_T(frag_Normal = )
+        << (unif_model 
+                ? GLSL_L(vec3(unif_Model * vec4(in_Normal, 0.0));) 
+                : GLSL_L(in_Normal;)); 
     }
 
     if (frag_texcoord) {
