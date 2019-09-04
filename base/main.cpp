@@ -1249,22 +1249,22 @@ struct pass_info {
 	g_textures.bind(bind.id, bind.slot);
       }
       
-      if (!uniforms.empty()) {      
-      
-	for (const auto& unif: uniforms) {
-	  switch (unif.type) {
-	  case shader_uniform_storage::uniform_mat4x4:
-	    g_uniform_storage->set_uniform(unif.name, unif.m4);
-	    break;
-
-	  case shader_uniform_storage::uniform_vec3:
-	    g_uniform_storage->set_uniform(unif.name, unif.v3);
-	    break;
-
-	  case shader_uniform_storage::uniform_int32:
-	    g_uniform_storage->set_uniform(unif.name, unif.i32);
-	    break;	  
-	  }
+      if (!uniforms.empty()) {
+        for (const auto& unif: uniforms) {
+          switch (unif.type) {
+            case shader_uniform_storage::uniform_mat4x4:
+              g_uniform_storage->set_uniform(unif.name, unif.m4);
+              break;
+            case shader_uniform_storage::uniform_pointlight:
+              g_uniform_storage->set_uniform(unif.name, unif.pl);
+              break;
+            case shader_uniform_storage::uniform_vec3:
+              g_uniform_storage->set_uniform(unif.name, unif.v3);
+              break;
+            case shader_uniform_storage::uniform_int32:
+              g_uniform_storage->set_uniform(unif.name, unif.i32);
+              break;	  
+          }
 
 	  uniform_names.push_back(unif.name);
 	}

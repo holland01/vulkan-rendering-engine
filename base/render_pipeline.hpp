@@ -12,13 +12,16 @@ struct shader_uniform_storage {
   
   enum uniform_type {
     uniform_mat4x4 = 0,
+    uniform_pointlight,
     uniform_vec3,
     uniform_int32
   };
 
   std::vector<mat4_t> mat4x4_store;
+  std::vector<dpointlight> pointlight_store;
   std::vector<vec3_t> vec3_store;
   std::vector<int32_t> int32_store;
+
 
   static const inline size_t MAX_BUFFER_OFFSET = (1 << ( (8 * sizeof(buffer_offset_t)) - 1 ));
   
@@ -38,6 +41,7 @@ struct shader_uniform_storage {
   void set_uniform(const std::string& name, const mat4_t& m);
   void set_uniform(const std::string& name, const vec3_t& v);
   void set_uniform(const std::string& name, int32_t i);
+  void set_uniform(const std::string& name, const dpointlight& pl);
   
   void upload_uniform(const std::string& name) const;
 };
@@ -45,6 +49,7 @@ struct shader_uniform_storage {
 struct duniform {
   union {
     mat4_t m4;
+    dpointlight pl;
     vec3_t v3;
     int32_t i32;
   };
@@ -57,6 +62,12 @@ struct duniform {
     : m4(m),
       name(n),
       type(shader_uniform_storage::uniform_mat4x4)
+  {}
+
+  duniform(dpointlight p, const std::string& n)
+    : pl(p),
+      name(n),
+      type(shader_uniform_storage::uniform_pointlight)
   {}
 
   duniform(vec3_t v, const std::string& n)
@@ -148,4 +159,3 @@ struct bind_texture {
     return ss.str();
   }
 };
-

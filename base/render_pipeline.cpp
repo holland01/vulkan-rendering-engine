@@ -36,12 +36,20 @@ void shader_uniform_storage::set_uniform(const std::string& name, int32_t i) {
   set_uniform<int32_t, shader_uniform_storage::uniform_int32>(name, i, int32_store);
 }
 
+void shader_uniform_storage::set_uniform(const std::string& name, const dpointlight& pl) {
+  set_uniform<dpointlight, shader_uniform_storage::uniform_pointlight>(name, pl, pointlight_store);
+}
+
 void shader_uniform_storage::upload_uniform(const std::string& name) const {
   const datum& d = datum_store.at(name);
 
   switch (d.uniform_buffer) {
   case uniform_mat4x4:
     g_programs->up_mat4x4(name, mat4x4_store.at(d.uniform_buffer_offset));
+    break;
+
+  case uniform_pointlight:
+    g_programs->up_pointlight(name, pointlight_store.at(d.uniform_buffer_offset));
     break;
 
   case uniform_vec3:
