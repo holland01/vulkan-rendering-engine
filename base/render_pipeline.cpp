@@ -1,5 +1,4 @@
 #include "render_pipeline.hpp"
-#include "programs.hpp"
 
 template <class uniformType, shader_uniform_storage::uniform_type unif_type>
 void shader_uniform_storage::set_uniform(const std::string& name,
