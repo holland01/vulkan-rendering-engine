@@ -1753,144 +1753,16 @@ static textures::index_type g_debug_cm_index{textures::k_uninit};
 
 static int screen_cube_index = 0;
 
-void draw_walls() {
-  g_models.select_draw(MODLAMSEL(m, g_models.type(m) == models::model_quad));
-        
-  use_program u(g_programs->default_fb);
-
-  DRAW_MODELS(models::transformorder_trs);
-}
-
-void reflect_spheres(textures::index_type reflect) {
-  g_models.select_draw(MODLAMSEL(m, m == g_models.modind_sphere));
-        
-  use_program u(g_programs->sphere_cubemap);
-        
-  int slot = 0;
-
-  g_textures.bind(reflect, slot);
-  g_programs->up_int("unif_TexCubeMap", slot);
-
-  g_programs->up_vec3("unif_CameraPosition", g_view.position);
-
-  DRAW_MODELS(models::transformorder_trs);
-
-  g_textures.unbind(reflect);
-}
-
-// room with a few spheres
-void test_main_1() {
-    g_vertex_buffer.bind();
-
-#ifndef ROOM_TEST
-    if (g_framemodelmap) {
-#endif
-      auto& fmodel_map = g_frame_model_map[g_models.modind_sphere];
-      fmodel_map.needs_render = true;
-    
-      if (fmodel_map.needs_render) {        
-        g_models.select_draw(MODLAMSEL(m,
-                                       g_models.type(m) == models::model_sphere ||
-                                       g_models.type(m) == models::model_quad));
-        
-        use_program u(g_programs->skybox);
-	g_programs->up_int("unif_TexCubeMap", 0);
-	g_textures.bind(g_checkerboard_cubemap, 0);
-
-	//        g_programs->up_int("unif_GammaCorrect", static_cast<int>(g_unif_gamma_correct));
-
-        g_frame.rcube->faces[0] =
-	  g_frame.rcube->calc_look_at_mats(g_models.positions[g_models.modind_sphere],
-					   TEST_SPHERE_RADIUS);
-        
-        g_models.maybe_render_cube(g_models.modind_sphere, models::transformorder_trs);
-
-	g_textures.unbind(g_checkerboard_cubemap);
-        
-#ifdef SPHERE_CAM
-        g_debug_cubemap_buf = std::move(g_frame.rcube->get_pixels(fmodel_map.render_cube_id));
-	
-        g_debug_cm_index = g_textures.new_texture(g_frame.width,
-                                                  g_frame.height,
-                                                  4,
-                                                  GL_TEXTURE_2D);
-        
-        g_textures.set_tex_2d(g_debug_cm_index,
-			      &g_debug_cubemap_buf[screen_cube_depth(screen_cube_index)]);
-#endif // SPHERE_CAM
-      } // fmodel_map.needs_render
-
-      CLEAR_COLOR_DEPTH;
-    
-      draw_walls();
-#if !defined(SPHERE_CAM)
-      
-      reflect_spheres(g_frame.render_cube_color_tex(fmodel_map.render_cube_id));
-#else
-      {
-        use_program u(g_programs->default_rtq);
-        
-        g_textures.bind(g_debug_cm_index, 0);
-
-        g_programs->up_int("unif_TexSampler", 0);
-
-        GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
-
-        g_textures.unbind(g_debug_cm_index);
-      }
-#endif // SPHERE_CAM
-#ifndef ROOM_TEST
-    }
-    else { // g_framemodelmap
-      CLEAR_COLOR_DEPTH;
-
-      if (g_reflect) {
-	reflect_spheres(g_checkerboard_cubemap);
-      } else
-#endif
-       
-	{
-	  
-	  use_program u(g_programs->skybox);
-
-	  g_models.select_draw(MODLAMSEL(m, m == g_models.modind_area_sphere));
-	  
-	  g_textures.bind(g_checkerboard_cubemap, 0);
-	  g_programs->up_int("unif_TexCubeMap", 0);
-	  
-	  DRAW_MODELS(models::transformorder_trs);
-
-	  g_textures.unbind(g_checkerboard_cubemap);
-	}
-
-      draw_walls();
-      
-
-#ifndef ROOM_TEST
-    }
-#endif
-    
-    g_vertex_buffer.unbind();
-}
-
 static void render() {
   vec4_t background(0.0f, 0.5f, 0.3f, 1.0f);
 
   SET_CLEAR_COLOR_V4(background);
 
-  #if 1
   for (auto& pass: g_render_passes) {
     pass.apply();
   }
 
   g_render_passes[0].active = false;
-  
-  #else
-
-  GL_FN(glDepthFunc(GL_LEQUAL));
-  test_main_1();
-
-  #endif
 }
 
 static void error_callback(int error, const char* description) {

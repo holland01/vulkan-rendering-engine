@@ -299,44 +299,13 @@ struct programs : public type_module {
     },
      {
       "cubemap",
-#if 0
-      GLSL(layout(location = 0) in vec3 in_Position;
-           layout(location = 1) in vec4 in_Color;           
-           
-           uniform mat4 unif_ModelView;
-           uniform mat4 unif_Projection;
-         
-           out vec4 frag_Color;
-           out vec3 frag_TexCoord;
-           
-           void main() {
-             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
-             gl_Position = clip;
 
-             frag_TexCoord = normalize(in_Position);
-             frag_Color = in_Color;
-           }),
-#else
       gen_vshader(vshader_frag_color | 
                   vshader_frag_texcoord),
-#endif
 
-#if 0
-      GLSL(in vec3 frag_TexCoord;
-           in vec4 frag_Color;
-           out vec4 fb_Color;
-
-           uniform samplerCube unif_TexCubeMap;
-
-           void main() {
-             vec4 x = frag_Color * texture(unif_TexCubeMap, frag_TexCoord);
-	          fb_Color = vec4(pow(x.xyz, vec3(1.0/2.2)), 1.0);
-           }),
-#else
       gen_fshader(fshader_frag_color | 
                   fshader_frag_texcoord | 
                   fshader_unif_texcubemap),
-#endif
       {
         "unif_ModelView",
         "unif_Projection",
