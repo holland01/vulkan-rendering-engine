@@ -53,22 +53,22 @@ struct duniform {
   
   shader_uniform_storage::uniform_type type;
   
-  duniform(mat4_t m, const std::string& n, shader_uniform_storage::uniform_type t)
+  duniform(mat4_t m, const std::string& n)
     : m4(m),
       name(n),
-      type(t)
+      type(shader_uniform_storage::uniform_mat4x4)
   {}
 
-  duniform(vec3_t v, const std::string& n, shader_uniform_storage::uniform_type t)
+  duniform(vec3_t v, const std::string& n)
     : v3(v),
       name(n),
-      type(t)
+      type(shader_uniform_storage::uniform_vec3)
   {}
 
-  duniform(int i, const std::string& n, shader_uniform_storage::uniform_type t)
+  duniform(int i, const std::string& n)
     : i32(i),
       name(n),
-      type(t)
+      type(shader_uniform_storage::uniform_int32)
   {}
 };
 

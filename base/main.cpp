@@ -1409,13 +1409,13 @@ struct gl_clear_depth {
 };
 
 #define DUNIFINT(name, value) \
-  duniform(static_cast<int32_t>(value), #name, shader_uniform_storage::uniform_int32)
+  duniform(static_cast<int32_t>(value), #name)
 
 #define DUNIFMAT4X4_R(name, value) \
-  duniform(mat4_t(R(value)), #name, shader_uniform_storage::uniform_mat4x4)
+  duniform(mat4_t(R(value)), #name)
 
 #define DUNIFVEC3_XYZ(name, x, y, z) \
-  duniform(vec3_t(R(x), R(y), R(z)), #name, shader_uniform_storage::uniform_vec3)
+  duniform(vec3_t(R(x), R(y), R(z)), #name)
 
 static void init_render_passes() {
   
