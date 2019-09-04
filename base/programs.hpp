@@ -215,6 +215,7 @@ struct programs : public type_module {
     bool frag_texcoord = flags & fshader_frag_texcoord;
     bool unif_texcubemap = flags & fshader_unif_texcubemap;
     bool reflect = flags & fshader_reflect;
+    bool lights = flags & fshader_lights;
 
     if (reflect) {
       ASSERT(!frag_texcoord);
@@ -234,6 +235,16 @@ struct programs : public type_module {
     if (frag_color) ss << GLSL_L(smooth in vec4 frag_Color;);
     if (frag_normal) ss << GLSL_L(smooth in vec3 frag_Normal;);
     if (frag_texcoord) ss << GLSL_L(in vec3 frag_TexCoord;);
+
+    if (lights) {
+      ASSERT(p.light_count != 0);
+      ss << GLSL_L(struct light {)
+         << GLSL_TL(vec3 position;)
+         << GLSL_TL(vec3 color;)
+         << GLSL_L(};)
+         << GLSL_INL(uniform light unif_Lights[) << p.light_count 
+         << GLSL_L(];);
+    }
 
     if (unif_texcubemap) ss << GLSL_L(uniform samplerCube unif_TexCubeMap;);
 
@@ -261,6 +272,26 @@ struct programs : public type_module {
       ss << GLSL_TL(out_color = frag_Color;);
     }
 
+    if (lights) {
+      ASSERT(frag_position);
+      ASSERT(frag_color);
+      ASSERT(frag_normal);
+
+      ss << GLSL_L(vec3 lightpass = vec3(0.0);)
+         << GLSL_I("for (int i = 0; i < ") 
+            << p.light_count 
+            << GLSL_IL("; ++i) {")
+         << GLSL_IT("vec3 lightDir = normalize(unif_Lights[i].position - ") << p.input_position << GLSL_IL(");")
+         << GLSL_IT("float diff = max(dot(lightDir, -normalize(") << p.input_normal << GLSL_IL(")), 0.0);") 
+         << GLSL_TL(vec3 diffuse = unif_Lights[i].color * diff;)
+         << GLSL_TL(vec3 result = diffuse;)
+         //<< GLSL_IT("float distance = length(") << p.input_position << GLSL_IL("- lights[i].position);")
+         //<< GLSL_TL(result *= 1.0 / (distance * distance);)
+         << GLSL_TL(lightpass += result;)
+         << GLSL_L(});
+
+      ss << GLSL_TL(out_color *= vec4(lightpass, 1.0););
+    }
     
     ss << GLSL_TL(fb_Color = out_color * frag_Color;)
        << GLSL_L(});
