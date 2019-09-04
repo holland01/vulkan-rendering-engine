@@ -241,7 +241,7 @@ struct programs : public type_module {
 
     ss << GLSL_L(out vec4 fb_Color;)
        << GLSL_L(void main() {)
-       << GLSL_TL(vec4 out_color;);
+       << GLSL_TL(vec4 out_color = vec4(1.0););
 
     if (!frag_color) {
       ss << GLSL_TL(vec4 frag_Color = vec4(1.0););
@@ -254,14 +254,15 @@ struct programs : public type_module {
     }
     
     if (frag_texcoord) {
-      ss << GLSL_TL(out_color = frag_Color * texture(unif_TexCubeMap, frag_TexCoord););
+      ss << GLSL_TL(out_color = texture(unif_TexCubeMap, frag_TexCoord););
     }
 
     if (!(reflect || frag_texcoord)) {
       ss << GLSL_TL(out_color = frag_Color;);
     }
 
-    ss << GLSL_TL(fb_Color = out_color;)
+    
+    ss << GLSL_TL(fb_Color = out_color * frag_Color;)
        << GLSL_L(});
 
     return ss.str();
