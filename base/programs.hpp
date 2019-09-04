@@ -9,6 +9,11 @@
 #define GLSL_TL(code) "\t" #code "\n"
 #define GLSL_T(code) "\t" #code
 
+#define GLSL_IT(code) "\t" code 
+#define GLSL_ITL(code) "\t" code "\n"
+#define GLSL_I(code) code
+#define GLSL_IL(code) code "\n"
+
 enum {
   vshader_in_normal = 1 << 0,
   vshader_in_texcoord = 1 << 1,
@@ -25,7 +30,15 @@ enum {
   fshader_frag_normal = 1 << 2,
   fshader_frag_texcoord = 1 << 3,
   fshader_unif_texcubemap = 1 << 4,
-  fshader_reflect = 1 << 5
+  fshader_reflect = 1 << 5,
+  fshader_lights = 1 << 6
+};
+
+struct fshader_params {
+  uint32_t light_count{1};
+  const std::string input_normal{"frag_Normal"};
+  const std::string input_position{"frag_Position"};
+  const std::string input_color{"frag_Color"};
 };
 
 #define GLSL_LIGHTING_DECL(num_lights) \
@@ -48,6 +61,12 @@ enum {
        result *= 1.0 / (distance * distance);			\
        output += result;					\
      })
+
+
+struct dpointlight {
+  vec3_t position;
+  vec3_t color;
+};
 
 struct programs : public type_module {
 
@@ -183,7 +202,7 @@ struct programs : public type_module {
     return ss.str();
   }
 
-  static std::string gen_fshader(uint32_t flags) {
+  static std::string gen_fshader(uint32_t flags, fshader_params p=fshader_params{}) {
     std::stringstream ss;
 
     bool frag_position = flags & fshader_frag_position;
