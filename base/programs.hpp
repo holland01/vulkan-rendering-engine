@@ -490,11 +490,9 @@ struct programs : public type_module {
     GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
   }
 
-  void up_plight(const std::string& name,
-          const vec3_t& position,
-          const vec3_t& color) {
-    GL_FN(glUniform3fv(uniform(name + ".position"), 1, &position[0]));
-    GL_FN(glUniform3fv(uniform(name + ".color"), 1, &color[0]));    
+  void up_pointlight(const std::string& name, const dpointlight& pl) {
+    GL_FN(glUniform3fv(uniform(name + ".position"), 1, &pl.position[0]));
+    GL_FN(glUniform3fv(uniform(name + ".color"), 1, &pl.color[0]));    
   }
   
   auto fetch_attrib(const std::string& program, const std::string& attrib) const {
