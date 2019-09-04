@@ -155,22 +155,22 @@ textures::index_type textures::new_cubemap(int w, int h, GLenum format) {
     std::vector<uint8_t> blank(w * h * channels, 0);
 
     if (format == GL_RGBA) {
-      fill_checkerboard(blank, w, h, glm::u8vec3(255, 0, 0), 4);     
+      fill_checkerboard(blank, w, h, glm::u8vec3(255, 255, 255), 4);     
       fill_cubemap_face(0, w, h, format, &blank[0]);
 
-      fill_checkerboard(blank, w, h, glm::u8vec3(0, 255, 0), 4);
+      fill_checkerboard(blank, w, h, glm::u8vec3(213, 213, 213), 4);
       fill_cubemap_face(1, w, h, format, &blank[0]);
 
-      fill_checkerboard(blank, w, h, glm::u8vec3(0, 0, 255), 4);
+      fill_checkerboard(blank, w, h, glm::u8vec3(171, 171, 171), 4);
       fill_cubemap_face(2, w, h, format, &blank[0]);
 
-      fill_checkerboard(blank, w, h, glm::u8vec3(255, 0, 255), 4);
+      fill_checkerboard(blank, w, h, glm::u8vec3(129, 129, 129), 4);
       fill_cubemap_face(3, w, h, format, &blank[0]);
 
-      fill_checkerboard(blank, w, h, glm::u8vec3(255, 255, 0), 4);
+      fill_checkerboard(blank, w, h, glm::u8vec3(87, 87, 87), 4);
       fill_cubemap_face(4, w, h, format, &blank[0]);
 
-      fill_checkerboard(blank, w, h,  glm::u8vec3(0, 255, 255), 4);
+      fill_checkerboard(blank, w, h,  glm::u8vec3(45, 45, 45), 4);
       fill_cubemap_face(5, w, h, format, &blank[0]);
       
     } else if (format == GL_DEPTH_COMPONENT) {
