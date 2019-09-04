@@ -718,12 +718,12 @@ struct models {
     vol.center = position;
         
     return new_model(model_quad,
-		     vbo_offset,
-		     6, // vertex count
-		     position,
-		     scale,
-		     glm::zero<vec3_t>(),
-		     vol);
+                     vbo_offset,
+                     6, // vertex count
+                     position,
+                     scale,
+                     glm::zero<vec3_t>(),
+                     vol);
   }
 
   auto new_cube(const vec3_t& position = glm::zero<vec3_t>(), const vec3_t& scale = vec3_t(1.0f), const vec4_t& color = vec4_t(1.0f)) {
@@ -931,10 +931,10 @@ struct scene_graph {
 
     init_info()
       : position(R(0)), angle(R(0)), scale(R(1)),
-	accum(true, true, false),
-	model(unset<models::index_type>()),
-	parent(0),
-	draw(true)
+        accum(true, true, false),
+        model(unset<models::index_type>()),
+        parent(0),
+        draw(true)
     {}
   };
 
@@ -1246,7 +1246,7 @@ struct pass_info {
       use_program u(shader);
       
       for (const auto& bind: tex_bindings) {
-	g_textures.bind(bind.id, bind.slot);
+        g_textures.bind(bind.id, bind.slot);
       }
       
       if (!uniforms.empty()) {
@@ -1266,16 +1266,16 @@ struct pass_info {
               break;	  
           }
 
-	  uniform_names.push_back(unif.name);
-	}
-
-	uniforms.clear();
+          uniform_names.push_back(unif.name);
+        }
       }
+
+	    uniforms.clear();
 
       init_fn();
       
       for (const auto& name: uniform_names) {
-	g_uniform_storage->upload_uniform(name);
+	      g_uniform_storage->upload_uniform(name);
       }
 
 #if defined(USE_SCENE_GRAPH)
@@ -1283,43 +1283,33 @@ struct pass_info {
 #else
       g_models.
 #endif
-	select_draw(select_draw_predicate);
+
+      select_draw(select_draw_predicate);
       
       switch (frametype) {
-      case frame_user: {
-	GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+        case frame_user: {
+	        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+	        state.apply();
+	        draw();
+        } break;
 
-	state.apply();
-	
-	draw();
-      } break;
-
-      case frame_envmap: {
-	ASSERT(envmap_id != frame::k_uninit);
-
-	g_models.framebuffer_pinned = true;
-
-	g_frame.rcube->bind(envmap_id);
-
-	state.apply();
-	
-	for (auto i = 0; i < 6; ++i) {	  
-	  g_view.bind_view(g_frame.rcube->set_face(envmap_id,
-						   static_cast<frame::render_cube::axis>(i)));
-                    
-	  draw();
-	}
-
-	g_frame.rcube->unbind();
-	g_view.unbind_view();
-	
-	g_models.framebuffer_pinned = false;
-
-      }	break;
+        case frame_envmap: {
+          ASSERT(envmap_id != frame::k_uninit);
+          g_models.framebuffer_pinned = true;
+          g_frame.rcube->bind(envmap_id);
+          state.apply();
+          for (auto i = 0; i < 6; ++i) {	  
+            g_view.bind_view(g_frame.rcube->set_face(envmap_id,
+                        static_cast<frame::render_cube::axis>(i)));
+            draw();
+          }
+          g_frame.rcube->unbind();
+          g_view.unbind_view();
+          g_models.framebuffer_pinned = false;
+        } break;
       }
-
       for (const auto& bind: tex_bindings) {
-	g_textures.unbind(bind.id);
+        g_textures.unbind(bind.id);
       }
       g_vertex_buffer.unbind();
     }
@@ -1447,11 +1437,9 @@ static void init_render_passes() {
 
     auto init = []() {
       g_frame.rcube->faces[0] =
-      g_frame.rcube->calc_look_at_mats(g_models.positions[g_models.modind_sphere],
-				       TEST_SPHERE_RADIUS);
-
+        g_frame.rcube->calc_look_at_mats( g_models.positions[g_models.modind_sphere],
+                                          TEST_SPHERE_RADIUS);
       g_frame_model_map[g_models.modind_sphere].needs_render = true;
-
     };
 
 #if defined(USE_SCENE_GRAPH)
@@ -1468,17 +1456,17 @@ static void init_render_passes() {
     
     pass_info envmap{
       "envmap",
-	state,
-	unifs,
-	tex_bindings,
-	ft,
-	shader,
-	transform_order,
-	init,
-	select,
-	envmap_id,
-	active
-	};
+      state,
+      unifs,
+      tex_bindings,
+      ft,
+      shader,
+      transform_order,
+      init,
+      select,
+      envmap_id,
+      active
+    };
 
     g_render_passes.push_back(envmap);
   }
@@ -1520,17 +1508,17 @@ static void init_render_passes() {
     
     pass_info main{
       "floor",
-	state,
-	unifs,
-	  {}, // textures
-	ft,
-	  shader,
-	  transform_order,
-	  init,
-	  select,
-	  envmap_id,
-	  active
-	  };
+      state,
+      unifs,
+      {}, // textures
+      ft,
+      shader,
+      transform_order,
+      init,
+      select,
+      envmap_id,
+      active
+    };
     
     g_render_passes.push_back(main);
   }
@@ -1551,8 +1539,9 @@ static void init_render_passes() {
 
     darray<bind_texture> tex_bindings = {
       {
-	g_frame.render_cube_color_tex(g_frame_model_map[g_models.modind_sphere].render_cube_id),
-	0
+        g_frame.render_cube_color_tex(
+          g_frame_model_map[g_models.modind_sphere].render_cube_id),
+	      0
       }
     };
 
@@ -1577,22 +1566,21 @@ static void init_render_passes() {
 #endif
 
     auto envmap_id = frame::k_uninit;
-    
     auto active = true;
     
     pass_info reflect{
       "reflect",
-	state,
-	unifs,
-	tex_bindings,
-	ft,
-	shader,
-	transform_order,
-	init,
-	select,
-	envmap_id,
-	active
-	};
+      state,
+      unifs,
+      tex_bindings,
+      ft,
+      shader,
+      transform_order,
+      init,
+      select,
+      envmap_id,
+      active
+    };
 
     g_render_passes.push_back(reflect);
   }
@@ -1625,27 +1613,24 @@ static void init_render_passes() {
     auto select = [](const models::index_type& m) -> bool {
       return m == g_models.modind_area_sphere; };
 #endif
-
     auto envmap_id = frame::k_uninit;
     
     auto active = true;
     
     pass_info room{
       "room",
-	state,
-	unifs,
-	tex_bindings,
-	ft,
-	shader,
-	transform_order,
-	init,
-	select,
-	envmap_id,
-	active
-	};
-
+      state,
+      unifs,
+      tex_bindings,
+      ft,
+      shader,
+      transform_order,
+      init,
+      select,
+      envmap_id,
+      active
+    };
     g_render_passes.push_back(room);
-
   }
 };
 

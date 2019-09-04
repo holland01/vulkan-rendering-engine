@@ -105,14 +105,14 @@ struct programs : public type_module {
   static attrib_entry_type attrib_layout_normal() {
     return {
       "in_Normal",
-  {
-    2,
-      3,
-      OPENGL_REAL,
-      GL_FALSE,
-      sizeof(vertex),
-      (void*) offsetof(vertex, normal)
-  }
+      {
+        2,
+        3,
+        OPENGL_REAL,
+        GL_FALSE,
+        sizeof(vertex),
+        (void*) offsetof(vertex, normal)
+      }
     };
   }
 
