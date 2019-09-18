@@ -580,34 +580,20 @@ struct models {
       	
     for (real_t phi = -glm::half_pi<real_t>(); phi <= glm::half_pi<real_t>(); phi += step) {
       for (real_t theta = 0.0f; theta <= glm::two_pi<real_t>(); theta += step) {
-	auto a = cart(phi, theta);
-	auto b = cart(phi, theta + step);
-	auto c = cart(phi + step, theta + step);
-	auto d = cart(phi + step, theta);
-		
-#if defined(SPHERE_SURFACE_NORMAL)
-	auto n_abc = g_geom.tri_normal(a, b, c);
-	auto n_cda = g_geom.tri_normal(c, d, a);
-		
-	g_vertex_buffer.add_triangle(a, color, n_abc,
-				     b, color, n_abc,
-				     c, color, n_abc);
+        auto a = cart(phi, theta);
+        auto b = cart(phi, theta + step);
+        auto c = cart(phi + step, theta + step);
+        auto d = cart(phi + step, theta);
 
-	g_vertex_buffer.add_triangle(c, color, n_abc,
-				     d, color, n_abc,
-				     a, color, n_abc);
+        g_vertex_buffer.add_triangle(a, color, a,
+                                     d, color, d,
+                                     c, color, c);
 
-#else
-	g_vertex_buffer.add_triangle(a, color, a,
-				     b, color, b,
-				     c, color, c);
-
-	g_vertex_buffer.add_triangle(c, color, c,
-				     d, color, d,
-				     a, color, a);
-
-#endif
-	count += 6;
+        g_vertex_buffer.add_triangle(c, color, c,
+                                     a, color, a,
+                                     b, color, b);
+        
+	      count += 6;
       }
     }
 
