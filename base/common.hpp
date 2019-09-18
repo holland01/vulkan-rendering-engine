@@ -78,6 +78,12 @@ using darray = std::vector<T>;
 
 #define OPENGL_REAL GL_FLOAT
 
+#define OPENGL_VERSION_MAJOR 4
+#define OPENGL_VERSION_MINOR 3
+
+#define OPENGL_VERSION_MAJOR_STR "4"
+#define OPENGL_VERSION_MINOR_STR "3"
+
 struct vertex {
   vec3_t position;
   vec4_t color;

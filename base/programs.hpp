@@ -22,6 +22,7 @@
 
 #define NUM_LIGHTS 1
 
+#define GLSL_FILE_HEADER "#version " OPENGL_VERSION_MAJOR_STR "" OPENGL_VERSION_MINOR_STR "0 core\n\n" 
 enum {
   vshader_in_normal = 1 << 0,
   vshader_in_texcoord = 1 << 1,
@@ -165,7 +166,7 @@ struct programs : public type_module {
     bool frag_texcoord = flags & vshader_frag_texcoord;
     bool unif_model = flags & vshader_unif_model;
 
-    ss << GLSL_L(#version 450 core)
+    ss << GLSL_FILE_HEADER
        << GLSL_L(layout(location = 0) in vec3 in_Position;)
        << GLSL_L(layout(location = 1) in vec4 in_Color;);
 
@@ -256,7 +257,7 @@ struct programs : public type_module {
       ASSERT(unif_texcubemap); // no 2d sampling currently, so this is all that's available
     }
 
-    ss << GLSL_L(#version 450 core);
+    ss << GLSL_FILE_HEADER;
 
     if (frag_position) ss << GLSL_L(smooth in vec3 frag_Position;);
     if (frag_color) ss << GLSL_L(smooth in vec4 frag_Color;);
