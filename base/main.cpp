@@ -2249,8 +2249,10 @@ int main(void) {
     
     init_api_data();
     init_render_passes();
+
+    GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
     
-    toggle_framebuffer_srgb();
+    //    toggle_framebuffer_srgb();
     
     while (!glfwWindowShouldClose(window)) {
         g_view(g_cam_move_state);

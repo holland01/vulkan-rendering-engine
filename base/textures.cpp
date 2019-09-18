@@ -70,7 +70,13 @@ textures::index_type textures::new_texture(uint32_t width,
 
 void textures::fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data) {
     ASSERT_FMT(fmt);
-    GLenum ifmt = fmt == GL_DEPTH_COMPONENT ? GL_DEPTH_COMPONENT24 : fmt; // ok for now as long as fmt is GL_RGBA, GL_RGB, GL_DEPTH_COMPONENT
+    GLenum ifmt = (fmt == GL_DEPTH_COMPONENT
+		   ? GL_DEPTH_COMPONENT24
+		   : (fmt == GL_SRGB
+		      ? GL_SRGB8_ALPHA8
+		      : fmt));
+
+    // ok for now as long as fmt is GL_RGBA, GL_RGB, GL_DEPTH_COMPONENT
 
     GL_FN(glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(offset),
                        0,
