@@ -372,15 +372,22 @@ struct programs : public type_module {
   std::vector<programdef> defs = {
     {
       "main",
-      gen_vshader(vshader_frag_color),
-      gen_fshader(fshader_frag_color),
+      gen_vshader(VSHADER_POINTLIGHTS),
+
+      gen_fshader(FSHADER_POINTLIGHTS,
+                  {NUM_LIGHTS,
+                  true}),
       {
         "unif_ModelView",
-        "unif_Projection"
+        "unif_Projection",
+        "unif_Model",
+        "unif_Lights[0].position",
+        "unif_Lights[0].color"
       },
       {
         attrib_layout_position(),
-        attrib_layout_color()
+        attrib_layout_color(),
+        attrib_layout_normal()
       },
     },
     {
@@ -425,19 +432,16 @@ struct programs : public type_module {
      {
       "cubemap",
 
-      gen_vshader(vshader_in_normal |
-                  vshader_frag_color | 
-                  vshader_frag_position |
-                  vshader_frag_normal |
-                  vshader_frag_texcoord |
-                  vshader_unif_model),
+      gen_vshader(VSHADER_POINTLIGHTS |
+                  vshader_frag_texcoord),
 
-      gen_fshader(fshader_frag_color | 
+      gen_fshader(FSHADER_POINTLIGHTS |
                   fshader_frag_texcoord | 
-                  fshader_unif_texcubemap |
-                  fshader_lights | 
-                  fshader_frag_normal | 
-                  fshader_frag_position),
+                  fshader_unif_texcubemap,
+                  {
+                    NUM_LIGHTS, 
+                    true        // invert normals
+                  }),
       {
         "unif_ModelView",
         "unif_Projection",

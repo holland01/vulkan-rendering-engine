@@ -617,6 +617,15 @@ struct models {
 		const vec3_t& scale,
 		const vec4_t& color = R4(1.0)) {
 
+    std::array<vec3_t, 6> normals = {
+      R3v(0, 0, -1), // front
+      R3v(-1, 0, 0), // left
+      R3v(1, 0, 0),  // right
+      R3v(0, 0, 1),  // back
+      R3v(0, 1, 0),  // top
+      R3v(0, -1, 0)  // bottom
+    };
+
     // TODO:
     // rewrite this so that the API
     // takes planes XY, XZ, and YZ
@@ -681,21 +690,23 @@ struct models {
         
     real_t* offset = &vertices[type * 18];
 
+    vec3_t normal = normals[type];
+
     vec3_t a(offset[0], offset[1], offset[2]);
     vec3_t b(offset[3], offset[4], offset[5]);
     vec3_t c(offset[6], offset[7], offset[8]);
 
-    g_vertex_buffer.add_triangle(a, color,
-				 b, color,
-				 c, color);
+    g_vertex_buffer.add_triangle(a, color, normal, 
+				                         b, color, normal,
+                                 c, color, normal);
 
     vec3_t d(offset[9], offset[10], offset[11]);
     vec3_t e(offset[12], offset[13], offset[14]);
     vec3_t f(offset[15], offset[16], offset[17]);
 
-    g_vertex_buffer.add_triangle(d, color,
-				 e, color,
-				 f, color);
+    g_vertex_buffer.add_triangle(d, color, normal,
+				                         e, color, normal,
+				                         f, color, normal);
 
     geom::bvol vol;
 
@@ -1222,6 +1233,12 @@ struct pass_info {
     g_models.render(transorder);
 #endif
   }
+
+  void add_pointlight(const dpointlight& pl, int which) {
+    ASSERT(which < NUM_LIGHTS);
+    std::string name = "unif_Lights[" + std::to_string(which) + "]";
+    uniforms.push_back(duniform{pl, name});
+  }
   
   void apply() {
     if (active) {
@@ -1392,6 +1409,17 @@ struct gl_clear_depth {
 #define DUNIFVEC3_XYZ(name, x, y, z) \
   duniform(vec3_t(R(x), R(y), R(z)), #name)
 
+static const dpointlight g_pointlight{
+  R3v(5.0, 5.0, 0),
+  R3v(0, 1, 0)
+};
+
+void add_pointlights(pass_info& p) {
+  if (p.name == "floor" || p.name == "room") {
+    p.add_pointlight(g_pointlight, 0);
+  }
+}
+
 static void init_render_passes() {
   
   // environment map pass
@@ -1453,6 +1481,7 @@ static void init_render_passes() {
       active
     };
 
+    add_pointlights(envmap);
     g_render_passes.push_back(envmap);
   }
 
@@ -1465,9 +1494,10 @@ static void init_render_passes() {
     
     darray<duniform> unifs;
 
-    unifs.push_back(DUNIFINT(unif_GammaCorrect, true));
+    //unifs.push_back(DUNIFINT(unif_GammaCorrect, true));
     unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Model, 1.0));
 
     auto ft = pass_info::frame_user;
 
@@ -1505,6 +1535,8 @@ static void init_render_passes() {
       active
     };
     
+    add_pointlights(main);
+
     g_render_passes.push_back(main);
   }
 
@@ -1567,6 +1599,8 @@ static void init_render_passes() {
       active
     };
 
+    add_pointlights(reflect);
+
     g_render_passes.push_back(reflect);
   }
 
@@ -1586,8 +1620,6 @@ static void init_render_passes() {
                                "unif_Model"));
     }
 
-    unifs.push_back(duniform(dpointlight{R3v(0, 0, 0), R3v(1, 0, 0)}, "lights[0]"));
-    //unifs.push_back(duniform(dpointlight{R3v(0, 0, 0), R3v(0, 0, 1)}, "lights[1]"));
     darray<bind_texture> tex_bindings = {
       { g_checkerboard_cubemap, 0 }
     };
@@ -1623,6 +1655,9 @@ static void init_render_passes() {
       envmap_id,
       active
     };
+
+    add_pointlights(room);
+
     g_render_passes.push_back(room);
   }
 };
@@ -1716,13 +1751,13 @@ static void init_api_data() {
       scene_graph::init_info floor;
 
       floor.position = vec3_t{0};
-      floor.scale = R3(wall_size);
+      floor.scale = R3v(1.0, 1.0, 1.0);
       floor.angle = vec3_t{0};
 
       floor.model = g_models.new_wall(R3(0.0),
 		      models::wall_bottom,
 		      R3(wall_size),
-		      R4v(0.1, 0.2, 0.3, 1.0));
+		      R4v(1.0, 1.0, 1.0, 1.0));
       
       floor.parent = g_graph->test_indices.area_sphere;
       
