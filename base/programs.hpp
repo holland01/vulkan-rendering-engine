@@ -1,7 +1,10 @@
 #pragma once
 
+
+
 #include "common.hpp"
 #include "util.hpp"
+#include <inttypes.h>
 
 #include <unordered_map>
 #define GLSL_INL(code) #code
@@ -145,6 +148,8 @@ struct programs : public type_module {
     };
   }
 
+  static inline uint32_t vshader_count{0};
+  static inline uint32_t fshader_count{0};
   static std::string gen_vshader(uint32_t flags) {
     std::stringstream ss;
 
@@ -213,7 +218,14 @@ struct programs : public type_module {
 
     ss << GLSL_L(});
 
-    return ss.str();
+    auto s = ss.str();
+
+    write_logf("\n----------vshader %" PRIu32 "----------\n%s\n\n\n", 
+                vshader_count, s.c_str());
+
+    vshader_count++;
+
+    return s;
   }
 
   static std::string gen_fshader(uint32_t flags, fshader_params p=fshader_params{}) {
@@ -306,7 +318,14 @@ struct programs : public type_module {
     ss << GLSL_TL(fb_Color = out_color * frag_Color;)
        << GLSL_L(});
 
-    return ss.str();
+    auto s = ss.str();
+
+    write_logf("\n---------fshader %" PRIu32 "-----------\n%s\n\n\n", 
+                fshader_count, s.c_str());
+
+    fshader_count++;
+
+    return s;
   }
 
   std::vector<programdef> defs = {
