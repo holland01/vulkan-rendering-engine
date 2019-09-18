@@ -242,6 +242,7 @@ struct programs : public type_module {
     bool unif_texcubemap = flags & fshader_unif_texcubemap;
     bool reflect = flags & fshader_reflect;
     bool lights = flags & fshader_lights;
+    bool unif_model = flags & fshader_unif_model;
 
     if (reflect) {
       ASSERT(!frag_texcoord);
@@ -272,6 +273,10 @@ struct programs : public type_module {
          << GLSL_L(];);
     }
 
+    if (unif_model) { 
+      ASSERT(lights); // only expected use case currently
+      ss << GLSL_L(uniform mat4 unif_Model;);
+    }
     if (unif_texcubemap) ss << GLSL_L(uniform samplerCube unif_TexCubeMap;);
 
     if (reflect) ss << GLSL_L(uniform vec3 unif_CameraPosition;);
@@ -317,6 +322,16 @@ struct programs : public type_module {
          << GLSL_L(});
 
       ss << GLSL_TL(out_color *= vec4(lightpass, 1.0););
+      
+      ss  << (unif_model 
+              ? GLSL_TL(vec3 vposition = vec3(unif_Model * vec4(frag_Position, 1.0));)
+              : GLSL_TL(vec3 vposition = frag_Position;))
+          << (unif_model
+              ? GLSL_TL(vec3 vnormal = vec3(transpose(inverse(unif_Model)) * vec4(frag_Normal, 0.0));)
+              : GLSL_TL(vec3 vnormal = frag_Normal;))
+          << GLSL_T(int numLights = ) <<  p.light_count << GLSL_L(;)
+          << GLSL_T(bool invertNormals = ) << from_bool(p.invert_normals) << GLSL_L(;)
+          << GLSL_TL(out_color.xyz *= applyPointLights(vposition, vnormal, numLights, invertNormals););
     }
     
     ss << GLSL_TL(fb_Color = out_color * frag_Color;)
