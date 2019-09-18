@@ -148,6 +148,10 @@ struct programs : public type_module {
     };
   }
 
+  static std::string from_bool(bool b) {
+    return b ? "true" : "false";
+  }
+
   static inline uint32_t vshader_count{0};
   static inline uint32_t fshader_count{0};
   static std::string gen_vshader(uint32_t flags) {
