@@ -114,6 +114,6 @@ struct geom {
 
     // right hand rule was used here to determine
     // correct ordering.
-    return glm::normalize(glm::cross(v0, v1));
+    return glm::normalize(glm::cross(v1, v0));
   }
 } g_geom{};
