@@ -277,12 +277,49 @@ struct programs : public type_module {
       ASSERT(lights); // only expected use case currently
       ss << GLSL_L(uniform mat4 unif_Model;);
     }
+
     if (unif_texcubemap) ss << GLSL_L(uniform samplerCube unif_TexCubeMap;);
 
     if (reflect) ss << GLSL_L(uniform vec3 unif_CameraPosition;);
 
-    ss << GLSL_L(out vec4 fb_Color;)
-       << GLSL_L(void main() {)
+    if (lights && !frag_normal) ss << GLSL_L(uniform vec3 frag_Normal;);
+
+    ss << GLSL_L(out vec4 fb_Color;);
+
+    ss << GLSL_L(vec3 debugVec3(in vec3 v) {)
+       << GLSL_TL(return min(max(normalize(v), vec3(0.0)), vec3(1.0));)
+       << GLSL_L(});
+
+    if (lights) {
+      /* TODO: eliminate conditional overhead associated with "invertNormals".
+       * there is a function which allows direct bit manipulation of floats,
+       * and combinatorial logic and should be used in conjunction with this
+       * function to perform the inversion when invertNormals == true, and
+       * not invert when invertNormals == false.
+       */
+
+      ss  << GLSL_L(vec3 applyPointLights(in vec3 vposition, in vec3 vnormal, int numLights, bool invertNormals) {)
+          << GLSL_TL(vec3 lightpass = vec3(0.0);)
+          << GLSL_TL(const float c1 = 0.0;)
+          << GLSL_TL(const float c2 = 0.0;)
+          << GLSL_TL(const float c3 = invertNormals ? -1.0 : 1.0;)
+          << GLSL_TL(for (int i = 0; i < numLights; ++i) {)
+          << GLSL_TTL(vec3 lightDir = normalize(unif_Lights[i].position - vposition);)
+          << GLSL_TTL(float diff = max(dot(lightDir, c3 * normalize(vnormal)), 0.0);)
+          << GLSL_TTL(vec3 diffuse = unif_Lights[i].color * diff * frag_Color.xyz;)
+          << GLSL_TTL(vec3 result = diffuse;)
+          #if 0
+          << GLSL_TTL(float distance = length(unif_Lights[i].position - vposition);)
+          << GLSL_TTL(result *= (1.0 / (1.0 + (c1 * distance) + (c2 * distance * distance)));)
+          #endif
+          << GLSL_TTL(lightpass += result;)
+          << GLSL_TL(})
+          << GLSL_TL(return lightpass;)
+          << GLSL_L(});
+    }
+
+
+    ss << GLSL_L(void main() {)
        << GLSL_TL(vec4 out_color = vec4(1.0););
 
     if (!frag_color) {
@@ -306,22 +343,7 @@ struct programs : public type_module {
     if (lights) {
       ASSERT(frag_position);
       ASSERT(frag_color);
-      ASSERT(frag_normal);
-
-      ss << GLSL_L(vec3 lightpass = vec3(0.0);)
-         << GLSL_I("for (int i = 0; i < ") 
-            << p.light_count 
-            << GLSL_IL("; ++i) {")
-         << GLSL_IT("vec3 lightDir = normalize(unif_Lights[i].position - ") << p.input_position << GLSL_IL(");")
-         << GLSL_IT("float diff = max(dot(lightDir, -normalize(") << p.input_normal << GLSL_IL(")), 0.0);") 
-         << GLSL_TL(vec3 diffuse = unif_Lights[i].color * diff;)
-         << GLSL_TL(vec3 result = diffuse;)
-         //<< GLSL_IT("float distance = length(") << p.input_position << GLSL_IL("- lights[i].position);")
-         //<< GLSL_TL(result *= 1.0 / (distance * distance);)
-         << GLSL_TL(lightpass += result;)
-         << GLSL_L(});
-
-      ss << GLSL_TL(out_color *= vec4(lightpass, 1.0););
+      //ASSERT(frag_normal);
       
       ss  << (unif_model 
               ? GLSL_TL(vec3 vposition = vec3(unif_Model * vec4(frag_Position, 1.0));)
