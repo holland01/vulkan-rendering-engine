@@ -7,12 +7,17 @@
 #define GLSL_INL(code) #code
 #define GLSL_L(code) #code "\n"
 #define GLSL_TL(code) "\t" #code "\n"
+#define GLSL_TTL(code) "\t" GLSL_TL(code)
+#define GLSL_TTTL(code) "\t" GLSL_TTL(code)
+#define GLSL_TTTTL(code) "\t" GLSL_TTTL(code)
 #define GLSL_T(code) "\t" #code
 
 #define GLSL_IT(code) "\t" code 
 #define GLSL_ITL(code) "\t" code "\n"
 #define GLSL_I(code) code
 #define GLSL_IL(code) code "\n"
+
+#define NUM_LIGHTS 1
 
 enum {
   vshader_in_normal = 1 << 0,
@@ -31,11 +36,14 @@ enum {
   fshader_frag_texcoord = 1 << 3,
   fshader_unif_texcubemap = 1 << 4,
   fshader_reflect = 1 << 5,
-  fshader_lights = 1 << 6
+  fshader_lights = 1 << 6,
+  fshader_unif_model = 1 << 7,
 };
 
 struct fshader_params {
-  uint32_t light_count{1};
+  const uint32_t light_count{NUM_LIGHTS};
+  const bool invert_normals{false};
+
   const std::string input_normal{"frag_Normal"};
   const std::string input_position{"frag_Position"};
   const std::string input_color{"frag_Color"};
@@ -62,6 +70,8 @@ struct fshader_params {
        output += result;					\
      })
 
+#define VSHADER_POINTLIGHTS vshader_in_normal | vshader_frag_position | vshader_frag_color | vshader_frag_normal | vshader_unif_model
+#define FSHADER_POINTLIGHTS fshader_frag_normal | fshader_frag_position | fshader_frag_color | fshader_lights
 
 struct dpointlight {
   vec3_t position;
