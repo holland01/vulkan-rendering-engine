@@ -175,13 +175,13 @@ struct programs : public type_module {
     if (in_texcoord) ss << GLSL_L(layout(location = 3) in vec2 in_TexCoord;);
 
     if (frag_position) ss << GLSL_L(smooth out vec3 frag_Position;);
-    if (frag_color) ss << GLSL_L(out vec4 frag_Color;);
+    if (frag_color) ss << GLSL_L(smooth out vec4 frag_Color;);
     if (frag_normal) ss << GLSL_L(smooth out vec3 frag_Normal;);
     
     if (frag_texcoord) { 
       ss << (in_texcoord 
-            ? GLSL_L(out vec2 frag_TexCoord;) 
-            : GLSL_L(out vec3 frag_TexCoord;));
+            ? GLSL_L(smooth out vec2 frag_TexCoord;) 
+            : GLSL_L(smooth out vec3 frag_TexCoord;));
     }
 
     if (unif_model) ss << GLSL_L(uniform mat4 unif_Model;);
@@ -262,7 +262,7 @@ struct programs : public type_module {
     if (frag_position) ss << GLSL_L(smooth in vec3 frag_Position;);
     if (frag_color) ss << GLSL_L(smooth in vec4 frag_Color;);
     if (frag_normal) ss << GLSL_L(smooth in vec3 frag_Normal;);
-    if (frag_texcoord) ss << GLSL_L(in vec3 frag_TexCoord;);
+    if (frag_texcoord) ss << GLSL_L(smooth in vec3 frag_TexCoord;);
 
     if (lights) {
       ASSERT(p.light_count != 0);
