@@ -21,11 +21,19 @@
 #endif
 
 #include <vector>
+#include <algorithm>
 
 namespace fs = std::experimental::filesystem;
 
 #define SCREEN_WIDTH 1024
 #define SCREEN_HEIGHT 1024
+
+#if defined (__GNUC__)
+#define TR_NOINLINE __attribute__ ((noinline))
+#else
+#error "Check for noinline support for this compiler"
+#define TR_NOINLINE
+#endif
 
 // Assumes that v is an ADT with a to_string(std::string) method,
 // and the string parameter for that method acts as a prefix
@@ -38,6 +46,8 @@ namespace fs = std::experimental::filesystem;
 #define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
 
 #define DEBUGLINE write_logf("FILE:%s,LINE:%i\n", __FILE__, __LINE__)
+
+
 #define NOP ;
 
 using vec2_t = glm::vec2;
@@ -110,4 +120,22 @@ static inline numType unset() {
 
 static inline mat4_t m4i() {
   return mat4_t{R(1)};
+}
+
+template <typename T>
+static inline bool vec_contains(const std::vector<T>& v, const T& t) {
+  return std::find(v.begin(), v.end(), t) != v.end();
+}
+
+template <typename T>
+static inline std::vector<T> vec_join(const std::vector<T>& a, const std::vector<T>& b) {
+  std::vector<T> c;
+  c.insert(c.end(), a.begin(), a.end());
+  c.insert(c.end(), b.begin(), b.end());
+  return c;
+}
+
+template <typename T>
+static inline std::vector<T> operator+(const std::vector<T>& a, const std::vector<T>& b) {
+  return vec_join(a, b);
 }
