@@ -37,6 +37,7 @@ namespace fs = std::experimental::filesystem;
 
 #define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
 
+#define DEBUGLINE write_logf("FILE:%s,LINE:%i\n", __FILE__, __LINE__)
 #define NOP ;
 
 using vec2_t = glm::vec2;
