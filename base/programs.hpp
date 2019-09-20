@@ -66,6 +66,12 @@ static constexpr shadergen_flags_t vshader_frag_pos_color_normal() {
 #define VSHADER_POINTLIGHTS vshader_frag_pos_color_normal() | vshader_in_normal | vshader_unif_model
 #define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights
 
+static inline std::vector<std::string> uniform_location_pointlight(uint32_t index) {
+  return {
+    "unif_Lights[" + std::to_string(index) + "].position",
+    "unif_Lights[" + std::to_string(index) + "].color"
+  };
+}
 
 struct dpointlight {
   vec3_t position;
@@ -371,13 +377,13 @@ struct programs : public type_module {
       gen_fshader(FSHADER_POINTLIGHTS,
                   {NUM_LIGHTS,
                   true}),
-      {
-        "unif_ModelView",
-        "unif_Projection",
-        "unif_Model",
-        "unif_Lights[0].position",
-        "unif_Lights[0].color"
-      },
+      ([&]() -> std::vector<std::string> {
+        return std::vector<std::string>{
+          "unif_ModelView",
+          "unif_Projection",
+          "unif_Model"
+        } + uniform_location_pointlight(0);
+      })(),
       {
         attrib_layout_position(),
         attrib_layout_color(),
@@ -436,16 +442,14 @@ struct programs : public type_module {
                     NUM_LIGHTS, 
                     true        // invert normals
                   }),
-      {
-        "unif_ModelView",
-        "unif_Projection",
-        "unif_TexCubeMap",
-        "unif_Lights[0].position",
-        "unif_Lights[0].color",
-        "unif_Model"
-     //   "unif_lights[1].position",
-       // "unif_lights[1].color"
-      },
+      ([&]() -> std::vector<std::string>  {
+        return std::vector<std::string>{
+          "unif_ModelView",
+          "unif_Projection",
+          "unif_TexCubeMap",
+          "unif_Model"
+        }  + uniform_location_pointlight(0);
+      })(),
       {
         attrib_layout_position(),
         attrib_layout_color(),
@@ -507,13 +511,15 @@ struct programs : public type_module {
                   fshader_unif_texcubemap |
                   fshader_reflect),
 #endif
-      {
-        "unif_Model",
-        "unif_ModelView",
-        "unif_Projection",
-        "unif_TexCubeMap",
-        "unif_CameraPosition"
-      },
+      ([&]() -> std::vector<std::string> { 
+        return std::vector<std::string> {
+          "unif_Model",
+          "unif_ModelView",
+          "unif_Projection",
+          "unif_TexCubeMap",
+          "unif_CameraPosition"
+        };
+      })(),
       {
         attrib_layout_position(),
         attrib_layout_color(),
