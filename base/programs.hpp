@@ -53,27 +53,6 @@ struct fshader_params {
   const std::string input_color{"frag_Color"};
 };
 
-#define GLSL_LIGHTING_DECL(num_lights) \
-  GLSL_INL(			       \
-     struct light {	       \
-       vec3 position;	       \
-       vec3 color;	       \
-     }			       \
-     uniform light lights[num_lights])
-
-#define GLSL_LIGHTING_PASS(num_lights, output, input_position, input_normal, input_color) \
-  GLSL_INL(								                      \
-     vec3 output;							\
-     for (int i = 0; i < num_lights; ++i) {			\
-       vec3 lightDir = normalize(lights[i].position - input_position); \
-       float diff = max(dot(lightDir, input_normal), 0.0);	\
-       vec3 diffuse = lights[i].color * diff * input_color;	\
-       vec3 result = diffuse;					\
-       float distance = length(input_position - lights[i].position); \
-       result *= 1.0 / (distance * distance);			\
-       output += result;					\
-     })
-
 #define VSHADER_POINTLIGHTS vshader_in_normal | vshader_frag_position | vshader_frag_color | vshader_frag_normal | vshader_unif_model
 #define FSHADER_POINTLIGHTS fshader_frag_normal | fshader_frag_position | fshader_frag_color | fshader_lights
 
