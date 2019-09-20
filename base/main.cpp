@@ -35,17 +35,11 @@
 #define ROOM_SPHERE_RADIUS R(30)
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
-#define ROOM_TEST
-
-#define USE_SCENE_GRAPH
-
 frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
 
 darray<type_module*> g_modules;
 
 programs::ptr_type g_programs{new programs()};
-
-textures::index_type g_skybox_texture {textures::k_uninit};
 
 textures::index_type g_checkerboard_cubemap {textures::k_uninit};
 
@@ -367,16 +361,6 @@ struct vertex_buffer {
 #define MODLAMSEL(name, return_expr) [](const models::index_type& name) -> bool { return return_expr; }
 
 struct models {
-  enum transformorder {
-    // srt -> translate first, then rotate, then scale. Order is backwards
-    // on purpose, since mathematically this is how transforms work with the current
-    // conventions used.
-    transformorder_srt = 0,
-    transformorder_trs, 
-    transformorder_lookat,
-    transformorder_skybox,
-    transformorder_count
-  };
 
   enum model_type {
     model_unknown = 0,
@@ -401,35 +385,12 @@ struct models {
   using predicate_fn_type = std::function<bool(const index_type&)>;
     
   static const inline index_type k_uninit = -1;
-  
-  std::array<transform_fn_type, transformorder_count> __table = {
-    [this](int model) { return scale(model) * rotate(model) * translate(model); },
-    [this](int model) { return translate(model) * rotate(model) * scale(model); },
-    [this](int model) { return glm::inverse(g_view.view())
-			* glm::lookAt(look_at.eye, look_at.center, look_at.up); },
-    [this](int model) {
-      return glm::translate(mat4_t(1.0f), g_view.position) * scale(model);
-    }
-  };
 
-  darray<vec3_t> positions;
-  darray<vec3_t> scales;
-  darray<vec3_t> angles;
   darray<geom::bvol> bound_volumes;
   darray<model_type> model_types;
   darray<index_type> vertex_offsets;
   darray<index_type> vertex_counts;
   mutable darray<bool> draw;
-    
-  struct {
-    vec3_t eye;
-    vec3_t center;
-    vec3_t up;
-  } look_at = {
-    glm::zero<vec3_t>(),
-    glm::zero<vec3_t>(),
-    glm::zero<vec3_t>()
-  };
 
   vec3_t model_select_reset_pos{glm::zero<vec3_t>()};
     
@@ -445,33 +406,21 @@ struct models {
     
   // It's assumed that vertices
   // have been already added to the vertex
-  // buffer when this function is called,
+  // buffer when this function is caglled,
   // so we explicitly reallocate the needed
   // VBO memory every time we add new
   // model data with this function.
-  auto new_model(model_type mt,
-		 index_type vbo_offset = 0,
-		 index_type num_vertices = 0,
-		 vec3_t position = glm::zero<vec3_t>(),
-		 vec3_t scale = vec3_t(1.0f),
-		 vec3_t angle = vec3_t(0.0f),
-		 geom::bvol bvol = geom::bvol(),		
-		 int tex_unit = 0) {
+  auto new_model(
+      model_type mt,
+      index_type vbo_offset = 0,
+      index_type num_vertices = 0) {
 
     index_type id = static_cast<index_type>(model_count);
 
     model_types.push_back(mt);
-        
-    positions.push_back(position);
-    scales.push_back(scale);
-    angles.push_back(angle);
 
     vertex_offsets.push_back(vbo_offset);
     vertex_counts.push_back(num_vertices);
-
-    draw.push_back(true);       
-
-    bound_volumes.push_back(bvol);
     
     model_count++;
 
@@ -480,90 +429,7 @@ struct models {
     return id;
   }    
     
-  void clear_select_model_state() {
-    if (modind_selected != k_uninit) {
-      // TODO: cleanup select state for previous model here
-    }
-
-    modind_selected = k_uninit;
-  }
-    
-  void set_select_model_state(index_type model) {
-    clear_select_model_state();
-
-    modind_selected = model;
-    model_select_reset_pos = positions[model];
-  }
-
-  bool has_select_model_state() const {
-    return modind_selected != k_uninit;
-  }
-
-#define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)	\
-  if (g_select_move_state.dir) { update.axis += amount;  }
-
-  // This is continuously called in the main loop,
-  // so it's important that we don't assume
-  // that this function is alaways called when
-  // a valid index hits.
-  void update_select_model_state() {
-    ASSERT(has_select_model_state());
-
-    vec3_t update{R(0.0)};
-        
-    MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
-    MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
-
-    MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
-    MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
-
-    MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
-    MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
-
-    move(modind_selected, update, mop_add);
-  }
-
-  void reset_select_model_state() {
-    if (has_select_model_state()) {
-      move(modind_selected, model_select_reset_pos, mop_set);
-    }
-  }
-    
-#undef MAP_UPDATE_SELECT_MODEL_STATE
-
-  enum _move_op {
-    mop_add,
-    mop_sub,
-    mop_set
-  };
-    
-  void move(index_type model, const vec3_t& position, _move_op mop) {
-    switch (mop) {
-    case mop_add: positions[model] += position; break;
-    case mop_sub: positions[model] -= position; break;
-    case mop_set: positions[model] = position; break;
-    }
-
-    bound_volumes[model].center = positions[model];
-  }
-
-  // Place model 'a' ontop of model 'b'.
-  // Right now we only care about bounding spheres
-  void place_above(index_type a, index_type b) {
-    ASSERT(bound_volumes[a].type == geom::bvol::type_sphere);
-    ASSERT(bound_volumes[b].type == geom::bvol::type_sphere);
-
-    vec3_t a_position{positions[b]};
-
-    auto arad = bound_volumes[a].radius;
-    auto brad = bound_volumes[b].radius;
-
-    a_position.y += arad + brad;
-
-    move(a, a_position, mop_set);
-  }
-    
-  auto new_sphere(const vec3_t& position = glm::zero<vec3_t>(), real_t scale = real_t(1), vec4_t color = vec4_t{R(1.0)}) {
+  auto new_sphere(vec4_t color = vec4_t{R(1.0)}) {
     auto offset = g_vertex_buffer.num_vertices();
 
     real_t step = 0.05f;
@@ -597,25 +463,22 @@ struct models {
       }
     }
 
+#if 0
     geom::bvol bvol {};
 
     bvol.type = geom::bvol::type_sphere;
     bvol.radius = scale;
     bvol.center = position;
+#endif
 
     return new_model(model_sphere,
 		     offset,
-		     count,
-		     position,
-		     vec3_t(scale),
-		     glm::zero<vec3_t>(),
-		     bvol);
+		     count);
   }
     
-  auto new_wall(const vec3_t& position,
-		wall_type type,
-		const vec3_t& scale,
-		const vec4_t& color = R4(1.0)) {
+  auto new_wall(
+    wall_type type,
+    const vec4_t& color = R4(1.0)) {
 
     std::array<vec3_t, 6> normals = {
       R3v(0, 0, -1), // front
@@ -708,21 +571,19 @@ struct models {
 				                         e, color, normal,
 				                         f, color, normal);
 
+#if 0
     geom::bvol vol;
 
     vol.radius = glm::length(scale);
     vol.center = position;
-        
+#endif   
     return new_model(model_quad,
                      vbo_offset,
-                     6, // vertex count
-                     position,
-                     scale,
-                     glm::zero<vec3_t>(),
-                     vol);
+                     6 // vertex count 
+                     );
   }
 
-  auto new_cube(const vec3_t& position = glm::zero<vec3_t>(), const vec3_t& scale = vec3_t(1.0f), const vec4_t& color = vec4_t(1.0f)) {
+  auto new_cube(const vec4_t& color = vec4_t(1.0f)) {
     std::array<real_t, 36 * 3> vertices = {
       // positions          
       -1.0f, 1.0f, -1.0f,
@@ -782,27 +643,7 @@ struct models {
 
     return new_model(model_cube,
 		     offset,
-		     36,
-		     position,
-		     scale);
-  }
-
-  mat4_t scale(index_type model) const {
-    return glm::scale(mat4_t(1.0f), scales.at(model));
-  }
-
-  mat4_t translate(index_type model) const {
-    return glm::translate(mat4_t(1.0f), positions.at(model));
-  }
-
-  mat4_t rotate(index_type model) const {
-    mat4_t rot(1.0f);
-
-    rot = glm::rotate(mat4_t(1.0f), angles.at(model).x, vec3_t(1.0f, 0.0f, 0.0f));
-    rot = glm::rotate(mat4_t(1.0f), angles.at(model).y, vec3_t(0.0f, 1.0f, 0.0f)) * rot;
-    rot = glm::rotate(mat4_t(1.0f), angles.at(model).z, vec3_t(0.0f, 0.0f, 1.0f)) * rot;
-
-    return rot;
+		     36);
   }
 
   void render(index_type model, const mat4_t& world) const {
@@ -827,62 +668,11 @@ struct models {
 		       ofs,
 		       count));
   }
-  
-  void render(index_type model, transformorder to) const {
-    if (draw.at(model) == true) {
-      mat4_t T = __table[to](model);
-      mat4_t mv = g_view.view() * T;
-
-      if (g_programs->uniform("unif_Model") != -1) {
-	g_programs->up_mat4x4("unif_Model", T);
-      }
-	    
-      g_programs->up_mat4x4("unif_ModelView", mv);
-      g_programs->up_mat4x4("unif_Projection",
-			   (model == modind_skybox
-			    ? g_view.skyproj
-			    : (framebuffer_pinned
-			       ? g_view.cubeproj
-			       : g_view.proj)));
-      
-      auto ofs = vertex_offsets[model];
-      auto count = vertex_counts[model];
-
-      GL_FN(glDrawArrays(GL_TRIANGLES,
-			 ofs,
-			 count));
-    };
-  }
-
-  void maybe_render_cube(index_type model, transformorder to);
-
-  void render(transformorder to) const {
-    for (auto i = 0; i < model_count; ++i) {
-      render(i, to);
-    }
-  }
-    
-  index_list_type select(predicate_fn_type func) const {
-    index_list_type members;
-
-    for (auto i = 0; i < model_count; ++i) {
-      if (func(i)) {
-	members.push_back(i);
-      }
-    }
-
-    return members;
-  }
-
-  void select_draw(predicate_fn_type func) {
-    for (auto i = 0; i < model_count; ++i) {
-      draw[i] = func(i);
-    }
-  }
 
   model_type type(index_type i) const {
     return model_types[i];
   }
+
 } static g_models;
 
 struct frame_model {    
@@ -1209,16 +999,9 @@ struct pass_info {
   
   programs::id_type shader;
 
-  models::transformorder transorder;
-
   std::function<void()> init_fn;
 
-#if defined (USE_SCENE_GRAPH)
-  scene_graph::
-#else
-  models::
-#endif
-  predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
+  scene_graph::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
 
   frame::index_type envmap_id{frame::k_uninit}; // optional
 
@@ -1226,12 +1009,10 @@ struct pass_info {
   
   darray<std::string> uniform_names; // no need to set this.
 
+  darray<pass_info> subpasses;
+  
   void draw() const {
-#if defined(USE_SCENE_GRAPH)
     g_graph->draw_all();
-#else
-    g_models.render(transorder);
-#endif
   }
 
   void add_pointlight(const dpointlight& pl, int which) {
@@ -1280,13 +1061,7 @@ struct pass_info {
 	      g_uniform_storage->upload_uniform(name);
       }
 
-#if defined(USE_SCENE_GRAPH)
-      g_graph->
-#else
-      g_models.
-#endif
-
-      select_draw(select_draw_predicate);
+      g_graph->select_draw(select_draw_predicate);
       
       switch (frametype) {
         case frame_user: {
@@ -1302,7 +1077,7 @@ struct pass_info {
           state.apply();
           for (auto i = 0; i < 6; ++i) {	  
             g_view.bind_view(g_frame.rcube->set_face(envmap_id,
-                        static_cast<frame::render_cube::axis>(i)));
+                              static_cast<frame::render_cube::axis>(i)));
             draw();
           }
           g_frame.rcube->unbind();
@@ -1313,6 +1088,7 @@ struct pass_info {
       for (const auto& bind: tex_bindings) {
         g_textures.unbind(bind.id);
       }
+
       g_vertex_buffer.unbind();
     }
   }
@@ -1321,58 +1097,6 @@ struct pass_info {
 darray<pass_info> g_render_passes{};
 
 std::unordered_map<models::index_type, frame_model> g_frame_model_map{};
-
-void models::maybe_render_cube(index_type model, transformorder to) {
-    if (!framebuffer_pinned) {    
-        auto search = g_frame_model_map.find(model);
-    
-        if (search != g_frame_model_map.end()) {
-            auto& map = search->second;
-            
-            if (map.needs_render) {
-                framebuffer_pinned = true;
-
-		this->select_draw([this](const index_type& m) { return type(m) == model_sphere;});
-		
-                draw[model] = false;
-            
-                ASSERT(map.render_cube_id != frame::k_uninit);
-
-                g_frame.rcube->bind(map.render_cube_id);
-
-		GL_FN(glClearDepth(1.0f));
-		GL_FN(glDepthFunc(GL_LEQUAL));
-		GL_FN(glDepthMask(GL_TRUE));
-		GL_FN(glDepthRange(0.0, 0.5));
-
-		GL_FN(glEnable(GL_CULL_FACE));
-		GL_FN(glCullFace(GL_BACK));
-		GL_FN(glFrontFace(GL_CCW));
-		
-                bool x = false;
-                
-                for (auto i = 0; i < 6; ++i) {
-                    g_view.bind_view(g_frame.rcube->set_face(map.render_cube_id,
-                                                             static_cast<frame::render_cube::axis>(i)));
-
-		    //                    CLEAR_COLOR_DEPTH;
-                    
-                    render(to);
-                }
-
-                g_frame.rcube->unbind();
-                g_view.unbind_view();
-
-                draw[model] = true;
-                framebuffer_pinned = false;
-                map.needs_render = false;
-
-		GL_FN(glDepthRange(0.0, 1.0));
-		GL_FN(glDisable(GL_CULL_FACE));
-            }
-        }
-    }
-}
 
 struct gl_depth_func {
     GLint prev_depth;
@@ -1446,22 +1170,12 @@ static void init_render_passes() {
 
     auto shader = g_programs->skybox;
 
-    auto transform_order = models::transformorder_trs;
-
     auto init = []() {
-      g_frame.rcube->faces[0] =
-        g_frame.rcube->calc_look_at_mats( g_models.positions[g_models.modind_sphere],
-                                          TEST_SPHERE_RADIUS);
+      g_frame.rcube->faces[0] = g_frame.rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
       g_frame_model_map[g_models.modind_sphere].needs_render = true;
     };
 
-#if defined(USE_SCENE_GRAPH)
     auto select = scene_graph_select(n, n != g_graph->test_indices.sphere);
-#else
-    auto select = [](const models::index_type& m) -> bool {
-      return m != g_models.modind_sphere;
-    };
-#endif
 
     auto envmap_id = g_frame_model_map[g_models.modind_sphere].render_cube_id;
     
@@ -1474,7 +1188,6 @@ static void init_render_passes() {
       tex_bindings,
       ft,
       shader,
-      transform_order,
       init,
       select,
       envmap_id,
@@ -1503,20 +1216,12 @@ static void init_render_passes() {
 
     auto shader = g_programs->default_fb;
 
-    auto transform_order = models::transformorder_trs;
-
     auto init = []() {};
 
-#if defined(USE_SCENE_GRAPH)
     auto select = scene_graph_select(n,
 				     g_models.type(g_graph->model_indices[n]) ==
 				     models::model_quad);
-#else
-    auto select = [](const models::index_type& m) -> bool {
-      return g_models.type(m) == models::model_quad;
-    };
-#endif
-
+    
     auto envmap_id = frame::k_uninit;
     
     auto active = true;
@@ -1528,7 +1233,6 @@ static void init_render_passes() {
       {}, // textures
       ft,
       shader,
-      transform_order,
       init,
       select,
       envmap_id,
@@ -1566,21 +1270,12 @@ static void init_render_passes() {
 
     auto shader = g_programs->sphere_cubemap;
 
-    auto transform_order = models::transformorder_trs;
-
     auto init = []() {
       g_uniform_storage->set_uniform("unif_CameraPosition", g_view.position);
     };
-
     
-#if defined(USE_SCENE_GRAPH)
     auto select = scene_graph_select(n,
 				     n == g_graph->test_indices.sphere);
-#else
-    auto select = [](const models::index_type& m) -> bool {
-      return m == g_models.modind_sphere;
-    };
-#endif
 
     auto envmap_id = frame::k_uninit;
     auto active = true;
@@ -1592,7 +1287,6 @@ static void init_render_passes() {
       tex_bindings,
       ft,
       shader,
-      transform_order,
       init,
       select,
       envmap_id,
@@ -1611,6 +1305,7 @@ static void init_render_passes() {
     darray<duniform> unifs;
 		 
     unifs.push_back(DUNIFINT(unif_TexCubeMap, 0));
+    
     unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
 
@@ -1628,16 +1323,10 @@ static void init_render_passes() {
 
     auto shader = g_programs->skybox;
 
-    auto transform_order = models::transformorder_trs;
-
     auto init = []() {};
     
-#if defined(USE_SCENE_GRAPH)
     auto select = scene_graph_select(n, n == g_graph->test_indices.area_sphere);
-#else
-    auto select = [](const models::index_type& m) -> bool {
-      return m == g_models.modind_area_sphere; };
-#endif
+
     auto envmap_id = frame::k_uninit;
     
     auto active = true;
@@ -1649,7 +1338,6 @@ static void init_render_passes() {
       tex_bindings,
       ft,
       shader,
-      transform_order,
       init,
       select,
       envmap_id,
@@ -1670,54 +1358,20 @@ static void init_api_data() {
     GL_FN(glGenVertexArrays(1, &g_vao));
     GL_FN(glBindVertexArray(g_vao));
 
-    g_models.modind_sphere = g_models.new_sphere(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
-    g_models.modind_area_sphere = g_models.new_sphere(ROOM_SPHERE_POS, ROOM_SPHERE_RADIUS);    
+    g_models.modind_sphere = g_models.new_sphere( );
+    g_models.modind_area_sphere = g_models.new_sphere( );
     
     frame_model fmod{};
-    fmod.render_cube_id = g_frame.add_render_cube(g_models.positions[g_models.modind_sphere],
+    fmod.render_cube_id = g_frame.add_render_cube(TEST_SPHERE_POS,
                                                   TEST_SPHERE_RADIUS);
     
     g_frame_model_map[g_models.modind_sphere] = fmod;
     
     g_checkerboard_cubemap = g_textures.new_cubemap(256, 256, GL_RGBA);
-
-#if 0
-    auto sb = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
-    auto sc = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
-    auto sd = g_models.new_sphere(vec3_t{R(0.0)}, R(1.0));
-
-    g_models.place_above(sb, g_models.modind_sphere);
-    g_models.place_above(sc, sb);
-    g_models.place_above(sd, sc);
-#endif
     
-    g_models.modind_skybox = g_models.new_cube();
-
     real_t wall_size = R(15.0);
     
-    g_models.new_wall(R3(0.0),
-		      models::wall_bottom,
-		      R3(wall_size),
-		      R4v(0.1, 0.2, 0.3, 1.0));
-    //    g_models.new_wall(R3v(-wall_size, 0.0, 0.0), models::wall_left, R3(wall_size), R4v(0.0, 0.0, 0.3, 1.0));
-    //g_models.new_wall(R3v(wall_size, 0.0, 0.0), models::wall_right, R3(wall_size), R4v(0.3, 0.5, 0.0, 1.0));
-    
     g_vertex_buffer.reset();
-
-#define p(path__) fs::path("skybox0") / fs::path(path__ ".jpg")
-    textures::cubemap_paths_type paths = {
-        p("right"),
-        p("left"),
-        p("top"),
-        p("bottom"),
-        p("front"),
-        p("back")
-    };
-#undef p
-
-    g_models.scales[g_models.modind_skybox] = vec3_t(500.0f);
-
-    g_skybox_texture = g_textures.new_cubemap(paths);
 
     g_graph.reset(new scene_graph{});
 
@@ -1754,10 +1408,7 @@ static void init_api_data() {
       floor.scale = R3v(1.0, 1.0, 1.0);
       floor.angle = vec3_t{0};
 
-      floor.model = g_models.new_wall(R3(0.0),
-		      models::wall_bottom,
-		      R3(wall_size),
-		      R4v(1.0, 1.0, 1.0, 1.0));
+      floor.model = g_models.new_wall(models::wall_bottom, R4v(1.0, 1.0, 1.0, 1.0));
       
       floor.parent = g_graph->test_indices.area_sphere;
       
