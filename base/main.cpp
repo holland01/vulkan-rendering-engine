@@ -1139,7 +1139,7 @@ static const dpointlight g_pointlight{
 };
 
 void add_pointlights(pass_info& p) {
-  if (p.name == "floor" || p.name == "room") {
+  if (p.name == "floor" || p.name == "room" || p.name == "envmap") {
     p.add_pointlight(g_pointlight, 0);
   }
 }
