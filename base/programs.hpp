@@ -53,8 +53,19 @@ struct fshader_params {
   const std::string input_color{"frag_Color"};
 };
 
-#define VSHADER_POINTLIGHTS vshader_in_normal | vshader_frag_position | vshader_frag_color | vshader_frag_normal | vshader_unif_model
-#define FSHADER_POINTLIGHTS fshader_frag_normal | fshader_frag_position | fshader_frag_color | fshader_lights
+typedef uint32_t shadergen_flags_t; 
+
+static constexpr shadergen_flags_t fshader_pos_color_normal() {
+  return fshader_frag_normal | fshader_frag_position | fshader_frag_color;
+}
+
+static constexpr shadergen_flags_t vshader_frag_pos_color_normal() {
+  return vshader_frag_normal | vshader_frag_position | vshader_frag_color;
+}
+
+#define VSHADER_POINTLIGHTS vshader_frag_pos_color_normal() | vshader_in_normal | vshader_unif_model
+#define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights
+
 
 struct dpointlight {
   vec3_t position;
@@ -134,7 +145,8 @@ struct programs : public type_module {
 
   static inline uint32_t vshader_count{0};
   static inline uint32_t fshader_count{0};
-  static std::string gen_vshader(uint32_t flags) {
+
+  static std::string gen_vshader(shadergen_flags_t flags, const std::string& name="UNSPECIFIED") {
     std::stringstream ss;
 
     bool in_normal = flags & vshader_in_normal;
@@ -204,15 +216,17 @@ struct programs : public type_module {
 
     auto s = ss.str();
 
-    write_logf("\n----------vshader %" PRIu32 "----------\n%s\n\n\n", 
-                vshader_count, s.c_str());
+    write_logf("\n----------vshader %" PRIu32 " (%s)----------\n%s\n\n\n", 
+                vshader_count, name.c_str(), s.c_str());
 
     vshader_count++;
 
     return s;
   }
 
-  static std::string gen_fshader(uint32_t flags, fshader_params p=fshader_params{}) {
+  static std::string gen_fshader( shadergen_flags_t flags, 
+                                  fshader_params p=fshader_params{}, 
+                                  const std::string& name = "UNSPECIFIED") {
     std::stringstream ss;
 
     bool frag_position = flags & fshader_frag_position;
@@ -341,8 +355,8 @@ struct programs : public type_module {
 
     auto s = ss.str();
 
-    write_logf("\n---------fshader %" PRIu32 "-----------\n%s\n\n\n", 
-                fshader_count, s.c_str());
+    write_logf("\n---------fshader %" PRIu32 " (%s)-----------\n%s\n\n\n", 
+                fshader_count, name.c_str(), s.c_str());
 
     fshader_count++;
 
