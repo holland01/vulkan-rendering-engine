@@ -481,11 +481,7 @@ struct programs : public type_module {
              frag_Position = vec3(unif_Model * vec4(in_Position, 1.0));
            }),
 #else
-      gen_vshader(vshader_in_normal | 
-                  vshader_frag_position | 
-                  vshader_frag_color |
-                  vshader_frag_normal |
-                  vshader_unif_model),
+      gen_vshader(vshader_in_normal | vshader_frag_pos_color_normal()),
 #endif           
 
 #if 0      
@@ -505,9 +501,7 @@ struct programs : public type_module {
               fb_Color = x;
             }),
 #else
-      gen_fshader(fshader_frag_position |
-                  fshader_frag_color | 
-                  fshader_frag_normal |
+      gen_fshader(fshader_pos_color_normal() |
                   fshader_unif_texcubemap |
                   fshader_reflect),
 #endif
