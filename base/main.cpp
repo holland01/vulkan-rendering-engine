@@ -1510,12 +1510,19 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 #define MAP_MOVE_STATE_TRUE(key, dir) case key: g_cam_move_state.dir = true; break
 #define MAP_MOVE_STATE_FALSE(key, dir) case key: g_cam_move_state.dir = false; break
 
+#if BREAK_COMPILATION
 #define MAP_MOVE_SELECT_STATE_TRUE(key, dir)    \
     case key: {                                 \
         if (g_models.has_select_model_state()){ \
             g_select_move_state.dir = true;     \
         }                                       \
     } break
+#else
+#define MAP_MOVE_SELECT_STATE_TRUE(key, dir)    \
+    case key: {                                 \
+        write_logf("MAP_MOVE_SELECT_STATE_TRUE needs TO BE REIMPLEMENTED"); \
+    } break
+#endif 
 
 #define MAP_MOVE_SELECT_STATE_FALSE(key, dir) case key: g_select_move_state.dir = false; break
     
@@ -1555,8 +1562,13 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
                       g_unif_gamma_correct = !g_unif_gamma_correct;
                       toggle_framebuffer_srgb());
 
+#if BREAK_COMPILATION
             KEY_BLOCK(GLFW_KEY_R,
                       g_models.reset_select_model_state());
+#else 
+            KEY_BLOCK(GLFW_KEY_R,
+                      write_logf("g_models.reset_select_model_state"));
+#endif
 
 	    KEY_BLOCK(GLFW_KEY_M,
 		      g_reflect = !g_reflect);
@@ -1703,7 +1715,9 @@ public:
         
         if (success) {
             std::cout << "HIT\n";
+            #if 0
             g_models.set_select_model_state(model);
+            #endif
         } else {
             std::cout << "NO HIT\n";
             clear_model_selection();
@@ -1726,10 +1740,16 @@ public:
     }
     
     auto calc_new_selected_position() const {
-
-        
         if (select.calc) {
-            vec3_t Po{g_models.positions[g_models.modind_selected]};
+            ASSERT(false);
+            
+            #if 0
+            vec3_t Po{g_models.positions[g_models.modind_selected]}; 
+            #else
+            vec3_t Po{R(1.0)};
+            #endif
+            DEBUGLINE;
+
             vec3_t UPcam{glm::normalize(glm::inverse(g_view.orient)[1])};
             
             vec3_t Fo{Po - g_view.position}; // negated z-axis of transform defined by the plane of interest
@@ -1752,8 +1772,6 @@ public:
                       << AS_STRING_GLM_SS(select.normal) << "\n"
                       << AS_STRING_GLM_SS(select.point) << "\n"
                       << "----------------------" << std::endl;
-                
-                
         }
 
         real_t cam_dist{g_geom.dist_point_plane(g_view.position,
@@ -1777,16 +1795,20 @@ public:
     }
 
     void scan_object_selection() const {
+      #if BREAK_COMPILATION
         models::index_list_type filtered =
             g_models.select([](const models::index_type& id) -> bool {
-                    return g_models.type(id) == models::model_sphere;
-                });
+              return g_models.type(id) == models::model_sphere;
+            });
+        
         
         for (auto id: filtered) {
             if (cast_ray(id)) {
                 break;
             }
         }
+        #endif 
+        DEBUGLINE;
     }
 
     void unselect() {
@@ -1796,7 +1818,10 @@ public:
 } g_click_state;
 
 void clear_model_selection() {
+    #if 0
     g_models.clear_select_model_state();
+    #endif
+    DEBUGLINE;
     g_click_state.unselect();
 }
 
@@ -1825,15 +1850,16 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
     } else {
         g_cam_orient.prev_xpos = xpos;
         g_cam_orient.prev_ypos = ypos;
-
+ #if 0       
         if (g_models.has_select_model_state()) {
             g_models.move(g_models.modind_selected,
                           g_click_state.calc_new_selected_position(),
                           models::mop_set);
         }
+#endif
+      DEBUGLINE;
     } 
 }
-
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
@@ -1908,9 +1934,9 @@ int main(void) {
     while (!glfwWindowShouldClose(window)) {
         g_view(g_cam_move_state);
 
-        if (g_models.has_select_model_state()) {
-            g_models.update_select_model_state();
-        }
+//        if (g_models.has_select_model_state()) {
+//            g_models.update_select_model_state();
+//        }
         
         render();
 
@@ -1930,3 +1956,93 @@ error:
     glfwTerminate();
     exit(EXIT_FAILURE);
 }
+
+
+
+// old model object selection/placement code
+#if 0 
+
+  void clear_select_model_state() {
+    if (modind_selected != k_uninit) {
+      // TODO: cleanup select state for previous model here
+    }
+
+    modind_selected = k_uninit;
+  }
+    
+  void set_select_model_state(index_type model) {
+    clear_select_model_state();
+
+    modind_selected = model;
+    model_select_reset_pos = positions[model];
+  }
+
+  bool has_select_model_state() const {
+    return modind_selected != k_uninit;
+  }
+
+#define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)	\
+  if (g_select_move_state.dir) { update.axis += amount;  }
+
+  // This is continuously called in the main loop,
+  // so it's important that we don't assume
+  // that this function is alaways called when
+  // a valid index hits.
+  void update_select_model_state() {
+    ASSERT(has_select_model_state());
+
+    vec3_t update{R(0.0)};
+        
+    MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
+
+    MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
+
+    MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
+
+    move(modind_selected, update, mop_add);
+  }
+
+  void reset_select_model_state() {
+    if (has_select_model_state()) {
+      move(modind_selected, model_select_reset_pos, mop_set);
+    }
+  }
+    
+#undef MAP_UPDATE_SELECT_MODEL_STATE
+
+  enum _move_op {
+    mop_add,
+    mop_sub,
+    mop_set
+  };
+    
+  void move(index_type model, const vec3_t& position, _move_op mop) {
+    switch (mop) {
+    case mop_add: positions[model] += position; break;
+    case mop_sub: positions[model] -= position; break;
+    case mop_set: positions[model] = position; break;
+    }
+
+    bound_volumes[model].center = positions[model];
+  }
+
+  // Place model 'a' ontop of model 'b'.
+  // Right now we only care about bounding spheres
+  void place_above(index_type a, index_type b) {
+    ASSERT(bound_volumes[a].type == geom::bvol::type_sphere);
+    ASSERT(bound_volumes[b].type == geom::bvol::type_sphere);
+
+    vec3_t a_position{positions[b]};
+
+    auto arad = bound_volumes[a].radius;
+    auto brad = bound_volumes[b].radius;
+
+    a_position.y += arad + brad;
+
+    move(a, a_position, mop_set);
+  }
+
+#endif //
