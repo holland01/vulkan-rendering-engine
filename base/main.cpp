@@ -126,8 +126,8 @@ struct view_data {
 
     void reset_proj() {
         set_proj_from_fovy(45.0f);
-        skyproj = glm::perspective(120.0f, calc_aspect(), skynearp, skyfarp);
-        cubeproj = glm::perspective(90.0f, calc_aspect(), nearp, farp);
+        skyproj = glm::perspective(45.0f, calc_aspect(), skynearp, skyfarp);
+        cubeproj = glm::perspective(45.0f, calc_aspect(), nearp, farp);
     }
 
     void set_proj_from_fovy(real_t fovy) {
@@ -1149,9 +1149,9 @@ static void init_render_passes() {
   // environment map pass
   {
     gl_state state{};
-    state.clear_buffers.depth = false;
-    state.clear_buffers.color = false;
-    state.depth.range_far = 0.5;
+    state.clear_buffers.depth = true;
+    state.clear_buffers.color = true;
+    state.depth.range_far = 1.0;
     state.face_cull.enabled = true;
     
     darray<duniform> unifs;
@@ -1440,8 +1440,6 @@ static void render() {
   for (auto& pass: g_render_passes) {
     pass.apply();
   }
-
-  g_render_passes[0].active = false;
 }
 
 static void error_callback(int error, const char* description) {
