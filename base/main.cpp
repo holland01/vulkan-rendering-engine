@@ -1074,10 +1074,11 @@ struct pass_info {
           ASSERT(envmap_id != frame::k_uninit);
           g_models.framebuffer_pinned = true;
           g_frame.rcube->bind(envmap_id);
-          state.apply();
+         
           for (auto i = 0; i < 6; ++i) {	  
             g_view.bind_view(g_frame.rcube->set_face(envmap_id,
                               static_cast<frame::render_cube::axis>(i)));
+            state.apply();
             draw();
           }
           g_frame.rcube->unbind();
@@ -1152,7 +1153,7 @@ static void init_render_passes() {
     state.clear_buffers.depth = true;
     state.clear_buffers.color = true;
     state.depth.range_far = 1.0;
-    state.face_cull.enabled = true;
+    state.face_cull.enabled = false;
     
     darray<duniform> unifs;
 		 
