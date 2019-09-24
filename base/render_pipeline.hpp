@@ -90,8 +90,6 @@ struct gl_state {
   struct {
     double range_near{0.0}; // [0, 1.0]
     double range_far{1.0}; // [0, 1.0] (far can be less than near as well)
-
-    float clear{1.0f};
     
     GLenum func{GL_LEQUAL}; // GL_LESS, GL_LEQUAL, GL_GEQUAL, GL_GREATER, GL_ALWAYS, GL_NEVER
 
@@ -110,12 +108,29 @@ struct gl_state {
   } face_cull{};
 
   struct {
+    vec4_t color_value{R(1.0)};
+    real_t depth_value{R(1.0)};
+
     bool depth{false};
     bool color{false};
   } clear_buffers;
 
+  struct {
+    bool fbo{false};
+  } draw_buffers;
+
   void apply() const {
-    GL_FN(glClearDepth(depth.clear));
+    if (draw_buffers.fbo) {
+      GLenum b[] = {
+        GL_COLOR_ATTACHMENT0
+      };
+      GL_FN(glDrawBuffers(1, b));
+    } else {
+      GLenum b[] = {
+        GL_BACK_LEFT
+      };
+      GL_FN(glDrawBuffers(1, b));
+    }
 
     if (depth.test_enabled) {
       GL_FN(glEnable(GL_DEPTH_TEST));
@@ -135,12 +150,23 @@ struct gl_state {
       GL_FN(glDisable(GL_CULL_FACE));
     }
 
+    if (clear_buffers.depth) {
+      GL_FN(glClearDepth(clear_buffers.depth_value));
+    }
+
+    if (clear_buffers.color) {
+      GL_FN(glClearColor(clear_buffers.color_value.r,
+                         clear_buffers.color_value.g,
+                         clear_buffers.color_value.b,
+                         clear_buffers.color_value.a));
+    }
+
     {
       GLenum bits = 0;
       bits = clear_buffers.color ? (bits | GL_COLOR_BUFFER_BIT) : bits;
       bits = clear_buffers.depth ? (bits | GL_DEPTH_BUFFER_BIT) : bits;
       if (bits != 0) {
-	GL_FN(glClear(bits));
+        GL_FN(glClear(bits));
       }
     }
   }

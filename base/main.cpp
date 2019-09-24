@@ -1269,8 +1269,8 @@ static void init_render_passes() {
     gl_state state{};
     state.clear_buffers.depth = true;
     state.clear_buffers.color = true;
-    state.depth.range_far = 1.0;
     state.face_cull.enabled = false;
+    state.draw_buffers.fbo = true;
     
     darray<duniform> unifs;
 		 
