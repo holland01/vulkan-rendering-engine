@@ -65,6 +65,14 @@ struct geom {
         }
     };
 
+    bvol make_bsphere(float radius, const vec3_t& center) {
+        bvol b{};
+        b.type = bvol::type_sphere;
+        b.radius = radius;
+        b.center = center;
+        return b;
+    }
+
     bool test_ray_sphere(ray& r, const bvol& s) {
         ASSERT(s.type == bvol::type_sphere);
 

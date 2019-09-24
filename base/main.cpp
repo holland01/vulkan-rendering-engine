@@ -690,6 +690,7 @@ struct scene_graph {
   using predicate_fn_type = std::function<bool(const index_type& n)>;
   
   darray<darray<index_type>> child_lists;
+  darray<geom::bvol> bound_volumes;
   darray<vec3_t> positions;
   darray<vec3_t> angles;
   darray<vec3_t> scales;
@@ -698,6 +699,7 @@ struct scene_graph {
   darray<models::index_type> model_indices;
   darray<index_type> parent_nodes;
   darray<bool> draw;
+  darray<bool> pickable; // can be selected by the mouse
 
   struct test_indices_s {
     index_type sphere{unset<index_type>()};
@@ -709,18 +711,21 @@ struct scene_graph {
   test_indices_s test_indices;
   
   struct init_info {
+    geom::bvol bvol;
     vec3_t position, angle, scale;
     boolvec3_t accum;
     models::index_type model;
     index_type parent;
     bool draw;
+    bool pickable;
 
     init_info()
       : position(R(0)), angle(R(0)), scale(R(1)),
         accum(true, true, false),
         model(unset<models::index_type>()),
         parent(0),
-        draw(true)
+        draw(true),
+        pickable(false)
     {}
   };
 
@@ -756,6 +761,7 @@ struct scene_graph {
   int depth(index_type node) const;
 
   void select_draw(predicate_fn_type func);
+  darray<index_type> select(predicate_fn_type func) const;
 };
 
 struct node_id {
@@ -801,6 +807,7 @@ scene_graph::scene_graph()
   : test_indices()
 {
   // root initialization
+  bound_volumes.push_back(geom::bvol{});
   child_lists.push_back(darray<index_type>());
   positions.push_back(vec3_t{R(0)});
   scales.push_back(vec3_t{R(1)});
@@ -810,6 +817,7 @@ scene_graph::scene_graph()
   model_indices.push_back(unset<models::index_type>());
   parent_nodes.push_back(unset<index_type>());
   draw.push_back(false);
+  pickable.push_back(false);
 
   #if 0
   test_indices.sphere = unset<index_type>();
@@ -821,6 +829,7 @@ scene_graph::scene_graph()
 scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info) {
   auto index = child_lists.size();
 
+  bound_volumes.push_back(info.bvol);
   child_lists.push_back(darray<index_type>());
   positions.push_back(info.position);
   scales.push_back(info.scale);
@@ -830,6 +839,7 @@ scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info
   model_indices.push_back(info.model);
   parent_nodes.push_back(info.parent);
   draw.push_back(info.draw);
+  pickable.push_back(info.pickable);
 
   ASSERT(info.parent != unset<index_type>());
   ASSERT(info.parent < child_lists.size());
@@ -953,7 +963,7 @@ void scene_graph::draw_all() const {
   draw_all(0, m4i());
 }
 
-int scene_graph::depth(index_type node) const {
+int scene_graph::depth(scene_graph::index_type node) const {
   ASSERT(!is_root(node));
   
   int d = 0;
@@ -973,7 +983,113 @@ void scene_graph::select_draw(predicate_fn_type func) {
   }
 }
 
+darray<scene_graph::index_type> scene_graph::select(predicate_fn_type func) const {
+  darray<index_type> ret;
+  for (auto i = 0; i < child_lists.size(); ++i) {
+    auto e = static_cast<index_type>(i);
+    if (func(e)) {
+      ret.push_back(e);
+    }
+  }
+  return ret;
+}
+
 static std::unique_ptr<scene_graph> g_graph{nullptr};
+
+struct object_manip {
+  using index_type = scene_graph::index_type;
+
+  static const inline index_type k_unset = unset<index_type>();
+
+  vec3_t entity_select_reset_pos{R(0)};
+  index_type entity_selected{k_unset};
+
+  void clear_select_model_state() {
+    if (entity_selected != k_unset) {
+      // TODO: cleanup select state for previous model here
+    }
+
+    entity_selected = k_unset;
+  }
+    
+  void set_select_model_state(scene_graph::index_type entity) {
+    clear_select_model_state();
+
+    entity_selected = entity;
+    entity_select_reset_pos = g_graph->positions[entity];
+  }
+
+  bool has_select_model_state() const {
+    return entity_selected != k_unset;
+  }
+
+#define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)	\
+  if (g_select_move_state.dir) { update.axis += amount;  }
+
+  // This is continuously called in the main loop,
+  // so it's important that we don't assume
+  // that this function is alaways called when
+  // a valid index hits.
+  void update_select_model_state() {
+    ASSERT(has_select_model_state());
+
+    vec3_t update{R(0.0)};
+    auto OBJECT_SELECT_MOVE_STEP = g_graph->bound_volumes[entity_selected].radius;
+
+    MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
+
+    MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
+
+    MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
+    MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
+
+    move(entity_selected, update, mop_add);
+  }
+
+  void reset_select_model_state() {
+    if (has_select_model_state()) {
+      move(entity_selected, entity_select_reset_pos, mop_set);
+    }
+  }
+    
+#undef MAP_UPDATE_SELECT_MODEL_STATE
+
+  enum _move_op {
+    mop_add,
+    mop_sub,
+    mop_set
+  };
+    
+  void move(index_type entity, const vec3_t& position, _move_op mop) {
+    switch (mop) {
+    case mop_add: g_graph->positions[entity] += position; break;
+    case mop_sub: g_graph->positions[entity] -= position; break;
+    case mop_set: g_graph->positions[entity] = position; break;
+    }
+
+    g_graph->bound_volumes[entity].center = g_graph->positions[entity];
+  }
+
+  // Place model 'a' ontop of model 'b'.
+  // Right now we only care about bounding spheres
+  void place_above(index_type a, index_type b) {
+    ASSERT(g_graph->bound_volumes[a].type == geom::bvol::type_sphere);
+    ASSERT(g_graph->bound_volumes[b].type == geom::bvol::type_sphere);
+
+    vec3_t a_position{g_graph->positions[b]};
+
+    auto arad = g_graph->bound_volumes[a].radius;
+    auto brad = g_graph->bound_volumes[b].radius;
+
+    a_position.y += arad + brad;
+
+    move(a, a_position, mop_set);
+  }
+};
+
+static std::unique_ptr<object_manip> g_obj_manip{new object_manip()};
 
 static std::unique_ptr<shader_uniform_storage> g_uniform_storage{new shader_uniform_storage()};
 
@@ -1385,7 +1501,8 @@ static void init_api_data() {
 
       sphere.model = g_models.modind_area_sphere;
       sphere.parent = 0;
-      
+      sphere.bvol = g_geom.make_bsphere(ROOM_SPHERE_RADIUS, ROOM_SPHERE_POS);
+
       g_graph->test_indices.area_sphere = g_graph->new_node(sphere);
     }
     
@@ -1398,7 +1515,9 @@ static void init_api_data() {
 
       sphere.model = g_models.modind_sphere;
       sphere.parent = g_graph->test_indices.area_sphere;
-      
+      sphere.pickable = true;
+      sphere.bvol = g_geom.make_bsphere(TEST_SPHERE_RADIUS, TEST_SPHERE_POS);
+
       g_graph->test_indices.sphere = g_graph->new_node(sphere);
     }
     
@@ -1509,19 +1628,12 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 #define MAP_MOVE_STATE_TRUE(key, dir) case key: g_cam_move_state.dir = true; break
 #define MAP_MOVE_STATE_FALSE(key, dir) case key: g_cam_move_state.dir = false; break
 
-#if BREAK_COMPILATION
 #define MAP_MOVE_SELECT_STATE_TRUE(key, dir)    \
     case key: {                                 \
-        if (g_models.has_select_model_state()){ \
+        if (g_obj_manip->has_select_model_state()){ \
             g_select_move_state.dir = true;     \
         }                                       \
     } break
-#else
-#define MAP_MOVE_SELECT_STATE_TRUE(key, dir)    \
-    case key: {                                 \
-        write_logf("MAP_MOVE_SELECT_STATE_TRUE needs TO BE REIMPLEMENTED"); \
-    } break
-#endif 
 
 #define MAP_MOVE_SELECT_STATE_FALSE(key, dir) case key: g_select_move_state.dir = false; break
     
@@ -1561,13 +1673,8 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
                       g_unif_gamma_correct = !g_unif_gamma_correct;
                       toggle_framebuffer_srgb());
 
-#if BREAK_COMPILATION
             KEY_BLOCK(GLFW_KEY_R,
-                      g_models.reset_select_model_state());
-#else 
-            KEY_BLOCK(GLFW_KEY_R,
-                      write_logf("g_models.reset_select_model_state"));
-#endif
+                      g_obj_manip->reset_select_model_state());
 
 	    KEY_BLOCK(GLFW_KEY_M,
 		      g_reflect = !g_reflect);
@@ -1702,21 +1809,19 @@ public:
         return glm::inverse(g_view.proj * g_view.view()) * mouse;
     }
     
-    bool cast_ray(models::index_type model) const {
+    bool cast_ray(scene_graph::index_type entity) const {
         vec3_t nearp = screen_out();
         geom::ray world_raycast{}; 
         world_raycast.dir = glm::normalize(nearp - g_view.position);
         world_raycast.orig = g_view.position;
 
-        auto bvol = g_models.bound_volumes[model];
+        auto bvol = g_graph->bound_volumes[entity];
 
         bool success = g_geom.test_ray_sphere(world_raycast, bvol);
         
         if (success) {
             std::cout << "HIT\n";
-            #if 0
-            g_models.set_select_model_state(model);
-            #endif
+            g_obj_manip->set_select_model_state(entity);
         } else {
             std::cout << "NO HIT\n";
             clear_model_selection();
@@ -1740,14 +1845,9 @@ public:
     
     auto calc_new_selected_position() const {
         if (select.calc) {
-            ASSERT(false);
+            //ASSERT(false);
             
-            #if 0
-            vec3_t Po{g_models.positions[g_models.modind_selected]}; 
-            #else
-            vec3_t Po{R(1.0)};
-            #endif
-            DEBUGLINE;
+            vec3_t Po{g_graph->positions[g_obj_manip->entity_selected]}; 
 
             vec3_t UPcam{glm::normalize(glm::inverse(g_view.orient)[1])};
             
@@ -1794,19 +1894,18 @@ public:
     }
 
     void scan_object_selection() const {
-      #if BREAK_COMPILATION
-        models::index_list_type filtered =
-            g_models.select([](const models::index_type& id) -> bool {
-              return g_models.type(id) == models::model_sphere;
-            });
-        
+        auto filtered = 
+          g_graph->select(scene_graph_select(entity, 
+                                             g_models.type(g_graph->model_indices[entity]) == 
+                                              models::model_sphere && 
+                                              g_graph->pickable[entity] == true));
         
         for (auto id: filtered) {
             if (cast_ray(id)) {
                 break;
             }
         }
-        #endif 
+
         DEBUGLINE;
     }
 
@@ -1817,9 +1916,7 @@ public:
 } g_click_state;
 
 void clear_model_selection() {
-    #if 0
-    g_models.clear_select_model_state();
-    #endif
+    g_obj_manip->clear_select_model_state();
     DEBUGLINE;
     g_click_state.unselect();
 }
@@ -1849,13 +1946,12 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
     } else {
         g_cam_orient.prev_xpos = xpos;
         g_cam_orient.prev_ypos = ypos;
- #if 0       
-        if (g_models.has_select_model_state()) {
-            g_models.move(g_models.modind_selected,
-                          g_click_state.calc_new_selected_position(),
-                          models::mop_set);
+     
+        if (g_obj_manip->has_select_model_state()) {
+            g_obj_manip->move(g_obj_manip->entity_selected,
+                              g_click_state.calc_new_selected_position(),
+                              object_manip::mop_set);
         }
-#endif
       DEBUGLINE;
     } 
 }
@@ -1933,10 +2029,10 @@ int main(void) {
     while (!glfwWindowShouldClose(window)) {
         g_view(g_cam_move_state);
 
-//        if (g_models.has_select_model_state()) {
-//            g_models.update_select_model_state();
-//        }
-        
+        if (g_obj_manip->has_select_model_state()) {
+            g_obj_manip->update_select_model_state();
+        }
+
         render();
 
         glfwSwapBuffers(window);
@@ -1955,93 +2051,3 @@ error:
     glfwTerminate();
     exit(EXIT_FAILURE);
 }
-
-
-
-// old model object selection/placement code
-#if 0 
-
-  void clear_select_model_state() {
-    if (modind_selected != k_uninit) {
-      // TODO: cleanup select state for previous model here
-    }
-
-    modind_selected = k_uninit;
-  }
-    
-  void set_select_model_state(index_type model) {
-    clear_select_model_state();
-
-    modind_selected = model;
-    model_select_reset_pos = positions[model];
-  }
-
-  bool has_select_model_state() const {
-    return modind_selected != k_uninit;
-  }
-
-#define MAP_UPDATE_SELECT_MODEL_STATE(dir, axis, amount)	\
-  if (g_select_move_state.dir) { update.axis += amount;  }
-
-  // This is continuously called in the main loop,
-  // so it's important that we don't assume
-  // that this function is alaways called when
-  // a valid index hits.
-  void update_select_model_state() {
-    ASSERT(has_select_model_state());
-
-    vec3_t update{R(0.0)};
-        
-    MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
-    MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
-
-    MAP_UPDATE_SELECT_MODEL_STATE(right, x, OBJECT_SELECT_MOVE_STEP);
-    MAP_UPDATE_SELECT_MODEL_STATE(left, x, -OBJECT_SELECT_MOVE_STEP);
-
-    MAP_UPDATE_SELECT_MODEL_STATE(up, y, OBJECT_SELECT_MOVE_STEP);
-    MAP_UPDATE_SELECT_MODEL_STATE(down, y, -OBJECT_SELECT_MOVE_STEP);
-
-    move(modind_selected, update, mop_add);
-  }
-
-  void reset_select_model_state() {
-    if (has_select_model_state()) {
-      move(modind_selected, model_select_reset_pos, mop_set);
-    }
-  }
-    
-#undef MAP_UPDATE_SELECT_MODEL_STATE
-
-  enum _move_op {
-    mop_add,
-    mop_sub,
-    mop_set
-  };
-    
-  void move(index_type model, const vec3_t& position, _move_op mop) {
-    switch (mop) {
-    case mop_add: positions[model] += position; break;
-    case mop_sub: positions[model] -= position; break;
-    case mop_set: positions[model] = position; break;
-    }
-
-    bound_volumes[model].center = positions[model];
-  }
-
-  // Place model 'a' ontop of model 'b'.
-  // Right now we only care about bounding spheres
-  void place_above(index_type a, index_type b) {
-    ASSERT(bound_volumes[a].type == geom::bvol::type_sphere);
-    ASSERT(bound_volumes[b].type == geom::bvol::type_sphere);
-
-    vec3_t a_position{positions[b]};
-
-    auto arad = bound_volumes[a].radius;
-    auto brad = bound_volumes[b].radius;
-
-    a_position.y += arad + brad;
-
-    move(a, a_position, mop_set);
-  }
-
-#endif //
