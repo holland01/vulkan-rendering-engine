@@ -1580,10 +1580,20 @@ struct camera_orientation {
     double dx;
     double dy;
 
+    double sdx;
+    double sdy;
+
     bool active;
 } static g_cam_orient = {
-    0.0, 0.0,
-    0.0, 0.0,
+    0.0, 
+    0.0,
+    
+    0.0, 
+    0.0,
+    
+    0.0,
+    0.0,
+    
     false
 };
 
@@ -1865,7 +1875,11 @@ public:
         vec3_t s2w{screen_out()};
         s2w.x *= 10.0;
         s2w.y *= 2.0;
+        //s2w.y *= 10.0;
+        std::cout << AS_STRING_GLM_SS(s2w) << std::endl;
 
+        //s2w.x += g_cam_orient.sdx * 3.0;
+        //s2w.y += g_cam_orient.sdy * 3.0;
 
         vec3_t new_pos{g_geom.proj_point_plane(s2w, select.normal, select.point)};
 
@@ -1901,15 +1915,28 @@ void clear_model_selection() {
 }
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-    if (g_cam_orient.active) {
-        double scale = 0.01;
-
+    auto dxdy = [xpos, ypos](double scale) {
         g_cam_orient.dx = xpos - g_cam_orient.prev_xpos;
-        g_cam_orient.dy = g_cam_orient.prev_ypos - ypos;
+        g_cam_orient.dy = ypos - g_cam_orient.prev_ypos; //g_cam_orient.prev_ypos - ypos;
 
         g_cam_orient.dx *= scale;
         g_cam_orient.dy *= scale;
 
+        g_cam_orient.sdx = (g_cam_orient.dx > 0.0 
+                                            ? 1.0 
+                                            : (g_cam_orient.dx == 0.0 
+                                                               ? 0.0 
+                                                               : -1.0));
+
+        g_cam_orient.sdy = (g_cam_orient.dy < 0.0 
+                                            ? 1.0 
+                                            : (g_cam_orient.dy == 0.0 
+                                                               ? 0.0 
+                                                               : -1.0));
+    };
+
+    if (g_cam_orient.active) {
+        dxdy(0.01);
         g_cam_orient.prev_xpos = xpos;
         g_cam_orient.prev_ypos = ypos;
 
@@ -1923,6 +1950,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 
         g_view.orient = mat3_t(yRot * xRot) * g_view.orient;
     } else {
+        dxdy(1.0);
         g_cam_orient.prev_xpos = xpos;
         g_cam_orient.prev_ypos = ypos;
      
