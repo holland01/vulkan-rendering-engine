@@ -1849,46 +1849,20 @@ public:
             
             vec3_t Po{g_graph->positions[g_obj_manip->entity_selected]}; 
 
-            vec3_t UPcam{glm::normalize(glm::inverse(g_view.orient)[1])};
-            
             vec3_t Fo{Po - g_view.position}; // negated z-axis of transform defined by the plane of interest
-            vec3_t Vright{glm::cross(UPcam, Fo)}; // x-axis of transform defined by the plane of interest
-            vec3_t Fup{glm::cross(Fo, Vright)}; // y-axis of transform defined by the plane of interest
-            
-            select.plane = mat4_t(vec4_t{-glm::normalize(Vright), R(0.0)}, 
-                                  vec4_t{glm::normalize(Fup), R(0.0)},
-                                  vec4_t{-glm::normalize(Fo), R(0.0)},
-                                  vec4_t{Po, R(1.0)});
-
 
             select.normal = -glm::normalize(Fo);
             select.d = glm::abs(glm::dot(select.normal, Po));
             select.point = Po;
             select.calc = false;
-
-            std::cout << "=====PLANE INFO====\n"
-                      << AS_STRING_GLM_SS(select.plane) << "\n"
-                      << AS_STRING_GLM_SS(select.normal) << "\n"
-                      << AS_STRING_GLM_SS(select.point) << "\n"
-                      << "----------------------" << std::endl;
         }
-
-        real_t cam_dist{g_geom.dist_point_plane(g_view.position,
-                                                select.normal,
-                                                select.point)};
         
-        vec3_t s2w{g_view.view() * vec4_t{screen_out(), R(1)}};
-        s2w.z = R(0.0);
+        vec3_t s2w{screen_out()};
+        s2w.x *= 10.0;
+        s2w.y *= 2.0;
 
-        auto c{coeff(cam_dist)};
-        
-        std::cout << "======CAMSEL INFO======\n" 
-                  << AS_STRING_SS(cam_dist) SEP_SS AS_STRING_GLM_SS(s2w) SEP_SS AS_STRING_SS(c);
 
-        s2w *= std::min(c * cam_dist, R(1000));
-        vec3_t new_pos{select.plane * vec4_t{s2w, 1.0}};
-
-        std::cout SEP_SS AS_STRING_GLM_SS(new_pos) << "----------\n" << std::endl;
+        vec3_t new_pos{g_geom.proj_point_plane(s2w, select.normal, select.point)};
 
         return new_pos;
     }

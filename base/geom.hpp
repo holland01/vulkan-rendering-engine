@@ -105,6 +105,14 @@ struct geom {
         return glm::length(glm::proj(pl2p, normal));        
     }
 
+    vec3_t proj_point_plane(const vec3_t& p, const vec3_t& normal, const vec3_t& plane_p) {
+        ASSERT(glm::length(normal) <= R(1.2) && glm::length(normal) >= R(0.8));
+
+        real_t alpha = dist_point_plane(p, normal, plane_p);
+        vec3_t N{normal * alpha};
+        return p + (-N);
+    }
+
   // a, b, and c are assumed to be
   // laid out in a counter clockwise ordering.
   // on the plane which they create. It's also
