@@ -78,7 +78,7 @@ static move_state  g_select_move_state = {
 // of the destination space
 
 struct view_data {
-    mat4_t proj, skyproj, cubeproj;    // proj: camera to clip space transform
+    mat4_t proj, skyproj, cubeproj, ortho;    // proj: camera to clip space transform
 
     mat4_t view_mat;
 
@@ -105,7 +105,7 @@ struct view_data {
     bool view_bound;
     
     view_data(uint16_t width, uint16_t height)
-        : proj(1.0f), skyproj(R(1.0)), cubeproj(R(1.0)),
+        : proj(1.0f), skyproj(R(1.0)), cubeproj(R(1.0)), ortho(R(1.0)),
           view_mat(R(1.0)),
           orient(1.0f),
           position(0.0f),
@@ -128,6 +128,11 @@ struct view_data {
         set_proj_from_fovy(45.0f);
         skyproj = glm::perspective(45.0f, calc_aspect(), skynearp, skyfarp);
         cubeproj = glm::perspective(45.0f, calc_aspect(), nearp, farp);
+
+        real_t w = view_width * 0.5;
+        real_t h = view_height * 0.5;
+
+        ortho = glm::orthoRH(-w, w, -h, h, nearp, farp);
     }
 
     void set_proj_from_fovy(real_t fovy) {
