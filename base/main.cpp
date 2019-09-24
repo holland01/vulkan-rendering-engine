@@ -24,8 +24,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-#define OBJECT_SELECT_MOVE_STEP real_t(0.01)
-
 #define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
 #define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
 
@@ -646,9 +644,7 @@ struct models {
 				   c, color);
     }
 
-    return new_model(model_cube,
-		     offset,
-		     36);
+    return new_model(model_cube, offset, 36);
   }
 
   void render(index_type model, const mat4_t& world) const {
