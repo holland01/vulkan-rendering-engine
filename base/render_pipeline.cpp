@@ -45,19 +45,19 @@ void shader_uniform_storage::upload_uniform(const std::string& name) const {
 
   switch (d.uniform_buffer) {
   case uniform_mat4x4:
-    g_programs->up_mat4x4(name, mat4x4_store.at(d.uniform_buffer_offset));
+    g_m.programs->up_mat4x4(name, mat4x4_store.at(d.uniform_buffer_offset));
     break;
 
   case uniform_pointlight:
-    g_programs->up_pointlight(name, pointlight_store.at(d.uniform_buffer_offset));
+    g_m.programs->up_pointlight(name, pointlight_store.at(d.uniform_buffer_offset));
     break;
 
   case uniform_vec3:
-    g_programs->up_vec3(name, vec3_store.at(d.uniform_buffer_offset));
+    g_m.programs->up_vec3(name, vec3_store.at(d.uniform_buffer_offset));
     break;
       
   case uniform_int32:
-    g_programs->up_int(name, int32_store.at(d.uniform_buffer_offset));
+    g_m.programs->up_int(name, int32_store.at(d.uniform_buffer_offset));
     break;
   }
 }

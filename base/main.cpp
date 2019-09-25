@@ -35,15 +35,16 @@
 
 void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
+  programs = new module_programs();
 }
 
 void modules::free() {
   safe_del(framebuffer);
+  safe_del(programs);
 }
 
 modules g_m{};
 
-programs::ptr_type g_programs{new programs()};
 
 textures::index_type g_checkerboard_cubemap {textures::k_uninit};
 
@@ -656,12 +657,12 @@ struct models {
   void render(index_type model, const mat4_t& world) const {
     mat4_t mv = g_view.view() * world;
 
-    if (g_programs->uniform("unif_Model") != -1) {
-      g_programs->up_mat4x4("unif_Model", world);
+    if (g_m.programs->uniform("unif_Model") != -1) {
+      g_m.programs->up_mat4x4("unif_Model", world);
     }
 	    
-    g_programs->up_mat4x4("unif_ModelView", mv);
-    g_programs->up_mat4x4("unif_Projection",
+    g_m.programs->up_mat4x4("unif_ModelView", mv);
+    g_m.programs->up_mat4x4("unif_Projection",
 			  (model == modind_skybox
 			   ? g_view.skyproj
 			   : (framebuffer_pinned
@@ -1120,7 +1121,7 @@ struct pass_info {
   
   frame_type frametype{frame_user};
   
-  programs::id_type shader;
+  module_programs::id_type shader;
 
   std::function<void()> init_fn;
 
@@ -1292,7 +1293,7 @@ static void init_render_passes() {
     
     auto ft = pass_info::frame_envmap;
 
-    auto shader = g_programs->skybox;
+    auto shader = g_m.programs->skybox;
 
     auto init = []() {
       g_m.framebuffer->rcube->faces[0] = g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
@@ -1338,7 +1339,7 @@ static void init_render_passes() {
 
     auto ft = pass_info::frame_user;
 
-    auto shader = g_programs->default_fb;
+    auto shader = g_m.programs->default_fb;
 
     auto init = []() {};
 
@@ -1392,7 +1393,7 @@ static void init_render_passes() {
 
     auto ft = pass_info::frame_user;
 
-    auto shader = g_programs->sphere_cubemap;
+    auto shader = g_m.programs->sphere_cubemap;
 
     auto init = []() {
       g_uniform_storage->set_uniform("unif_CameraPosition", g_view.position);
@@ -1445,7 +1446,7 @@ static void init_render_passes() {
     
     auto ft = pass_info::frame_user;
 
-    auto shader = g_programs->skybox;
+    auto shader = g_m.programs->skybox;
 
     auto init = []() {};
     
@@ -1477,7 +1478,7 @@ static void init_render_passes() {
 static void init_api_data() {
     g_view.reset_proj();
 
-    g_programs->load();
+    g_m.programs->load();
 
     GL_FN(glGenVertexArrays(1, &g_vao));
     GL_FN(glBindVertexArray(g_vao));

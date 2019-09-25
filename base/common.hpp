@@ -112,9 +112,11 @@ struct vertex {
 
 struct type_module;
 struct framebuffer_ops;
+struct module_programs;
 
 struct modules {
   framebuffer_ops* framebuffer{nullptr};
+  module_programs* programs{nullptr};
 
   void init();
   void free();
