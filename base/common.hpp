@@ -103,13 +103,21 @@ struct vertex {
 };
 
 struct type_module;
+struct framebuffer_ops;
 
-extern std::vector<type_module*> g_modules;
+struct modules {
+  framebuffer_ops* framebuffer{nullptr};
+
+  void init();
+  void free();
+} extern g_m;
+
+//extern std::vector<type_module*> g_modules;
 
 struct type_module {
   virtual void free_mem() = 0;
   void registermod() {
-    g_modules.push_back(this);
+    //g_modules.push_back(this);
   }
 };
 

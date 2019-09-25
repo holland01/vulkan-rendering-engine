@@ -7,7 +7,7 @@
 #include <array>
 #include <glm/gtc/matrix_transform.hpp>
 
-struct frame {
+struct framebuffer_ops {
     using index_type = int32_t;
     
     uint32_t count;
@@ -25,7 +25,7 @@ struct frame {
         std::vector<vec3_t> positions;
         std::vector<face_mats_type> faces;
 
-        const frame& self;
+        const framebuffer_ops& self;
 
       uint32_t cwidth;
       uint32_t cheight;
@@ -43,7 +43,7 @@ struct frame {
             neg_z
         };
 
-    render_cube(const frame& f) : self(f),
+    render_cube(const framebuffer_ops& f) : self(f),
 	  cwidth(256),
 	  cheight(256){
     }
@@ -195,7 +195,7 @@ struct frame {
 
     std::unique_ptr<render_cube> rcube;
     
-    frame(uint32_t w, uint32_t h)
+    framebuffer_ops(uint32_t w, uint32_t h)
         :   count(0),
             width(w),
         height(h),
@@ -211,5 +211,4 @@ struct frame {
     auto render_cube_color_tex(index_type r) const {
         return rcube->tex_color_handles.at(r);
     }
-
-} extern g_frame;
+};

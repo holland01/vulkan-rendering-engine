@@ -33,9 +33,16 @@
 #define ROOM_SPHERE_RADIUS R(30)
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
-frame g_frame {SCREEN_WIDTH, SCREEN_HEIGHT};
+void modules::init() {
+  framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
+}
 
-darray<type_module*> g_modules;
+void modules::free() {
+  ASSERT(framebuffer != nullptr);
+  delete framebuffer;
+}
+
+modules g_m{};
 
 programs::ptr_type g_programs{new programs()};
 
@@ -677,7 +684,7 @@ struct models {
 } static g_models;
 
 struct frame_model {    
-    frame::index_type render_cube_id{frame::k_uninit};
+    framebuffer_ops::index_type render_cube_id{framebuffer_ops::k_uninit};
     bool needs_render{true};
 };
 
@@ -1120,7 +1127,7 @@ struct pass_info {
 
   scene_graph::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
 
-  frame::index_type envmap_id{frame::k_uninit}; // optional
+  framebuffer_ops::index_type envmap_id{framebuffer_ops::k_uninit}; // optional
 
   bool active{true};
   
@@ -1188,17 +1195,17 @@ struct pass_info {
         } break;
 
         case frame_envmap: {
-          ASSERT(envmap_id != frame::k_uninit);
+          ASSERT(envmap_id != framebuffer_ops::k_uninit);
           g_models.framebuffer_pinned = true;
-          g_frame.rcube->bind(envmap_id);
+          g_m.framebuffer->rcube->bind(envmap_id);
          
-          for (auto i = 0; i < 6; ++i) {	  
-            g_view.bind_view(g_frame.rcube->set_face(envmap_id,
-                              static_cast<frame::render_cube::axis>(i)));
+          for (auto i = 0; i < 6; ++i) {
+            g_view.bind_view(g_m.framebuffer->rcube->set_face(envmap_id,
+                              static_cast<framebuffer_ops::render_cube::axis>(i)));
             state.apply();
             draw();
           }
-          g_frame.rcube->unbind();
+          g_m.framebuffer->rcube->unbind();
           g_view.unbind_view();
           g_models.framebuffer_pinned = false;
         } break;
@@ -1289,7 +1296,7 @@ static void init_render_passes() {
     auto shader = g_programs->skybox;
 
     auto init = []() {
-      g_frame.rcube->faces[0] = g_frame.rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
+      g_m.framebuffer->rcube->faces[0] = g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
       g_frame_model_map[g_models.modind_sphere].needs_render = true;
     };
 
@@ -1340,7 +1347,7 @@ static void init_render_passes() {
 				     g_models.type(g_graph->model_indices[n]) ==
 				     models::model_quad);
     
-    auto envmap_id = frame::k_uninit;
+    auto envmap_id = framebuffer_ops::k_uninit;
     
     auto active = true;
     
@@ -1378,7 +1385,7 @@ static void init_render_passes() {
 
     darray<bind_texture> tex_bindings = {
       {
-        g_frame.render_cube_color_tex(
+        g_m.framebuffer->render_cube_color_tex(
           g_frame_model_map[g_models.modind_sphere].render_cube_id),
 	      0
       }
@@ -1395,7 +1402,7 @@ static void init_render_passes() {
     auto select = scene_graph_select(n,
 				     n == g_graph->test_indices.sphere);
 
-    auto envmap_id = frame::k_uninit;
+    auto envmap_id = framebuffer_ops::k_uninit;
     auto active = true;
     
     pass_info reflect{
@@ -1445,7 +1452,7 @@ static void init_render_passes() {
     
     auto select = scene_graph_select(n, n == g_graph->test_indices.area_sphere);
 
-    auto envmap_id = frame::k_uninit;
+    auto envmap_id = framebuffer_ops::k_uninit;
     
     auto active = true;
     
@@ -1480,7 +1487,7 @@ static void init_api_data() {
     g_models.modind_area_sphere = g_models.new_sphere( );
     
     frame_model fmod{};
-    fmod.render_cube_id = g_frame.add_render_cube(TEST_SPHERE_POS,
+    fmod.render_cube_id = g_m.framebuffer->add_render_cube(TEST_SPHERE_POS,
                                                   TEST_SPHERE_RADIUS);
     
     g_frame_model_map[g_models.modind_sphere] = fmod;
@@ -1549,7 +1556,7 @@ static void init_api_data() {
 static darray<uint8_t> g_debug_cubemap_buf;
 static textures::index_type g_debug_cm_index{textures::k_uninit};
 
-#define screen_cube_depth(k) (g_frame.width * g_frame.height * 4 * (k))
+#define screen_cube_depth(k) (g_m.framebuffer->width * g_m.framebuffer->height * 4 * (k))
 
 static int screen_cube_index = 0;
 
@@ -1678,7 +1685,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
                       g_models.new_sphere());
 
             KEY_BLOCK(GLFW_KEY_F2,
-                      g_frame.screenshot());
+                      g_m.framebuffer->screenshot());
 
             KEY_BLOCK(GLFW_KEY_G,
                       g_unif_gamma_correct = !g_unif_gamma_correct;
@@ -1977,6 +1984,8 @@ int main(void) {
     g_programs->registermod();
     g_textures.registermod();
 
+    g_m.init();
+
     GLFWwindow* window;
 
     glfwSetErrorCallback(error_callback);
@@ -2042,14 +2051,13 @@ int main(void) {
         glfwPollEvents();
     }
 
-    for (auto module : g_modules) {
-        module->free_mem();
-    }
+    g_m.free();
 
     glfwDestroyWindow(window);
     
     glfwTerminate();
     exit(EXIT_SUCCESS);
+
 error:
     glfwTerminate();
     exit(EXIT_FAILURE);
