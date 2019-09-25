@@ -540,7 +540,7 @@ struct module_programs : public type_module {
 
   using id_type = std::string;
   
-  void free_mem() override {
+  ~module_programs() {
     GL_FN(glUseProgram(0));
     
     for (auto& entry: data) {

@@ -25,7 +25,7 @@ struct textures: public type_module {
     static const inline index_type k_uninit = -1;
     static const inline fs::path k_root_path = fs::path("resources") / fs::path("textures");
 
-    void free_mem() override;
+    ~textures();
 
     void bind(index_type id, int slot = 0) const;
 

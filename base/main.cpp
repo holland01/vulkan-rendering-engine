@@ -1981,9 +1981,6 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
 int main(void) {
     g_key_states.fill(false);
 
-    g_programs->registermod();
-    g_textures.registermod();
-
     g_m.init();
 
     GLFWwindow* window;

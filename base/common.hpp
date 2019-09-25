@@ -50,6 +50,7 @@ namespace fs = std::experimental::filesystem;
 
 #define NOP ;
 
+
 using vec2_t = glm::vec2;
 using vec3_t = glm::vec3;
 using boolvec3_t = glm::bvec3;
@@ -125,10 +126,6 @@ struct modules {
 //extern std::vector<type_module*> g_modules;
 
 struct type_module {
-  virtual void free_mem() = 0;
-  void registermod() {
-    //g_modules.push_back(this);
-  }
 };
 
 template <typename numType>

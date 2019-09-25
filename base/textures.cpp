@@ -3,7 +3,7 @@
 
 textures g_textures{};
 
-void textures::free_mem() {
+textures::~textures() {
     if (!tex_handles.empty()) {
         GL_FN(glDeleteTextures(static_cast<GLsizei>(tex_handles.size()), tex_handles.data()));
     }
