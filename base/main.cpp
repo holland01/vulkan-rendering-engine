@@ -38,8 +38,7 @@ void modules::init() {
 }
 
 void modules::free() {
-  ASSERT(framebuffer != nullptr);
-  delete framebuffer;
+  safe_del(framebuffer);
 }
 
 modules g_m{};
