@@ -36,17 +36,18 @@
 void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
   programs = new module_programs();
+  textures = new module_textures();
 }
 
 void modules::free() {
   safe_del(framebuffer);
   safe_del(programs);
+  safe_del(textures);
 }
 
 modules g_m{};
 
-
-textures::index_type g_checkerboard_cubemap {textures::k_uninit};
+module_textures::index_type g_checkerboard_cubemap {module_textures::k_uninit};
 
 static bool g_framemodelmap = true;
 static bool g_reflect = true;
@@ -1153,7 +1154,7 @@ struct pass_info {
       use_program u(shader);
       
       for (const auto& bind: tex_bindings) {
-        g_textures.bind(bind.id, bind.slot);
+        g_m.textures->bind(bind.id, bind.slot);
       }
       
       if (!uniforms.empty()) {
@@ -1211,7 +1212,7 @@ struct pass_info {
         } break;
       }
       for (const auto& bind: tex_bindings) {
-        g_textures.unbind(bind.id);
+        g_m.textures->unbind(bind.id);
       }
 
       g_vertex_buffer.unbind();
@@ -1492,7 +1493,7 @@ static void init_api_data() {
     
     g_frame_model_map[g_models.modind_sphere] = fmod;
     
-    g_checkerboard_cubemap = g_textures.new_cubemap(256, 256, GL_RGBA);
+    g_checkerboard_cubemap = g_m.textures->new_cubemap(256, 256, GL_RGBA);
     
     real_t wall_size = R(15.0);
     
@@ -1554,7 +1555,7 @@ static void init_api_data() {
 }
 
 static darray<uint8_t> g_debug_cubemap_buf;
-static textures::index_type g_debug_cm_index{textures::k_uninit};
+static module_textures::index_type g_debug_cm_index{module_textures::k_uninit};
 
 #define screen_cube_depth(k) (g_m.framebuffer->width * g_m.framebuffer->height * 4 * (k))
 

@@ -173,7 +173,7 @@ struct gl_state {
 };
 
 struct bind_texture {
-  textures::index_type id;
+  module_textures::index_type id;
   int slot;
 
   std::string to_string() const {

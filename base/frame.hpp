@@ -19,8 +19,8 @@ struct framebuffer_ops {
     static const inline index_type k_uninit = -1;
     
     struct render_cube {
-        std::vector<textures::index_type> tex_color_handles;
-        std::vector<textures::index_type> tex_depth_handles;
+        std::vector<module_textures::index_type> tex_color_handles;
+        std::vector<module_textures::index_type> tex_depth_handles;
         std::vector<GLuint> fbos;
         std::vector<vec3_t> positions;
         std::vector<face_mats_type> faces;
@@ -84,16 +84,16 @@ struct framebuffer_ops {
         auto add(const vec3_t& position, real_t radius) {           
             auto rcubeid = tex_color_handles.size();
 	    
-            tex_color_handles.push_back(g_textures.new_cubemap(cwidth,
+            tex_color_handles.push_back(g_m.textures->new_cubemap(cwidth,
 							       cheight,
 							       GL_RGBA));
 
 #if defined(ENVMAP_CUBE_DEPTH)
-            tex_depth_handles.push_back(g_textures.new_cubemap(cwidth,
+            tex_depth_handles.push_back(g_m.textures->new_cubemap(cwidth,
                                                                cheight,
                                                                GL_DEPTH_COMPONENT));
 #else
-	    tex_depth_handles.push_back(g_textures.new_texture(cwidth,
+	    tex_depth_handles.push_back(g_m.textures->new_texture(cwidth,
 							       cheight,
 							       1,
 							       GL_TEXTURE_2D,
@@ -104,7 +104,7 @@ struct framebuffer_ops {
 #if !defined(ENVMAP_CUBE_DEPTH)
 	    {
 	      auto depth = tex_depth_handles[tex_depth_handles.size() - 1];
-	      g_textures.bind(depth, 0);
+	      g_m.textures->bind(depth, 0);
 	      
 	      GL_FN(glTexImage2D(GL_TEXTURE_2D,
 				 0,
@@ -115,7 +115,7 @@ struct framebuffer_ops {
 				 GL_FLOAT,
 				 NULL));
 
-	      g_textures.unbind(depth);
+	      g_m.textures->unbind(depth);
 	      
 	    }
 #endif // ENVMAP_CUBE_DEPTH
@@ -147,7 +147,7 @@ struct framebuffer_ops {
             auto sz = cwidth * cheight * 4 * 6;
             std::vector<uint8_t> all_faces(static_cast<size_t>(sz), 0x7f);
 
-            GL_FN(glGetTextureImage(g_textures.handle(tex_color_handles.at(cube_id)),
+            GL_FN(glGetTextureImage(g_m.textures->handle(tex_color_handles.at(cube_id)),
                                     0,
                                     GL_RGBA,
                                     GL_UNSIGNED_BYTE,
@@ -161,7 +161,7 @@ struct framebuffer_ops {
             GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
                                          GL_COLOR_ATTACHMENT0,
                                          GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face),
-                                         g_textures.handle(tex_color_handles.at(cube_id)),
+                                         g_m.textures->handle(tex_color_handles.at(cube_id)),
                                          0));
 #ifdef ENVMAP_CUBE_DEPTH
 	    auto target = GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face);
@@ -172,7 +172,7 @@ struct framebuffer_ops {
             GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
                                          GL_DEPTH_ATTACHMENT,
                                          target,
-                                         g_textures.handle(tex_depth_handles.at(cube_id)),
+                                         g_m.textures->handle(tex_depth_handles.at(cube_id)),
                                          0));
 
             auto fbcheck = glCheckFramebufferStatus(GL_FRAMEBUFFER);
