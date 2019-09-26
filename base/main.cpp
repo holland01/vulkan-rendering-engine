@@ -70,9 +70,6 @@ GLuint g_vao = 0;
 //
 //
 
-static vertex_buffer g_vertex_buffer{};
-
-
 static move_state  g_cam_move_state = {
     0, 0, 0, 0, 0, 0, 0
 };
