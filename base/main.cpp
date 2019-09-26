@@ -17,6 +17,7 @@
 #include "programs.hpp"
 #include "geom.hpp"
 #include "frame.hpp"
+#include "vertex_buffer.hpp"
 
 #include "render_pipeline.hpp"
 
@@ -38,6 +39,7 @@ void modules::init() {
   programs = new module_programs();
   textures = new module_textures();
   geom = new module_geom();
+  main_vertex_buffer = new vertex_buffer();
 }
 
 void modules::free() {
@@ -45,6 +47,7 @@ void modules::free() {
   safe_del(programs);
   safe_del(textures);
   safe_del(geom);
+  safe_del(main_vertex_buffer);
 }
 
 modules g_m{};
@@ -59,6 +62,8 @@ static bool g_unif_gamma_correct = true;
 GLuint g_vao = 0;
 //
 //
+
+static vertex_buffer g_vertex_buffer{};
 
 struct move_state {
     uint8_t up : 1;
@@ -273,103 +278,6 @@ struct view_data {
 
 static view_data g_view(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-struct vertex_buffer {
-  
-  darray<vertex> data;
-
-    mutable GLuint vbo;
-
-    vertex_buffer()
-        : vbo(0) {
-    }
-
-    void bind() const {
-        GL_FN(glBindBuffer(GL_ARRAY_BUFFER, vbo));
-    }
-
-    void unbind() const {
-        GL_FN(glBindBuffer(GL_ARRAY_BUFFER, 0));
-    }
-
-    void push(const vertex& v) {
-        data.push_back(v);
-    }
-
-    void reset() const {
-        if (vbo == 0) {
-            GL_FN(glGenBuffers(1, &vbo));
-        }
-
-        bind();
-
-        GL_FN(glBufferData(GL_ARRAY_BUFFER,
-                           sizeof(data[0]) * data.size(),
-                           &data[0],
-                           GL_STATIC_DRAW));
-
-        unbind();
-    }
-
-    auto num_vertices() const {
-        return static_cast<int>(data.size());
-    }
-
-  auto add_triangle(const vec3_t& a_position, const vec4_t& a_color, const vec3_t& a_normal, const vec2_t& a_uv,
-		    const vec3_t& b_position, const vec4_t& b_color,  const vec3_t& b_normal, const vec2_t& b_uv,
-		    const vec3_t& c_position, const vec4_t& c_color, const vec3_t& c_normal, const vec2_t& c_uv) {
-        vertex a = {
-            a_position,
-            a_color,
-	    a_normal,
-            a_uv
-        };
-
-        vertex b = {
-            b_position,
-            b_color,
-	    b_normal,
-            b_uv
-        };
-
-        vertex c = {
-            c_position,
-            c_color,
-	    c_normal,
-            c_uv
-        };
-
-        auto offset = num_vertices();
-
-        data.push_back(a);
-        data.push_back(b);
-        data.push_back(c);
-
-        return offset;
-
-    }
-
-    auto add_triangle(const vec3_t& a_position, const vec4_t& a_color,
-                      const vec3_t& b_position, const vec4_t& b_color,
-                      const vec3_t& c_position, const vec4_t& c_color) {
-        vec2_t defaultuv(glm::zero<vec2_t>());
-	
-        return add_triangle(a_position, a_color, a_position, defaultuv,
-                            b_position, b_color, b_position, defaultuv,
-                            c_position, c_color, c_position, defaultuv);
-    }
-
-  auto add_triangle(const vec3_t& a_position, const vec4_t& a_color, const vec3_t& a_normal, 
-		    const vec3_t& b_position, const vec4_t& b_color, const vec3_t& b_normal,
-		    const vec3_t& c_position, const vec4_t& c_color, const vec3_t& c_normal) {
-    vec2_t defaultuv(glm::zero<vec2_t>());
-    
-    return add_triangle(a_position, a_color, a_normal, defaultuv,
-			b_position, b_color, b_normal, defaultuv,
-			c_position, c_color, c_normal, defaultuv);
-  }
-
-
-} static g_vertex_buffer;
 
 #define MODLAMSEL(name, return_expr) [](const models::index_type& name) -> bool { return return_expr; }
 
@@ -437,13 +345,13 @@ struct models {
     
     model_count++;
 
-    g_vertex_buffer.reset();
+    g_m.main_vertex_buffer->reset();
 
     return id;
   }    
     
   auto new_sphere(vec4_t color = vec4_t{R(1.0)}) {
-    auto offset = g_vertex_buffer.num_vertices();
+    auto offset = g_m.main_vertex_buffer->num_vertices();
 
     real_t step = 0.05f;
 
@@ -464,11 +372,11 @@ struct models {
         auto c = cart(phi + step, theta + step);
         auto d = cart(phi + step, theta);
 
-        g_vertex_buffer.add_triangle(a, color, a,
+        g_m.main_vertex_buffer->add_triangle(a, color, a,
                                      d, color, d,
                                      c, color, c);
 
-        g_vertex_buffer.add_triangle(c, color, c,
+        g_m.main_vertex_buffer->add_triangle(c, color, c,
                                      a, color, a,
                                      b, color, b);
         
@@ -554,7 +462,7 @@ struct models {
       1.0f, 0.0f, 1.0f
     };
 
-    auto vbo_offset = g_vertex_buffer.num_vertices();
+    auto vbo_offset = g_m.main_vertex_buffer->num_vertices();
         
     real_t* offset = &vertices[type * 18];
 
@@ -564,7 +472,7 @@ struct models {
     vec3_t b(offset[3], offset[4], offset[5]);
     vec3_t c(offset[6], offset[7], offset[8]);
 
-    g_vertex_buffer.add_triangle(a, color, normal, 
+    g_m.main_vertex_buffer->add_triangle(a, color, normal, 
 				                         b, color, normal,
                                  c, color, normal);
 
@@ -572,7 +480,7 @@ struct models {
     vec3_t e(offset[12], offset[13], offset[14]);
     vec3_t f(offset[15], offset[16], offset[17]);
 
-    g_vertex_buffer.add_triangle(d, color, normal,
+    g_m.main_vertex_buffer->add_triangle(d, color, normal,
 				                         e, color, normal,
 				                         f, color, normal);
 
@@ -634,16 +542,16 @@ struct models {
       1.0f, -1.0f, 1.0f
     };
 
-    auto offset = g_vertex_buffer.num_vertices();
+    auto offset = g_m.main_vertex_buffer->num_vertices();
 
     for (auto i = 0; i < vertices.size(); i += 9) {
       vec3_t a(vertices[i + 0], vertices[i + 1], vertices[i + 2]);
       vec3_t b(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
       vec3_t c(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
 
-      g_vertex_buffer.add_triangle(a, color,
-				   b, color,
-				   c, color);
+      g_m.main_vertex_buffer->add_triangle( a, color,
+                                    b, color,
+                                    c, color);
     }
 
     return new_model(model_cube, offset, 36);
@@ -1144,7 +1052,7 @@ struct pass_info {
     if (active) {
       write_logf("pass: %s", name.c_str());
       
-      g_vertex_buffer.bind();
+      g_m.main_vertex_buffer->bind();
       use_program u(shader);
       
       for (const auto& bind: tex_bindings) {
@@ -1209,14 +1117,14 @@ struct pass_info {
         g_m.textures->unbind(bind.id);
       }
 
-      g_vertex_buffer.unbind();
+      g_m.main_vertex_buffer->unbind();
     }
   }
 };
 
 darray<pass_info> g_render_passes{};
 
-std::unordered_map<models::index_type, frame_model> g_frame_model_map{};
+std::unordered_map<module_models::index_type, frame_model> g_frame_model_map{};
 
 struct gl_depth_func {
     GLint prev_depth;
@@ -1491,7 +1399,7 @@ static void init_api_data() {
     
     real_t wall_size = R(15.0);
     
-    g_vertex_buffer.reset();
+    g_m.main_vertex_buffer->reset();
 
     g_graph.reset(new scene_graph{});
 
