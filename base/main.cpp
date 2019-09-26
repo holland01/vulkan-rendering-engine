@@ -37,12 +37,14 @@ void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
   programs = new module_programs();
   textures = new module_textures();
+  geom = new module_geom();
 }
 
 void modules::free() {
   safe_del(framebuffer);
   safe_del(programs);
   safe_del(textures);
+  safe_del(geom);
 }
 
 modules g_m{};
@@ -397,7 +399,7 @@ struct models {
     
   static const inline index_type k_uninit = -1;
 
-  darray<geom::bvol> bound_volumes;
+  darray<module_geom::bvol> bound_volumes;
   darray<model_type> model_types;
   darray<index_type> vertex_offsets;
   darray<index_type> vertex_counts;
@@ -473,14 +475,6 @@ struct models {
 	      count += 6;
       }
     }
-
-#if 0
-    geom::bvol bvol {};
-
-    bvol.type = geom::bvol::type_sphere;
-    bvol.radius = scale;
-    bvol.center = position;
-#endif
 
     return new_model(model_sphere,
 		     offset,
@@ -583,7 +577,7 @@ struct models {
 				                         f, color, normal);
 
 #if 0
-    geom::bvol vol;
+    module_geom::bvol vol;
 
     vol.radius = glm::length(scale);
     vol.center = position;
@@ -699,7 +693,7 @@ struct scene_graph {
   using predicate_fn_type = std::function<bool(const index_type& n)>;
   
   darray<darray<index_type>> child_lists;
-  darray<geom::bvol> bound_volumes;
+  darray<module_geom::bvol> bound_volumes;
   darray<vec3_t> positions;
   darray<vec3_t> angles;
   darray<vec3_t> scales;
@@ -720,7 +714,7 @@ struct scene_graph {
   test_indices_s test_indices;
   
   struct init_info {
-    geom::bvol bvol;
+    module_geom::bvol bvol;
     vec3_t position, angle, scale;
     boolvec3_t accum;
     models::index_type model;
@@ -816,7 +810,7 @@ scene_graph::scene_graph()
   : test_indices()
 {
   // root initialization
-  bound_volumes.push_back(geom::bvol{});
+  bound_volumes.push_back(module_geom::bvol{});
   child_lists.push_back(darray<index_type>());
   positions.push_back(vec3_t{R(0)});
   scales.push_back(vec3_t{R(1)});
@@ -1084,8 +1078,8 @@ struct object_manip {
   // Place model 'a' ontop of model 'b'.
   // Right now we only care about bounding spheres
   void place_above(index_type a, index_type b) {
-    ASSERT(g_graph->bound_volumes[a].type == geom::bvol::type_sphere);
-    ASSERT(g_graph->bound_volumes[b].type == geom::bvol::type_sphere);
+    ASSERT(g_graph->bound_volumes[a].type == module_geom::bvol::type_sphere);
+    ASSERT(g_graph->bound_volumes[b].type == module_geom::bvol::type_sphere);
 
     vec3_t a_position{g_graph->positions[b]};
 
@@ -1510,7 +1504,7 @@ static void init_api_data() {
 
       sphere.model = g_models.modind_area_sphere;
       sphere.parent = 0;
-      sphere.bvol = g_geom.make_bsphere(ROOM_SPHERE_RADIUS, ROOM_SPHERE_POS);
+      sphere.bvol = g_m.geom->make_bsphere(ROOM_SPHERE_RADIUS, ROOM_SPHERE_POS);
 
       g_graph->test_indices.area_sphere = g_graph->new_node(sphere);
     }
@@ -1525,7 +1519,7 @@ static void init_api_data() {
       sphere.model = g_models.modind_sphere;
       sphere.parent = g_graph->test_indices.area_sphere;
       sphere.pickable = true;
-      sphere.bvol = g_geom.make_bsphere(TEST_SPHERE_RADIUS, TEST_SPHERE_POS);
+      sphere.bvol = g_m.geom->make_bsphere(TEST_SPHERE_RADIUS, TEST_SPHERE_POS);
 
       g_graph->test_indices.sphere = g_graph->new_node(sphere);
     }
@@ -1830,13 +1824,13 @@ public:
     
     bool cast_ray(scene_graph::index_type entity) const {
         vec3_t nearp = screen_out();
-        geom::ray world_raycast{}; 
+        module_geom::ray world_raycast{}; 
         world_raycast.dir = glm::normalize(nearp - g_view.position);
         world_raycast.orig = g_view.position;
 
         auto bvol = g_graph->bound_volumes[entity];
 
-        bool success = g_geom.test_ray_sphere(world_raycast, bvol);
+        bool success = g_m.geom->test_ray_sphere(world_raycast, bvol);
         
         if (success) {
             std::cout << "HIT\n";
@@ -1885,7 +1879,7 @@ public:
         //s2w.x += g_cam_orient.sdx * 3.0;
         //s2w.y += g_cam_orient.sdy * 3.0;
 
-        vec3_t new_pos{g_geom.proj_point_plane(s2w, select.normal, select.point)};
+        vec3_t new_pos{g_m.geom->proj_point_plane(s2w, select.normal, select.point)};
 
         return new_pos;
     }

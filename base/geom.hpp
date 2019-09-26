@@ -6,7 +6,7 @@
 #include <sstream>
 #include <string>
 
-struct geom {
+struct module_geom {
     struct ray {
         vec3_t orig{0.0f};
         vec3_t dir{0.0f}; // normalized
@@ -132,4 +132,4 @@ struct geom {
     // correct ordering.
     return glm::normalize(glm::cross(v1, v0));
   }
-} g_geom{};
+};

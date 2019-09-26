@@ -115,11 +115,13 @@ struct type_module;
 struct framebuffer_ops;
 struct module_programs;
 struct module_textures;
+struct module_geom;
 
 struct modules {
   framebuffer_ops* framebuffer{nullptr};
   module_programs* programs{nullptr};
   module_textures* textures{nullptr};
+  module_geom* geom{nullptr};
 
   void init();
   void free();
