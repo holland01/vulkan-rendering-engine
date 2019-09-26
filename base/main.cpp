@@ -77,11 +77,6 @@ static move_state  g_select_move_state = {
 };
 
 
-#define DRAW_MODELS(transform_order) g_models.render(transform_order)
-
-
-
-#define MODLAMSEL(name, return_expr) [](const models::index_type& name) -> bool { return return_expr; }
 
 struct models {
 
