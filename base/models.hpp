@@ -2,7 +2,6 @@
 
 #include "common.hpp"
 #include "vertex_buffer.hpp"
-#include "geom.hpp"
 #include "programs.hpp"
 #include "view_data.hpp"
 
@@ -34,11 +33,9 @@ struct module_models {
     
   static const inline index_type k_uninit = -1;
 
-  darray<module_geom::bvol> bound_volumes;
   darray<model_type> model_types;
   darray<index_type> vertex_offsets;
   darray<index_type> vertex_counts;
-  mutable darray<bool> draw;
 
   vec3_t model_select_reset_pos{glm::zero<vec3_t>()};
     

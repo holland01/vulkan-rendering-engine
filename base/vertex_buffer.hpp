@@ -1,6 +1,9 @@
 #pragma once
 
 #include "common.hpp"
+#include "util.hpp"
+
+#include <glm/gtc/constants.hpp>
 
 struct vertex_buffer {
     darray<vertex> data;
