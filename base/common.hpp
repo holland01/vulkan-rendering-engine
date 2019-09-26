@@ -118,6 +118,7 @@ struct module_textures;
 struct module_geom;
 struct module_models;
 struct vertex_buffer;
+struct scene_graph;
 
 struct modules {
   framebuffer_ops* framebuffer{nullptr};
@@ -126,6 +127,7 @@ struct modules {
   module_geom* geom{nullptr};
   module_models* models{nullptr};
   vertex_buffer* main_vertex_buffer{nullptr};
+  scene_graph* main_graph{nullptr};
 
   void init();
   void free();

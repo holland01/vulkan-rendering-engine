@@ -20,6 +20,7 @@
 #include "vertex_buffer.hpp"
 #include "models.hpp"
 #include "view_data.hpp"
+#include "scene_graph.hpp"
 
 #include "render_pipeline.hpp"
 
@@ -37,12 +38,15 @@
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
 static view_data g_view(SCREEN_WIDTH, SCREEN_HEIGHT);
+
 void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
   programs = new module_programs();
   textures = new module_textures();
   geom = new module_geom();
   main_vertex_buffer = new vertex_buffer();
+  main_graph = new scene_graph();
+
   models = new module_models();
   models->model_vbo = main_vertex_buffer;
   models->model_view = &g_view;
@@ -54,6 +58,7 @@ void modules::free() {
   safe_del(textures);
   safe_del(geom);
   safe_del(models);
+  safe_del(main_graph);
   safe_del(main_vertex_buffer);
 }
 
@@ -78,328 +83,10 @@ static move_state  g_select_move_state = {
     0, 0, 0, 0, 0, 0, 0
 };
 
-
-
 struct frame_model {    
     framebuffer_ops::index_type render_cube_id{framebuffer_ops::k_uninit};
     bool needs_render{true};
 };
-
-struct node_id;
-
-#define scene_graph_select(n, expr) [](const scene_graph::index_type& n) -> bool { return expr; }
-
-struct scene_graph {
-  using index_type = int16_t;
-
-  using predicate_fn_type = std::function<bool(const index_type& n)>;
-  
-  darray<darray<index_type>> child_lists;
-  darray<module_geom::bvol> bound_volumes;
-  darray<vec3_t> positions;
-  darray<vec3_t> angles;
-  darray<vec3_t> scales;
-  darray<boolvec3_t> accum; // x -> pos, y -> orient, z -> scale
-  darray<node_id> node_ids;
-  darray<module_models::index_type> model_indices;
-  darray<index_type> parent_nodes;
-  darray<bool> draw;
-  darray<bool> pickable; // can be selected by the mouse
-
-  struct test_indices_s {
-    index_type sphere{unset<index_type>()};
-    index_type skybox{unset<index_type>()};
-    index_type area_sphere{unset<index_type>()};
-    index_type floor{unset<index_type>()};
-  };
-
-  test_indices_s test_indices;
-  
-  struct init_info {
-    module_geom::bvol bvol;
-    vec3_t position, angle, scale;
-    boolvec3_t accum;
-    module_models::index_type model;
-    index_type parent;
-    bool draw;
-    bool pickable;
-
-    init_info()
-      : position(R(0)), angle(R(0)), scale(R(1)),
-        accum(true, true, false),
-        model(unset<module_models::index_type>()),
-        parent(0),
-        draw(true),
-        pickable(false)
-    {}
-  };
-
-  scene_graph();
-
-  index_type new_node(const scene_graph::init_info& info);
-  
-  bool is_root(index_type node) const { return parent_nodes[node] == unset<index_type>(); }
-  
-  void make_node_id(index_type node, int depth);
-
-  mat4_t scale(index_type node) const;
-
-  mat4_t translate(index_type node) const;
-
-  mat4_t rotate(index_type node) const;
-
-  mat4_t model_transform(scene_graph::index_type node) const;
-
-  mat4_t modaccum_transform(scene_graph::index_type node) const;
-  
-  void draw_node(index_type node);
-
-  void draw_node(scene_graph::index_type draw_node,
-	    scene_graph::index_type traverse_node,
-	    node_id* id,
-	    const mat4_t& world);
-
-  void draw_all(index_type current, const mat4_t& world) const;
-  
-  void draw_all() const;
-
-  int depth(index_type node) const;
-
-  void select_draw(predicate_fn_type func);
-  darray<index_type> select(predicate_fn_type func) const;
-};
-
-struct node_id {
-  using offset_type = scene_graph::index_type;
-  using index_type = uint8_t;
-  
-  darray<offset_type> levels; // levels[0] = child node of graph root
-  index_type ptr;
-  bool root;
-  
-  node_id()
-    : ptr{0},
-      root(true)
-  {}
-  
-  node_id(int depth)
-    : levels(depth, unset<offset_type>()),
-      ptr{0},
-      root(false)
-  {}
-
-  bool finished() const {
-    ASSERT(levels.size() < std::numeric_limits<index_type>::max());
-    return ptr == levels.size();
-  }
-
-  offset_type peek() const {
-    ASSERT(ptr < levels.size());
-    return levels[ptr];
-  }
-  
-  void pop() {
-    ASSERT(!finished());
-    ptr++;
-  }
-
-  void reset() {
-    ptr = 0;
-  }
-};
-
-scene_graph::scene_graph()
-  : test_indices()
-{
-  // root initialization
-  bound_volumes.push_back(module_geom::bvol{});
-  child_lists.push_back(darray<index_type>());
-  positions.push_back(vec3_t{R(0)});
-  scales.push_back(vec3_t{R(1)});
-  angles.push_back(vec3_t{R(0)});
-  accum.push_back(boolvec3_t{false});
-  node_ids.push_back(node_id());
-  model_indices.push_back(unset<module_models::index_type>());
-  parent_nodes.push_back(unset<index_type>());
-  draw.push_back(false);
-  pickable.push_back(false);
-
-  #if 0
-  test_indices.sphere = unset<index_type>();
-  test_indices.area_sphere = unset<index_type>();
-  test_indices.skybox = unset<index_type>();
-  #endif
-}
-
-scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info) {
-  auto index = child_lists.size();
-
-  bound_volumes.push_back(info.bvol);
-  child_lists.push_back(darray<index_type>());
-  positions.push_back(info.position);
-  scales.push_back(info.scale);
-  angles.push_back(info.angle);
-  accum.push_back(info.accum);
-  node_ids.push_back(node_id());
-  model_indices.push_back(info.model);
-  parent_nodes.push_back(info.parent);
-  draw.push_back(info.draw);
-  pickable.push_back(info.pickable);
-
-  ASSERT(info.parent != unset<index_type>());
-  ASSERT(info.parent < child_lists.size());
-
-  child_lists[info.parent].push_back(index);
-  
-  make_node_id(index, depth(index));
-
-  return index;
-} 
-
-void scene_graph::make_node_id(scene_graph::index_type node, int depth) {
-  ASSERT(!is_root(node));
-  
-  node_id nid(depth);
-  int counter = depth - 1;
-
-  auto inode = node;
-  
-  while (!is_root(inode)) {
-    ASSERT(counter >= 0);
-
-    auto parent = parent_nodes[inode]; 
-    
-    auto offset = 0;
-    {
-      const auto& children = child_lists[parent];
-      while (offset < children.size() && children[offset] != inode) offset++;
-      ASSERT(children[offset] == inode);
-    }
-    nid.levels[counter] = offset;
-
-    inode = parent;
-    counter--;
-  }
-
-  node_ids[node] = std::move(nid);
-}
-
-mat4_t scene_graph::scale(index_type node) const {
-  return glm::scale(mat4_t(1.0f), scales.at(node));
-}
-
-mat4_t scene_graph::translate(index_type node) const {
-  return glm::translate(mat4_t(1.0f), positions.at(node));
-}
-
-mat4_t scene_graph::rotate(index_type node) const {
-  mat4_t rot(1.0f);
-
-  rot = glm::rotate(mat4_t(1.0f), angles.at(node).x, vec3_t(1.0f, 0.0f, 0.0f));
-  rot = glm::rotate(mat4_t(1.0f), angles.at(node).y, vec3_t(0.0f, 1.0f, 0.0f)) * rot;
-  rot = glm::rotate(mat4_t(1.0f), angles.at(node).z, vec3_t(0.0f, 0.0f, 1.0f)) * rot;
-
-  return rot;
-}
-
-mat4_t scene_graph::model_transform(scene_graph::index_type node) const {
-  return translate(node) * rotate(node) * scale(node);
-}
-
-mat4_t scene_graph::modaccum_transform(scene_graph::index_type node) const {
-  mat4_t m{m4i()};
-  
-  if (accum[node][0]) m *= translate(node);
-  if (accum[node][1]) m *= rotate(node);
-  if (accum[node][2]) m *= scale(node);
-
-  return m;
-}
-
-void scene_graph::draw_node(scene_graph::index_type node,
-			    scene_graph::index_type traverse_node,
-			    node_id* id,
-			    const mat4_t& world) {  
-  if (id->finished()) {
-    ASSERT(traverse_node == node);
-    
-    mat4_t world_accum{world * model_transform(node)};
-    
-    g_m.models->render(model_indices[node], world_accum);
-    
-  } else {
-    mat4_t world_accum{world * modaccum_transform(traverse_node)};
-    
-    auto traverse_next = child_lists[traverse_node][id->peek()];
-    id->pop();
-
-    draw_node(node, traverse_next, id, world_accum);
-  }
-}
-
-void scene_graph::draw_node(scene_graph::index_type node) {
-  if (draw[node]) {
-    node_id* id = node_ids.data() + node;
-    ASSERT(id->ptr == 0);
-  
-    auto traverse = child_lists[0][id->peek()];
-    id->pop();
-
-    draw_node(node, traverse, id, modaccum_transform(0));
-  
-    id->reset();
-  }
-}
-
-void scene_graph::draw_all(index_type current, const mat4_t& world) const {
-  mat4_t accum{world * modaccum_transform(current)};
-
-  if (draw[current]) {
-    mat4_t raccum{world * model_transform(current)};
-    g_m.models->render(model_indices[current], raccum);
-  }
-
-  for (auto child: child_lists[current]) {
-    draw_all(child, accum);
-  }
-}
-  
-void scene_graph::draw_all() const {
-  draw_all(0, m4i());
-}
-
-int scene_graph::depth(scene_graph::index_type node) const {
-  ASSERT(!is_root(node));
-  
-  int d = 0;
-  auto n = node;
-
-  while (!is_root(n)) {
-    n = parent_nodes[n];
-    d++;
-  }
-
-  return d;
-}
-
-void scene_graph::select_draw(predicate_fn_type func) {
-  for (auto i = 0; i < child_lists.size(); ++i) {
-    draw[i] = func(i);
-  }
-}
-
-darray<scene_graph::index_type> scene_graph::select(predicate_fn_type func) const {
-  darray<index_type> ret;
-  for (auto i = 0; i < child_lists.size(); ++i) {
-    auto e = static_cast<index_type>(i);
-    if (func(e)) {
-      ret.push_back(e);
-    }
-  }
-  return ret;
-}
-
-static std::unique_ptr<scene_graph> g_graph{nullptr};
 
 struct object_manip {
   using index_type = scene_graph::index_type;
@@ -421,7 +108,7 @@ struct object_manip {
     clear_select_model_state();
 
     entity_selected = entity;
-    entity_select_reset_pos = g_graph->positions[entity];
+    entity_select_reset_pos = g_m.main_graph->positions[entity];
   }
 
   bool has_select_model_state() const {
@@ -439,7 +126,7 @@ struct object_manip {
     ASSERT(has_select_model_state());
 
     vec3_t update{R(0.0)};
-    auto OBJECT_SELECT_MOVE_STEP = g_graph->bound_volumes[entity_selected].radius;
+    auto OBJECT_SELECT_MOVE_STEP = g_m.main_graph->bound_volumes[entity_selected].radius;
 
     MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
     MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
@@ -469,24 +156,24 @@ struct object_manip {
     
   void move(index_type entity, const vec3_t& position, _move_op mop) {
     switch (mop) {
-    case mop_add: g_graph->positions[entity] += position; break;
-    case mop_sub: g_graph->positions[entity] -= position; break;
-    case mop_set: g_graph->positions[entity] = position; break;
+    case mop_add: g_m.main_graph->positions[entity] += position; break;
+    case mop_sub: g_m.main_graph->positions[entity] -= position; break;
+    case mop_set: g_m.main_graph->positions[entity] = position; break;
     }
 
-    g_graph->bound_volumes[entity].center = g_graph->positions[entity];
+    g_m.main_graph->bound_volumes[entity].center = g_m.main_graph->positions[entity];
   }
 
   // Place model 'a' ontop of model 'b'.
   // Right now we only care about bounding spheres
   void place_above(index_type a, index_type b) {
-    ASSERT(g_graph->bound_volumes[a].type == module_geom::bvol::type_sphere);
-    ASSERT(g_graph->bound_volumes[b].type == module_geom::bvol::type_sphere);
+    ASSERT(g_m.main_graph->bound_volumes[a].type == module_geom::bvol::type_sphere);
+    ASSERT(g_m.main_graph->bound_volumes[b].type == module_geom::bvol::type_sphere);
 
-    vec3_t a_position{g_graph->positions[b]};
+    vec3_t a_position{g_m.main_graph->positions[b]};
 
-    auto arad = g_graph->bound_volumes[a].radius;
-    auto brad = g_graph->bound_volumes[b].radius;
+    auto arad = g_m.main_graph->bound_volumes[a].radius;
+    auto brad = g_m.main_graph->bound_volumes[b].radius;
 
     a_position.y += arad + brad;
 
@@ -533,7 +220,7 @@ struct pass_info {
   darray<pass_info> subpasses;
   
   void draw() const {
-    g_graph->draw_all();
+    g_m.main_graph->draw_all();
   }
 
   void add_pointlight(const dpointlight& pl, int which) {
@@ -582,7 +269,7 @@ struct pass_info {
 	      g_uniform_storage->upload_uniform(name);
       }
 
-      g_graph->select_draw(select_draw_predicate);
+      g_m.main_graph->select_draw(select_draw_predicate);
       
       switch (frametype) {
         case frame_user: {
@@ -697,7 +384,7 @@ static void init_render_passes() {
       g_frame_model_map[g_m.models->modind_sphere].needs_render = true;
     };
 
-    auto select = scene_graph_select(n, n != g_graph->test_indices.sphere);
+    auto select = scene_graph_select(n, n != g_m.main_graph->test_indices.sphere);
 
     auto envmap_id = g_frame_model_map[g_m.models->modind_sphere].render_cube_id;
     
@@ -741,7 +428,7 @@ static void init_render_passes() {
     auto init = []() {};
 
     auto select = scene_graph_select(n,
-				     g_m.models->type(g_graph->model_indices[n]) ==
+				     g_m.models->type(g_m.main_graph->model_indices[n]) ==
 				     module_models::model_quad);
     
     auto envmap_id = framebuffer_ops::k_uninit;
@@ -797,7 +484,7 @@ static void init_render_passes() {
     };
     
     auto select = scene_graph_select(n,
-				     n == g_graph->test_indices.sphere);
+				     n == g_m.main_graph->test_indices.sphere);
 
     auto envmap_id = framebuffer_ops::k_uninit;
     auto active = true;
@@ -832,7 +519,7 @@ static void init_render_passes() {
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
 
     {
-      mat4_t model{g_graph->model_transform(g_graph->test_indices.area_sphere)};
+      mat4_t model{g_m.main_graph->model_transform(g_m.main_graph->test_indices.area_sphere)};
       unifs.push_back(duniform(model,
                                "unif_Model"));
     }
@@ -847,7 +534,7 @@ static void init_render_passes() {
 
     auto init = []() {};
     
-    auto select = scene_graph_select(n, n == g_graph->test_indices.area_sphere);
+    auto select = scene_graph_select(n, n == g_m.main_graph->test_indices.area_sphere);
 
     auto envmap_id = framebuffer_ops::k_uninit;
     
@@ -895,8 +582,6 @@ static void init_api_data() {
     
     g_m.main_vertex_buffer->reset();
 
-    g_graph.reset(new scene_graph{});
-
     {
       scene_graph::init_info sphere;
 
@@ -908,7 +593,7 @@ static void init_api_data() {
       sphere.parent = 0;
       sphere.bvol = g_m.geom->make_bsphere(ROOM_SPHERE_RADIUS, ROOM_SPHERE_POS);
 
-      g_graph->test_indices.area_sphere = g_graph->new_node(sphere);
+      g_m.main_graph->test_indices.area_sphere = g_m.main_graph->new_node(sphere);
     }
     
     {
@@ -919,11 +604,11 @@ static void init_api_data() {
       sphere.angle = vec3_t{0};
 
       sphere.model = g_m.models->modind_sphere;
-      sphere.parent = g_graph->test_indices.area_sphere;
+      sphere.parent = g_m.main_graph->test_indices.area_sphere;
       sphere.pickable = true;
       sphere.bvol = g_m.geom->make_bsphere(TEST_SPHERE_RADIUS, TEST_SPHERE_POS);
 
-      g_graph->test_indices.sphere = g_graph->new_node(sphere);
+      g_m.main_graph->test_indices.sphere = g_m.main_graph->new_node(sphere);
     }
     
     {
@@ -935,9 +620,9 @@ static void init_api_data() {
 
       floor.model = g_m.models->new_wall(module_models::wall_bottom, R4v(1.0, 1.0, 1.0, 1.0));
       
-      floor.parent = g_graph->test_indices.area_sphere;
+      floor.parent = g_m.main_graph->test_indices.area_sphere;
       
-      g_graph->test_indices.floor = g_graph->new_node(floor);
+      g_m.main_graph->test_indices.floor = g_m.main_graph->new_node(floor);
     }
     
     GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
@@ -1230,7 +915,7 @@ public:
         world_raycast.dir = glm::normalize(nearp - g_view.position);
         world_raycast.orig = g_view.position;
 
-        auto bvol = g_graph->bound_volumes[entity];
+        auto bvol = g_m.main_graph->bound_volumes[entity];
 
         bool success = g_m.geom->test_ray_sphere(world_raycast, bvol);
         
@@ -1262,7 +947,7 @@ public:
         if (select.calc) {
             //ASSERT(false);
             
-            vec3_t Po{g_graph->positions[g_obj_manip->entity_selected]}; 
+            vec3_t Po{g_m.main_graph->positions[g_obj_manip->entity_selected]}; 
 
             vec3_t Fo{Po - g_view.position}; // negated z-axis of transform defined by the plane of interest
 
@@ -1288,10 +973,10 @@ public:
 
     void scan_object_selection() const {
         auto filtered = 
-          g_graph->select(scene_graph_select(entity, 
-                                             g_m.models->type(g_graph->model_indices[entity]) == 
+          g_m.main_graph->select(scene_graph_select(entity, 
+                                             g_m.models->type(g_m.main_graph->model_indices[entity]) == 
                                               module_models::model_sphere && 
-                                              g_graph->pickable[entity] == true));
+                                              g_m.main_graph->pickable[entity] == true));
         
         for (auto id: filtered) {
             if (cast_ray(id)) {
