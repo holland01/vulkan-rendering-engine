@@ -116,12 +116,16 @@ struct framebuffer_ops;
 struct module_programs;
 struct module_textures;
 struct module_geom;
+struct module_models;
+struct vertex_buffer;
 
 struct modules {
   framebuffer_ops* framebuffer{nullptr};
   module_programs* programs{nullptr};
   module_textures* textures{nullptr};
   module_geom* geom{nullptr};
+  module_models* models{nullptr};
+  vertex_buffer* main_vertex_buffer{nullptr};
 
   void init();
   void free();
