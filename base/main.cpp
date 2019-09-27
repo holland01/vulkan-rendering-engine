@@ -55,13 +55,14 @@ void modules::init() {
 }
 
 void modules::free() {
-  safe_del(framebuffer);
-  safe_del(programs);
-  safe_del(textures);
-  safe_del(geom);
-  safe_del(models);
-  safe_del(main_graph);
-  safe_del(main_vertex_buffer);
+  delete framebuffer;
+  delete main_uniform_store;
+  delete programs;
+  delete textures;
+  delete geom;
+  delete models;
+  delete main_graph;
+  delete main_vertex_buffer;
 }
 
 modules g_m{};

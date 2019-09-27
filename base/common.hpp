@@ -95,14 +95,6 @@ using darray = std::vector<T>;
 
 #define OPENGL_VERSION_MAJOR_STR "4"
 #define OPENGL_VERSION_MINOR_STR "3"
-
-template <typename T>
-void safe_del(T*& t) {
-  if (t != nullptr) {
-    delete t;
-    t = nullptr;
-  }
-}
  
 struct vertex {
   vec3_t position;
