@@ -37,24 +37,24 @@
 #define ROOM_SPHERE_RADIUS R(30)
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
-static view_data g_view(SCREEN_WIDTH, SCREEN_HEIGHT);
-
 void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
   programs = new module_programs();
   textures = new module_textures();
   geom = new module_geom();
+  view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
   main_vertex_buffer = new vertex_buffer();
   main_graph = new scene_graph();
 
   models = new module_models();
   models->model_vbo = main_vertex_buffer;
-  models->model_view = &g_view;
+  models->model_view = view;
 
   main_uniform_store = new shader_uniform_storage();
 }
 
 void modules::free() {
+  delete view;
   delete framebuffer;
   delete main_uniform_store;
   delete programs;
@@ -481,7 +481,7 @@ static void init_render_passes() {
     auto shader = g_m.programs->sphere_cubemap;
 
     auto init = []() {
-      g_m.main_uniform_store ->set_uniform("unif_CameraPosition", g_view.position);
+      g_m.main_uniform_store ->set_uniform("unif_CameraPosition", g_m.view->position);
     };
     
     auto select = scene_graph_select(n,
@@ -561,7 +561,7 @@ static void init_render_passes() {
 };
 
 static void init_api_data() {
-    g_view.reset_proj();
+    g_m.view->reset_proj();
 
     g_m.programs->load();
 
@@ -888,8 +888,8 @@ public:
 
         // TODO: cache screen_sp and clip_to_ndc, since they're essentially static data
         mat4_t screen_sp{R(1.0)};
-        screen_sp[0][0] = R(g_view.view_width);
-        screen_sp[1][1] = R(g_view.view_height);
+        screen_sp[0][0] = R(g_m.view->view_width);
+        screen_sp[1][1] = R(g_m.view->view_height);
 
         // OpenGL viewport origin is lower left, GLFW's is upper left.
         mouse.y = screen_sp[1][1] - mouse.y;
@@ -907,14 +907,14 @@ public:
         std::cout << AS_STRING_SS(depth) SEP_SS AS_STRING_SS(x_offset) SEP_SS AS_STRING_SS(y_offset)
                   << std::endl;
 
-        return glm::inverse(g_view.proj * g_view.view()) * mouse;
+        return glm::inverse(g_m.view->proj * g_m.view->view()) * mouse;
     }
     
     bool cast_ray(scene_graph::index_type entity) const {
         vec3_t nearp = screen_out();
         module_geom::ray world_raycast{}; 
-        world_raycast.dir = glm::normalize(nearp - g_view.position);
-        world_raycast.orig = g_view.position;
+        world_raycast.dir = glm::normalize(nearp - g_m.view->position);
+        world_raycast.orig = g_m.view->position;
 
         auto bvol = g_m.main_graph->bound_volumes[entity];
 
@@ -950,7 +950,7 @@ public:
             
             vec3_t Po{g_m.main_graph->positions[g_obj_manip->entity_selected]}; 
 
-            vec3_t Fo{Po - g_view.position}; // negated z-axis of transform defined by the plane of interest
+            vec3_t Fo{Po - g_m.view->position}; // negated z-axis of transform defined by the plane of interest
 
             select.normal = -glm::normalize(Fo);
             select.d = glm::abs(glm::dot(select.normal, Po));
@@ -1034,7 +1034,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
                                   static_cast<real_t>(g_cam_orient.dx),
                                   vec3_t(0.0f, 1.0f, 0.0f));
 
-        g_view.orient = mat3_t(yRot * xRot) * g_view.orient;
+        g_m.view->orient = mat3_t(yRot * xRot) * g_m.view->orient;
     } else {
         dxdy(1.0);
         g_cam_orient.prev_xpos = xpos;
@@ -1119,7 +1119,7 @@ int main(void) {
     //    toggle_framebuffer_srgb();
     
     while (!glfwWindowShouldClose(window)) {
-        g_view(g_cam_move_state);
+        (*g_m.view)(g_cam_move_state);
 
         if (g_obj_manip->has_select_model_state()) {
             g_obj_manip->update_select_model_state();

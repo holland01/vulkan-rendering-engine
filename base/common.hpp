@@ -112,6 +112,7 @@ struct module_models;
 struct vertex_buffer;
 struct scene_graph;
 struct shader_uniform_storage;
+struct view_data;
 
 struct modules {
   framebuffer_ops* framebuffer{nullptr};
@@ -121,7 +122,8 @@ struct modules {
   module_models* models{nullptr};
   vertex_buffer* main_vertex_buffer{nullptr};
   scene_graph* main_graph{nullptr};
-  shader_uniform_storage* main_uniform_store;
+  shader_uniform_storage* main_uniform_store{nullptr};
+  view_data* view{nullptr};
 
   void init();
   void free();
