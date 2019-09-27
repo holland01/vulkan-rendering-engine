@@ -50,6 +50,8 @@ void modules::init() {
   models = new module_models();
   models->model_vbo = main_vertex_buffer;
   models->model_view = &g_view;
+
+  main_uniform_store = new shader_uniform_storage();
 }
 
 void modules::free() {
@@ -183,8 +185,6 @@ struct object_manip {
 
 static std::unique_ptr<object_manip> g_obj_manip{new object_manip()};
 
-static std::unique_ptr<shader_uniform_storage> g_uniform_storage{new shader_uniform_storage()};
-
 struct pass_info {
   using ptr_type = std::unique_ptr<pass_info>;
   
@@ -244,16 +244,16 @@ struct pass_info {
         for (const auto& unif: uniforms) {
           switch (unif.type) {
             case shader_uniform_storage::uniform_mat4x4:
-              g_uniform_storage->set_uniform(unif.name, unif.m4);
+              g_m.main_uniform_store ->set_uniform(unif.name, unif.m4);
               break;
             case shader_uniform_storage::uniform_pointlight:
-              g_uniform_storage->set_uniform(unif.name, unif.pl);
+              g_m.main_uniform_store ->set_uniform(unif.name, unif.pl);
               break;
             case shader_uniform_storage::uniform_vec3:
-              g_uniform_storage->set_uniform(unif.name, unif.v3);
+              g_m.main_uniform_store ->set_uniform(unif.name, unif.v3);
               break;
             case shader_uniform_storage::uniform_int32:
-              g_uniform_storage->set_uniform(unif.name, unif.i32);
+              g_m.main_uniform_store ->set_uniform(unif.name, unif.i32);
               break;	  
           }
 
@@ -266,7 +266,7 @@ struct pass_info {
       init_fn();
       
       for (const auto& name: uniform_names) {
-	      g_uniform_storage->upload_uniform(name);
+	      g_m.main_uniform_store ->upload_uniform(name);
       }
 
       g_m.main_graph->select_draw(select_draw_predicate);
@@ -480,7 +480,7 @@ static void init_render_passes() {
     auto shader = g_m.programs->sphere_cubemap;
 
     auto init = []() {
-      g_uniform_storage->set_uniform("unif_CameraPosition", g_view.position);
+      g_m.main_uniform_store ->set_uniform("unif_CameraPosition", g_view.position);
     };
     
     auto select = scene_graph_select(n,
