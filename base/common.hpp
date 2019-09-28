@@ -50,6 +50,7 @@ namespace fs = std::experimental::filesystem;
 
 #define NOP ;
 
+
 using vec2_t = glm::vec2;
 using vec3_t = glm::vec3;
 using boolvec3_t = glm::bvec3;
@@ -94,7 +95,7 @@ using darray = std::vector<T>;
 
 #define OPENGL_VERSION_MAJOR_STR "4"
 #define OPENGL_VERSION_MINOR_STR "3"
-
+ 
 struct vertex {
   vec3_t position;
   vec4_t color;
@@ -103,14 +104,34 @@ struct vertex {
 };
 
 struct type_module;
+struct framebuffer_ops;
+struct module_programs;
+struct module_textures;
+struct module_geom;
+struct module_models;
+struct module_vertex_buffer;
+struct scene_graph;
+struct shader_uniform_storage;
+struct view_data;
 
-extern std::vector<type_module*> g_modules;
+struct modules {
+  framebuffer_ops* framebuffer{nullptr};
+  module_programs* programs{nullptr};
+  module_textures* textures{nullptr};
+  module_geom* geom{nullptr};
+  module_models* models{nullptr};
+  module_vertex_buffer* vertex_buffer{nullptr};
+  scene_graph* graph{nullptr};
+  shader_uniform_storage* uniform_store{nullptr};
+  view_data* view{nullptr};
+
+  void init();
+  void free();
+} extern g_m;
+
+//extern std::vector<type_module*> g_modules;
 
 struct type_module {
-  virtual void free_mem() = 0;
-  void registermod() {
-    g_modules.push_back(this);
-  }
 };
 
 template <typename numType>

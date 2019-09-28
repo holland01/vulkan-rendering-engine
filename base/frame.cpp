@@ -8,7 +8,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-void frame::screenshot() {
+void framebuffer_ops::screenshot() {
     std::stringstream ss;
 
     ss << "screenshoot_" << count << ".png";

@@ -1,26 +1,24 @@
 #include "textures.hpp"
 #include "stb_image.h"
 
-textures g_textures{};
-
-void textures::free_mem() {
+module_textures::~module_textures() {
     if (!tex_handles.empty()) {
         GL_FN(glDeleteTextures(static_cast<GLsizei>(tex_handles.size()), tex_handles.data()));
     }
 }
 
-void textures::bind(textures::index_type id, int slot) const {
+void module_textures::bind(module_textures::index_type id, int slot) const {
     slots[id] = static_cast<GLenum>(slot);
     GL_FN(glActiveTexture(GL_TEXTURE0 + slots[id]));
     GL_FN(glBindTexture(types[id], tex_handles[id]));
 }
 
-void textures::unbind(textures::index_type id) const {
+void module_textures::unbind(module_textures::index_type id) const {
     GL_FN(glActiveTexture(GL_TEXTURE0 + slots.at(id)));
     GL_FN(glBindTexture(types[id], 0));
 }
     
-textures::index_type textures::new_texture(uint32_t width,
+module_textures::index_type module_textures::new_texture(uint32_t width,
 					   uint32_t height,
 					   uint32_t channels,
 					   GLenum type,
@@ -56,7 +54,7 @@ textures::index_type textures::new_texture(uint32_t width,
 
     GL_FN(glBindTexture(type, 0));
 
-    auto index = static_cast<textures::index_type>(tex_handles.size());
+    auto index = static_cast<module_textures::index_type>(tex_handles.size());
 
     tex_handles.push_back(handle);
     widths.push_back(width);
@@ -68,7 +66,7 @@ textures::index_type textures::new_texture(uint32_t width,
     return index;
 }
 
-void textures::fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data) {
+void module_textures::fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data) {
     ASSERT_FMT(fmt);
     GLenum ifmt = (fmt == GL_DEPTH_COMPONENT
 		   ? GL_DEPTH_COMPONENT24
@@ -90,7 +88,7 @@ void textures::fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, cons
 
 }
 
-int textures::channels_from_format(GLenum format) const {
+int module_textures::channels_from_format(GLenum format) const {
     int channels = -1;
 
     switch (format) {
@@ -108,7 +106,7 @@ int textures::channels_from_format(GLenum format) const {
     return channels;
 }
 
-GLenum textures::format_from_channels(int channels) const {
+GLenum module_textures::format_from_channels(int channels) const {
     GLenum format = -1;
 
     switch (channels) {
@@ -144,7 +142,7 @@ void fill_checkerboard(std::vector<uint8_t>& blank, int w, int h, glm::u8vec3 ma
 }
 
 // creates a blank cubemap
-textures::index_type textures::new_cubemap(int w, int h, GLenum format) {
+module_textures::index_type module_textures::new_cubemap(int w, int h, GLenum format) {
     int channels = channels_from_format(format);
 
     GLenum min_mag_filter = format == GL_DEPTH_COMPONENT ? GL_NEAREST : GL_LINEAR;
@@ -203,7 +201,7 @@ textures::index_type textures::new_cubemap(int w, int h, GLenum format) {
     return cmap_id;
 }
     
-textures::index_type textures::new_cubemap(cubemap_paths_type paths) {
+module_textures::index_type module_textures::new_cubemap(cubemap_paths_type paths) {
     auto cmap_id = new_texture(0, 0, 0, GL_TEXTURE_CUBE_MAP);
 
     bind(cmap_id);
@@ -254,7 +252,7 @@ textures::index_type textures::new_cubemap(cubemap_paths_type paths) {
     return cmap_id;
 }
 
-void textures::set_tex_2d(textures::index_type tid, const uint8_t* pixels) const {
+void module_textures::set_tex_2d(module_textures::index_type tid, const uint8_t* pixels) const {
     bind(tid);
     GLenum format = format_from_channels(num_channels[tid]);
     ASSERT_FMT(format);
@@ -269,7 +267,7 @@ void textures::set_tex_2d(textures::index_type tid, const uint8_t* pixels) const
     unbind(tid);                           
 }
     
-textures::index_type textures::handle(textures::index_type i) const {
+module_textures::index_type module_textures::handle(module_textures::index_type i) const {
     return tex_handles.at(i);
 }
 

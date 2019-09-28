@@ -10,7 +10,7 @@
 
 #define ASSERT_FMT(fmt) ASSERT(fmt == GL_RGBA || fmt == GL_RGB || fmt == GL_DEPTH_COMPONENT)
 
-struct textures: public type_module {
+struct module_textures: public type_module {
     std::vector<GLuint> tex_handles;
 
     std::vector<uint32_t> widths;
@@ -25,7 +25,7 @@ struct textures: public type_module {
     static const inline index_type k_uninit = -1;
     static const inline fs::path k_root_path = fs::path("resources") / fs::path("textures");
 
-    void free_mem() override;
+    ~module_textures();
 
     void bind(index_type id, int slot = 0) const;
 
@@ -53,8 +53,4 @@ struct textures: public type_module {
 
     index_type handle(index_type i) const;
 };
-
-
-extern textures g_textures;
-
 

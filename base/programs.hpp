@@ -78,9 +78,9 @@ struct dpointlight {
   vec3_t color;
 };
 
-struct programs : public type_module {
+struct module_programs : public type_module {
 
-  using ptr_type = std::unique_ptr<programs>;
+  using ptr_type = std::unique_ptr<module_programs>;
   
   struct attrib_layout {
     GLint index;
@@ -540,7 +540,7 @@ struct programs : public type_module {
 
   using id_type = std::string;
   
-  void free_mem() override {
+  ~module_programs() {
     GL_FN(glUseProgram(0));
     
     for (auto& entry: data) {
@@ -580,9 +580,9 @@ struct programs : public type_module {
       //    ASSERT(id != -1);
 
       if (id == -1) {
-  write_logf("%s -> unif %s. Not found\n",
-       current.c_str(),
-       name.c_str());
+        write_logf("%s -> unif %s. Not found\n",
+        current.c_str(),
+        name.c_str());
       }
     }
     
@@ -636,25 +636,22 @@ struct programs : public type_module {
   
 };
 
-extern programs::ptr_type g_programs;
-
 // Make sure the VBO is bound BEFORE
 // this is initialized
 struct use_program {
   GLuint prog;
 
   use_program(const std::string& name)
-    : prog(g_programs->get(name)->handle){
+    : prog(g_m.programs->get(name)->handle){
 
-    g_programs->make_current(name);
-    g_programs->load_layout();
+    g_m.programs->make_current(name);
+    g_m.programs->load_layout();
     
     GL_FN(glUseProgram(prog));
   }
 
   ~use_program() {
-
-    g_programs->unload_layout();
+    g_m.programs->unload_layout();
     GL_FN(glUseProgram(0));
   }
 };
