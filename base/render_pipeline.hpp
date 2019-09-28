@@ -225,7 +225,7 @@ struct pass_info {
   darray<pass_info> subpasses;
 
   void draw() const {
-    g_m.main_graph->draw_all();
+    g_m.graph->draw_all();
   }
 
   void add_pointlight(const dpointlight& pl, int which) {
@@ -238,7 +238,7 @@ struct pass_info {
     if (active) {
       write_logf("pass: %s", name.c_str());
       
-      g_m.main_vertex_buffer->bind();
+      g_m.vertex_buffer->bind();
       use_program u(shader);
       
       for (const auto& bind: tex_bindings) {
@@ -249,16 +249,16 @@ struct pass_info {
         for (const auto& unif: uniforms) {
           switch (unif.type) {
             case shader_uniform_storage::uniform_mat4x4:
-              g_m.main_uniform_store ->set_uniform(unif.name, unif.m4);
+              g_m.uniform_store ->set_uniform(unif.name, unif.m4);
               break;
             case shader_uniform_storage::uniform_pointlight:
-              g_m.main_uniform_store ->set_uniform(unif.name, unif.pl);
+              g_m.uniform_store ->set_uniform(unif.name, unif.pl);
               break;
             case shader_uniform_storage::uniform_vec3:
-              g_m.main_uniform_store ->set_uniform(unif.name, unif.v3);
+              g_m.uniform_store ->set_uniform(unif.name, unif.v3);
               break;
             case shader_uniform_storage::uniform_int32:
-              g_m.main_uniform_store ->set_uniform(unif.name, unif.i32);
+              g_m.uniform_store ->set_uniform(unif.name, unif.i32);
               break;	  
           }
 
@@ -271,10 +271,10 @@ struct pass_info {
       init_fn();
       
       for (const auto& name: uniform_names) {
-	      g_m.main_uniform_store ->upload_uniform(name);
+	      g_m.uniform_store ->upload_uniform(name);
       }
 
-      g_m.main_graph->select_draw(select_draw_predicate);
+      g_m.graph->select_draw(select_draw_predicate);
       
       switch (frametype) {
         case frame_user: {
@@ -302,7 +302,7 @@ struct pass_info {
         g_m.textures->unbind(bind.id);
       }
 
-      g_m.main_vertex_buffer->unbind();
+      g_m.vertex_buffer->unbind();
     }
   }
 };

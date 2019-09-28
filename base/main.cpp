@@ -41,28 +41,26 @@ void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
   programs = new module_programs();
   textures = new module_textures();
-  geom = new module_geom();
-  view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
-  main_vertex_buffer = new vertex_buffer();
-  main_graph = new scene_graph();
-
+  vertex_buffer = new module_vertex_buffer();
   models = new module_models();
-  models->model_vbo = main_vertex_buffer;
-  models->model_view = view;
+  geom = new module_geom();
 
-  main_uniform_store = new shader_uniform_storage();
+  view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
+  graph = new scene_graph();
+  
+  uniform_store = new shader_uniform_storage();
 }
 
 void modules::free() {
   delete view;
   delete framebuffer;
-  delete main_uniform_store;
+  delete uniform_store;
   delete programs;
   delete textures;
   delete geom;
   delete models;
-  delete main_graph;
-  delete main_vertex_buffer;
+  delete graph;
+  delete vertex_buffer;
 }
 
 modules g_m{};
@@ -75,8 +73,6 @@ static bool g_reflect = true;
 static bool g_unif_gamma_correct = true;
 
 GLuint g_vao = 0;
-//
-//
 
 static move_state  g_cam_move_state = {
     0, 0, 0, 0, 0, 0, 0
@@ -111,7 +107,7 @@ struct object_manip {
     clear_select_model_state();
 
     entity_selected = entity;
-    entity_select_reset_pos = g_m.main_graph->positions[entity];
+    entity_select_reset_pos = g_m.graph->positions[entity];
   }
 
   bool has_select_model_state() const {
@@ -129,7 +125,7 @@ struct object_manip {
     ASSERT(has_select_model_state());
 
     vec3_t update{R(0.0)};
-    auto OBJECT_SELECT_MOVE_STEP = g_m.main_graph->bound_volumes[entity_selected].radius;
+    auto OBJECT_SELECT_MOVE_STEP = g_m.graph->bound_volumes[entity_selected].radius;
 
     MAP_UPDATE_SELECT_MODEL_STATE(front, z, -OBJECT_SELECT_MOVE_STEP);
     MAP_UPDATE_SELECT_MODEL_STATE(back, z, OBJECT_SELECT_MOVE_STEP);
@@ -159,24 +155,24 @@ struct object_manip {
     
   void move(index_type entity, const vec3_t& position, _move_op mop) {
     switch (mop) {
-    case mop_add: g_m.main_graph->positions[entity] += position; break;
-    case mop_sub: g_m.main_graph->positions[entity] -= position; break;
-    case mop_set: g_m.main_graph->positions[entity] = position; break;
+    case mop_add: g_m.graph->positions[entity] += position; break;
+    case mop_sub: g_m.graph->positions[entity] -= position; break;
+    case mop_set: g_m.graph->positions[entity] = position; break;
     }
 
-    g_m.main_graph->bound_volumes[entity].center = g_m.main_graph->positions[entity];
+    g_m.graph->bound_volumes[entity].center = g_m.graph->positions[entity];
   }
 
   // Place model 'a' ontop of model 'b'.
   // Right now we only care about bounding spheres
   void place_above(index_type a, index_type b) {
-    ASSERT(g_m.main_graph->bound_volumes[a].type == module_geom::bvol::type_sphere);
-    ASSERT(g_m.main_graph->bound_volumes[b].type == module_geom::bvol::type_sphere);
+    ASSERT(g_m.graph->bound_volumes[a].type == module_geom::bvol::type_sphere);
+    ASSERT(g_m.graph->bound_volumes[b].type == module_geom::bvol::type_sphere);
 
-    vec3_t a_position{g_m.main_graph->positions[b]};
+    vec3_t a_position{g_m.graph->positions[b]};
 
-    auto arad = g_m.main_graph->bound_volumes[a].radius;
-    auto brad = g_m.main_graph->bound_volumes[b].radius;
+    auto arad = g_m.graph->bound_volumes[a].radius;
+    auto brad = g_m.graph->bound_volumes[b].radius;
 
     a_position.y += arad + brad;
 
@@ -267,7 +263,7 @@ static void init_render_passes() {
       g_frame_model_map[g_m.models->modind_sphere].needs_render = true;
     };
 
-    auto select = scene_graph_select(n, n != g_m.main_graph->test_indices.sphere);
+    auto select = scene_graph_select(n, n != g_m.graph->test_indices.sphere);
 
     auto envmap_id = g_frame_model_map[g_m.models->modind_sphere].render_cube_id;
     
@@ -311,7 +307,7 @@ static void init_render_passes() {
     auto init = []() {};
 
     auto select = scene_graph_select(n,
-				     g_m.models->type(g_m.main_graph->model_indices[n]) ==
+				     g_m.models->type(g_m.graph->model_indices[n]) ==
 				     module_models::model_quad);
     
     auto envmap_id = framebuffer_ops::k_uninit;
@@ -363,11 +359,11 @@ static void init_render_passes() {
     auto shader = g_m.programs->sphere_cubemap;
 
     auto init = []() {
-      g_m.main_uniform_store ->set_uniform("unif_CameraPosition", g_m.view->position);
+      g_m.uniform_store ->set_uniform("unif_CameraPosition", g_m.view->position);
     };
     
     auto select = scene_graph_select(n,
-				     n == g_m.main_graph->test_indices.sphere);
+				     n == g_m.graph->test_indices.sphere);
 
     auto envmap_id = framebuffer_ops::k_uninit;
     auto active = true;
@@ -402,7 +398,7 @@ static void init_render_passes() {
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
 
     {
-      mat4_t model{g_m.main_graph->model_transform(g_m.main_graph->test_indices.area_sphere)};
+      mat4_t model{g_m.graph->model_transform(g_m.graph->test_indices.area_sphere)};
       unifs.push_back(duniform(model,
                                "unif_Model"));
     }
@@ -417,7 +413,7 @@ static void init_render_passes() {
 
     auto init = []() {};
     
-    auto select = scene_graph_select(n, n == g_m.main_graph->test_indices.area_sphere);
+    auto select = scene_graph_select(n, n == g_m.graph->test_indices.area_sphere);
 
     auto envmap_id = framebuffer_ops::k_uninit;
     
@@ -463,7 +459,7 @@ static void init_api_data() {
     
     real_t wall_size = R(15.0);
     
-    g_m.main_vertex_buffer->reset();
+    g_m.vertex_buffer->reset();
 
     {
       scene_graph::init_info sphere;
@@ -476,7 +472,7 @@ static void init_api_data() {
       sphere.parent = 0;
       sphere.bvol = g_m.geom->make_bsphere(ROOM_SPHERE_RADIUS, ROOM_SPHERE_POS);
 
-      g_m.main_graph->test_indices.area_sphere = g_m.main_graph->new_node(sphere);
+      g_m.graph->test_indices.area_sphere = g_m.graph->new_node(sphere);
     }
     
     {
@@ -487,11 +483,11 @@ static void init_api_data() {
       sphere.angle = vec3_t{0};
 
       sphere.model = g_m.models->modind_sphere;
-      sphere.parent = g_m.main_graph->test_indices.area_sphere;
+      sphere.parent = g_m.graph->test_indices.area_sphere;
       sphere.pickable = true;
       sphere.bvol = g_m.geom->make_bsphere(TEST_SPHERE_RADIUS, TEST_SPHERE_POS);
 
-      g_m.main_graph->test_indices.sphere = g_m.main_graph->new_node(sphere);
+      g_m.graph->test_indices.sphere = g_m.graph->new_node(sphere);
     }
     
     {
@@ -503,9 +499,9 @@ static void init_api_data() {
 
       floor.model = g_m.models->new_wall(module_models::wall_bottom, R4v(1.0, 1.0, 1.0, 1.0));
       
-      floor.parent = g_m.main_graph->test_indices.area_sphere;
+      floor.parent = g_m.graph->test_indices.area_sphere;
       
-      g_m.main_graph->test_indices.floor = g_m.main_graph->new_node(floor);
+      g_m.graph->test_indices.floor = g_m.graph->new_node(floor);
     }
     
     GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
@@ -798,7 +794,7 @@ public:
         world_raycast.dir = glm::normalize(nearp - g_m.view->position);
         world_raycast.orig = g_m.view->position;
 
-        auto bvol = g_m.main_graph->bound_volumes[entity];
+        auto bvol = g_m.graph->bound_volumes[entity];
 
         bool success = g_m.geom->test_ray_sphere(world_raycast, bvol);
         
@@ -830,7 +826,7 @@ public:
         if (select.calc) {
             //ASSERT(false);
             
-            vec3_t Po{g_m.main_graph->positions[g_obj_manip->entity_selected]}; 
+            vec3_t Po{g_m.graph->positions[g_obj_manip->entity_selected]}; 
 
             vec3_t Fo{Po - g_m.view->position}; // negated z-axis of transform defined by the plane of interest
 
@@ -856,10 +852,10 @@ public:
 
     void scan_object_selection() const {
         auto filtered = 
-          g_m.main_graph->select(scene_graph_select(entity, 
-                                             g_m.models->type(g_m.main_graph->model_indices[entity]) == 
+          g_m.graph->select(scene_graph_select(entity, 
+                                             g_m.models->type(g_m.graph->model_indices[entity]) == 
                                               module_models::model_sphere && 
-                                              g_m.main_graph->pickable[entity] == true));
+                                              g_m.graph->pickable[entity] == true));
         
         for (auto id: filtered) {
             if (cast_ray(id)) {

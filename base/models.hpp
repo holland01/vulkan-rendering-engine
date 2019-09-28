@@ -48,9 +48,6 @@ struct module_models {
   index_type modind_selected = k_uninit;
 
   mutable bool framebuffer_pinned = false;
-
-  vertex_buffer* model_vbo = nullptr;
-  view_data* model_view = nullptr;
     
   // It's assumed that vertices
   // have been already added to the vertex
@@ -72,13 +69,13 @@ struct module_models {
     
     model_count++;
 
-    model_vbo->reset();
+    g_m.vertex_buffer->reset();
 
     return id;
   }    
     
   auto new_sphere(vec4_t color = vec4_t{R(1.0)}) {
-    auto offset = model_vbo->num_vertices();
+    auto offset = g_m.vertex_buffer->num_vertices();
 
     real_t step = 0.05f;
 
@@ -99,11 +96,11 @@ struct module_models {
         auto c = cart(phi + step, theta + step);
         auto d = cart(phi + step, theta);
 
-        model_vbo->add_triangle(a, color, a,
+        g_m.vertex_buffer->add_triangle(a, color, a,
                                      d, color, d,
                                      c, color, c);
 
-        model_vbo->add_triangle(c, color, c,
+        g_m.vertex_buffer->add_triangle(c, color, c,
                                      a, color, a,
                                      b, color, b);
         
@@ -189,7 +186,7 @@ struct module_models {
       1.0f, 0.0f, 1.0f
     };
 
-    auto vbo_offset = model_vbo->num_vertices();
+    auto vbo_offset = g_m.vertex_buffer->num_vertices();
         
     real_t* offset = &vertices[type * 18];
 
@@ -199,7 +196,7 @@ struct module_models {
     vec3_t b(offset[3], offset[4], offset[5]);
     vec3_t c(offset[6], offset[7], offset[8]);
 
-    model_vbo->add_triangle(a, color, normal, 
+    g_m.vertex_buffer->add_triangle(a, color, normal, 
 				                         b, color, normal,
                                  c, color, normal);
 
@@ -207,7 +204,7 @@ struct module_models {
     vec3_t e(offset[12], offset[13], offset[14]);
     vec3_t f(offset[15], offset[16], offset[17]);
 
-    model_vbo->add_triangle(d, color, normal,
+    g_m.vertex_buffer->add_triangle(d, color, normal,
                             e, color, normal,
                             f, color, normal);
  
@@ -263,23 +260,23 @@ struct module_models {
       1.0f, -1.0f, 1.0f
     };
 
-    auto offset = model_vbo->num_vertices();
+    auto offset = g_m.vertex_buffer->num_vertices();
 
     for (auto i = 0; i < vertices.size(); i += 9) {
       vec3_t a(vertices[i + 0], vertices[i + 1], vertices[i + 2]);
       vec3_t b(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
       vec3_t c(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
 
-      model_vbo->add_triangle( a, color,
-                               b, color,
-                               c, color);
+      g_m.vertex_buffer->add_triangle( a, color,
+                                       b, color,
+                                       c, color);
     }
 
     return new_model(model_cube, offset, 36);
   }
 
   void render(index_type model, const mat4_t& world) const {
-    mat4_t mv = model_view->view() * world;
+    mat4_t mv = g_m.view->view() * world;
 
     if (g_m.programs->uniform("unif_Model") != -1) {
       g_m.programs->up_mat4x4("unif_Model", world);
@@ -288,10 +285,10 @@ struct module_models {
     g_m.programs->up_mat4x4("unif_ModelView", mv);
     g_m.programs->up_mat4x4("unif_Projection",
         (model == modind_skybox
-          ? model_view->skyproj
+          ? g_m.view->skyproj
           : (framebuffer_pinned
-            ? model_view->cubeproj
-            : model_view->proj)));
+            ? g_m.view->cubeproj
+            : g_m.view->proj)));
       
     auto ofs = vertex_offsets[model];
     auto count = vertex_counts[model];

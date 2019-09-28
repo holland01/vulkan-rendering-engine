@@ -5,12 +5,12 @@
 
 #include <glm/gtc/constants.hpp>
 
-struct vertex_buffer {
+struct module_vertex_buffer {
     darray<vertex> data;
 
     mutable GLuint vbo;
 
-    vertex_buffer()
+    module_vertex_buffer()
         : vbo(0) {
     }
 

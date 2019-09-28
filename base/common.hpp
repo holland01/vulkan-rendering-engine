@@ -109,7 +109,7 @@ struct module_programs;
 struct module_textures;
 struct module_geom;
 struct module_models;
-struct vertex_buffer;
+struct module_vertex_buffer;
 struct scene_graph;
 struct shader_uniform_storage;
 struct view_data;
@@ -120,9 +120,9 @@ struct modules {
   module_textures* textures{nullptr};
   module_geom* geom{nullptr};
   module_models* models{nullptr};
-  vertex_buffer* main_vertex_buffer{nullptr};
-  scene_graph* main_graph{nullptr};
-  shader_uniform_storage* main_uniform_store{nullptr};
+  module_vertex_buffer* vertex_buffer{nullptr};
+  scene_graph* graph{nullptr};
+  shader_uniform_storage* uniform_store{nullptr};
   view_data* view{nullptr};
 
   void init();

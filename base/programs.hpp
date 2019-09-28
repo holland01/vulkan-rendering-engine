@@ -580,9 +580,9 @@ struct module_programs : public type_module {
       //    ASSERT(id != -1);
 
       if (id == -1) {
-  write_logf("%s -> unif %s. Not found\n",
-       current.c_str(),
-       name.c_str());
+        write_logf("%s -> unif %s. Not found\n",
+        current.c_str(),
+        name.c_str());
       }
     }
     
