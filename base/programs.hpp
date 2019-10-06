@@ -67,7 +67,7 @@ static constexpr shadergen_flags_t vshader_frag_pos_color_normal() {
 #define VSHADER_POINTLIGHTS vshader_frag_pos_color_normal() | vshader_in_normal | vshader_unif_model
 #define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights
 
-static inline std::vector<std::string> uniform_location_pointlight(uint32_t index) {
+static inline darray<std::string> uniform_location_pointlight(uint32_t index) {
   return {
     "unif_Lights[" + std::to_string(index) + "].position",
     "unif_Lights[" + std::to_string(index) + "].color"
@@ -107,7 +107,7 @@ struct module_programs : public type_module {
     std::string vertex;
     std::string fragment;
 
-    std::vector<std::string> uniforms;
+    darray<std::string> uniforms;
     attrib_map_type attribs;
   };
 
@@ -403,7 +403,7 @@ struct module_programs : public type_module {
     return s;
   }
 
-  std::vector<programdef> defs = {
+  darray<programdef> defs = {
     {
       "main",
       gen_vshader(VSHADER_POINTLIGHTS),
@@ -411,8 +411,8 @@ struct module_programs : public type_module {
       gen_fshader(FSHADER_POINTLIGHTS,
                   {NUM_LIGHTS,
                   true}),
-      ([&]() -> std::vector<std::string> {
-        return std::vector<std::string>{
+      ([&]() -> darray<std::string> {
+        return darray<std::string> {
           "unif_ModelView",
           "unif_Projection",
           "unif_Model"
@@ -476,8 +476,8 @@ struct module_programs : public type_module {
                     NUM_LIGHTS, 
                     true        // invert normals
                   }),
-      ([&]() -> std::vector<std::string>  {
-        return std::vector<std::string>{
+      ([&]() -> darray<std::string>  {
+        return darray<std::string>{
           "unif_ModelView",
           "unif_Projection",
           "unif_TexCubeMap",
@@ -539,8 +539,8 @@ struct module_programs : public type_module {
                   fshader_unif_texcubemap |
                   fshader_reflect),
 #endif
-      ([&]() -> std::vector<std::string> { 
-        return std::vector<std::string> {
+      ([&]() -> darray<std::string> { 
+        return darray<std::string> {
           "unif_Model",
           "unif_ModelView",
           "unif_Projection",

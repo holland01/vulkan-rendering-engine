@@ -21,11 +21,10 @@ struct shader_uniform_storage {
     uniform_int32
   };
 
-  std::vector<mat4_t> mat4x4_store;
-  std::vector<dpointlight> pointlight_store;
-  std::vector<vec3_t> vec3_store;
-  std::vector<int32_t> int32_store;
-
+  darray<mat4_t> mat4x4_store;
+  darray<dpointlight> pointlight_store;
+  darray<vec3_t> vec3_store;
+  darray<int32_t> int32_store;
 
   static const inline size_t MAX_BUFFER_OFFSET = (1 << ( (8 * sizeof(buffer_offset_t)) - 1 ));
   
@@ -40,7 +39,7 @@ struct shader_uniform_storage {
 	    uniform_type unif_type>
   void set_uniform(const std::string& name,
 		   const uniformType& v,
-		   std::vector<uniformType>& store);
+		   darray<uniformType>& store);
 
   void set_uniform(const std::string& name, const mat4_t& m);
   void set_uniform(const std::string& name, const vec3_t& v);

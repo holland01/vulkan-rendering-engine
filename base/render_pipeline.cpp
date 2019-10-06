@@ -3,7 +3,7 @@
 template <class uniformType, shader_uniform_storage::uniform_type unif_type>
 void shader_uniform_storage::set_uniform(const std::string& name,
 		 const uniformType& v,
-		 std::vector<uniformType>& store) {
+		 darray<uniformType>& store) {
   auto it = datum_store.find(name);
 
   if (it == datum_store.end()) {
