@@ -631,6 +631,10 @@ struct module_programs : public type_module {
     GL_FN(glUniform1i(uniform(name), i));
   }
 
+  void up_float(const std::string& name, float f) const {
+    GL_FN(glUniform1f(uniform(name), f));
+  }
+
   void up_vec3(const std::string& name, const vec3_t& v) const {
     GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
   }

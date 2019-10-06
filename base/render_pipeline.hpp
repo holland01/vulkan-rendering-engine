@@ -18,13 +18,15 @@ struct shader_uniform_storage {
     uniform_mat4x4 = 0,
     uniform_pointlight,
     uniform_vec3,
-    uniform_int32
+    uniform_int32,
+    uniform_float32
   };
 
   darray<mat4_t> mat4x4_store;
   darray<dpointlight> pointlight_store;
   darray<vec3_t> vec3_store;
   darray<int32_t> int32_store;
+  darray<float> float32_store;
 
   static const inline size_t MAX_BUFFER_OFFSET = (1 << ( (8 * sizeof(buffer_offset_t)) - 1 ));
   
@@ -44,6 +46,7 @@ struct shader_uniform_storage {
   void set_uniform(const std::string& name, const mat4_t& m);
   void set_uniform(const std::string& name, const vec3_t& v);
   void set_uniform(const std::string& name, int32_t i);
+  void set_uniform(const std::string& name, float f);
   void set_uniform(const std::string& name, const dpointlight& pl);
   
   void upload_uniform(const std::string& name) const;
@@ -55,6 +58,7 @@ struct duniform {
     dpointlight pl;
     vec3_t v3;
     int32_t i32;
+    float f32;
   };
 
   std::string name;
@@ -83,6 +87,12 @@ struct duniform {
     : i32(i),
       name(n),
       type(shader_uniform_storage::uniform_int32)
+  {}
+
+  duniform(float f, const std::string& n)
+    : f32(f),
+      name(n),
+      type(shader_uniform_storage::uniform_float32)
   {}
 };
 
@@ -232,6 +242,14 @@ struct pass_info {
     std::string name = "unif_Lights[" + std::to_string(which) + "]";
     uniforms.push_back(duniform{pl, name});
   }
+
+  void add_vec3(const std::string& name, const vec3_t& v) {
+    uniforms.push_back(duniform{v, name});
+  }
+
+  void add_float(const std::string& name, float f) {
+    uniforms.push_back(duniform{f, name});
+  }
   
   void apply() {
     if (active) {
@@ -259,6 +277,9 @@ struct pass_info {
             case shader_uniform_storage::uniform_int32:
               g_m.uniform_store ->set_uniform(unif.name, unif.i32);
               break;	  
+            case shader_uniform_storage::uniform_float32:
+              g_m.uniform_store->set_uniform(unif.name, unif.f32);
+              break;
           }
 
           uniform_names.push_back(unif.name);
