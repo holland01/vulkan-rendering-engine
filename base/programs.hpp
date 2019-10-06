@@ -65,7 +65,7 @@ static constexpr shadergen_flags_t vshader_frag_pos_color_normal() {
 }
 
 #define VSHADER_POINTLIGHTS vshader_frag_pos_color_normal() | vshader_in_normal | vshader_unif_model
-#define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights
+#define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights | fshader_lights_shine_phong
 
 static inline darray<std::string> uniform_location_pointlight(uint32_t index) {
   return {
@@ -416,7 +416,8 @@ struct module_programs : public type_module {
           "unif_ModelView",
           "unif_Projection",
           "unif_Model"
-        } + uniform_location_pointlight(0);
+        } + uniform_location_pointlight(0) 
+          + uniform_location_shine();
       })(),
       {
         attrib_layout_position(),
@@ -482,7 +483,8 @@ struct module_programs : public type_module {
           "unif_Projection",
           "unif_TexCubeMap",
           "unif_Model"
-        }  + uniform_location_pointlight(0);
+        }  + uniform_location_pointlight(0)
+           + uniform_location_shine();
       })(),
       {
         attrib_layout_position(),

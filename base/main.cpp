@@ -223,12 +223,29 @@ struct gl_clear_depth {
 
 static const dpointlight g_pointlight{
   R3v(5.0, 5.0, 0),
-  R3v(0, 1, 0)
+  R3v(0.3, 0.3, 0.3)
 };
+
+void shader_pointlight_update() {
+  g_m.uniform_store->set_uniform("unif_CameraPosition", g_m.view->position);
+}
 
 void add_pointlights(pass_info& p) {
   if (p.name == "floor" || p.name == "room" || p.name == "envmap") {
     p.add_pointlight(g_pointlight, 0);
+    p.add_vec3("unif_CameraPosition", vec3_t{});
+  }
+
+  if (p.name == "floor") {
+    p.add_float("unif_MaterialSmooth", 1.0);
+  }
+
+  if (p.name == "room") {
+    p.add_float("unif_MaterialSmooth", 1.0);
+  }
+
+  if (p.name == "envmap") {
+    p.add_float("unif_MaterialSmooth", 1.0);
   }
 }
 
@@ -261,13 +278,14 @@ static void init_render_passes() {
     auto init = []() {
       g_m.framebuffer->rcube->faces[0] = g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
       g_frame_model_map[g_m.models->modind_sphere].needs_render = true;
+      shader_pointlight_update();
     };
 
     auto select = scene_graph_select(n, n != g_m.graph->test_indices.sphere);
 
     auto envmap_id = g_frame_model_map[g_m.models->modind_sphere].render_cube_id;
     
-    auto active = true;
+    auto active = false;
     
     pass_info envmap{
       "envmap",
@@ -304,11 +322,13 @@ static void init_render_passes() {
 
     auto shader = g_m.programs->default_fb;
 
-    auto init = []() {};
+    auto init = []() {
+      shader_pointlight_update();
+    };
 
     auto select = scene_graph_select(n,
-				     g_m.models->type(g_m.graph->model_indices[n]) ==
-				     module_models::model_quad);
+                                     g_m.models->type(g_m.graph->model_indices[n]) ==
+                                     module_models::model_quad);
     
     auto envmap_id = framebuffer_ops::k_uninit;
     
@@ -359,6 +379,8 @@ static void init_render_passes() {
     auto shader = g_m.programs->sphere_cubemap;
 
     auto init = []() {
+      // NOTE: unif_CameraPosition is also used for specular reflection - 
+      // this unif_CameraPosition does NOT correspond to that.
       g_m.uniform_store ->set_uniform("unif_CameraPosition", g_m.view->position);
     };
     
@@ -411,7 +433,9 @@ static void init_render_passes() {
 
     auto shader = g_m.programs->skybox;
 
-    auto init = []() {};
+    auto init = []() {
+      shader_pointlight_update();
+    };
     
     auto select = scene_graph_select(n, n == g_m.graph->test_indices.area_sphere);
 
