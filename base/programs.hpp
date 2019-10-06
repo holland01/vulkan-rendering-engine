@@ -42,6 +42,7 @@ enum {
   fshader_reflect = 1 << 5,
   fshader_lights = 1 << 6,
   fshader_unif_model = 1 << 7,
+  fshader_lights_shine_phong = 1 << 8
 };
 
 struct fshader_params {
@@ -70,6 +71,13 @@ static inline std::vector<std::string> uniform_location_pointlight(uint32_t inde
   return {
     "unif_Lights[" + std::to_string(index) + "].position",
     "unif_Lights[" + std::to_string(index) + "].color"
+  };
+}
+
+static inline darray<std::string> uniform_location_shine() {
+  return { 
+    "unif_MaterialSmooth", 
+    "unif_CameraPosition" 
   };
 }
 
@@ -243,6 +251,7 @@ struct module_programs : public type_module {
     bool reflect = flags & fshader_reflect;
     bool lights = flags & fshader_lights;
     bool unif_model = flags & fshader_unif_model;
+    bool lights_shine_phong = flags & fshader_lights_shine_phong;
 
     if (reflect) {
       ASSERT(!frag_texcoord);
@@ -273,6 +282,12 @@ struct module_programs : public type_module {
          << GLSL_L(];);
     }
 
+    if (lights_shine_phong) {
+      ASSERT(lights);
+      ss << GLSL_L(uniform float unif_MaterialSmooth;)
+         << GLSL_L(uniform vec3 unif_CameraPosition;);
+    }
+
     if (unif_model) { 
       ASSERT(lights); // only expected use case currently
       ss << GLSL_L(uniform mat4 unif_Model;);
@@ -290,6 +305,18 @@ struct module_programs : public type_module {
        << GLSL_TL(return min(max(normalize(v), vec3(0.0)), vec3(1.0));)
        << GLSL_L(});
 
+    if (lights_shine_phong) {
+      ASSERT(lights);
+      ss  << GLSL_L(float phongShine(in vec3 vposition, 
+                                     in vec3 vnormal, 
+                                     in vec3 dirToViewer, 
+                                     in vec3 lightPos) {)
+          << GLSL_TL(vec3 dirToLight = normalize(lightPos - vposition);)
+          << GLSL_TL(vec3 reflectDir = reflect(-dirToLight, normalize(vnormal));)
+          << GLSL_TL(return pow(dot(reflectDir, dirToViewer), unif_MaterialSmooth);)
+          << GLSL_L(});
+    }
+
     if (lights) {
       /* TODO: eliminate conditional overhead associated with "invertNormals".
        * there is a function which allows direct bit manipulation of floats,
@@ -297,17 +324,24 @@ struct module_programs : public type_module {
        * function to perform the inversion when invertNormals == true, and
        * not invert when invertNormals == false.
        */
-
       ss  << GLSL_L(vec3 applyPointLights(in vec3 vposition, in vec3 vnormal, int numLights, bool invertNormals) {)
           << GLSL_TL(vec3 lightpass = vec3(0.0);)
           << GLSL_TL(const float c1 = 0.0;)
           << GLSL_TL(const float c2 = 0.0;)
-          << GLSL_TL(const float c3 = invertNormals ? -1.0 : 1.0;)
+          << GLSL_TL(const float c3 = invertNormals ? -1.0 : 1.0;);
+          if (lights_shine_phong) {
+            ss << GLSL_TL(vec3 dirToViewer = normalize(unif_CameraPosition - vposition););
+          }
+          ss
           << GLSL_TL(for (int i = 0; i < numLights; ++i) {)
           << GLSL_TTL(vec3 lightDir = normalize(unif_Lights[i].position - vposition);)
           << GLSL_TTL(float diff = max(dot(lightDir, c3 * normalize(vnormal)), 0.0);)
           << GLSL_TTL(vec3 diffuse = unif_Lights[i].color * diff * frag_Color.xyz;)
-          << GLSL_TTL(vec3 result = diffuse;)
+          << GLSL_TTL(vec3 result = diffuse;);
+          if (lights_shine_phong) {
+            ss << GLSL_TTL(result *= phongShine(vposition, vnormal, dirToViewer, unif_Lights[i].position););
+          }
+          ss
           #if 0
           << GLSL_TTL(float distance = length(unif_Lights[i].position - vposition);)
           << GLSL_TTL(result *= (1.0 / (1.0 + (c1 * distance) + (c2 * distance * distance)));)
