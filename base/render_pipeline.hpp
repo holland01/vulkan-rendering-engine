@@ -111,7 +111,6 @@ struct gl_state {
     GLboolean mask{GL_TRUE};
 
     bool test_enabled{true};
-    
   } depth{};
 
   struct {
@@ -266,17 +265,17 @@ struct pass_info {
         for (const auto& unif: uniforms) {
           switch (unif.type) {
             case shader_uniform_storage::uniform_mat4x4:
-              g_m.uniform_store ->set_uniform(unif.name, unif.m4);
+              g_m.uniform_store->set_uniform(unif.name, unif.m4);
               break;
             case shader_uniform_storage::uniform_pointlight:
-              g_m.uniform_store ->set_uniform(unif.name, unif.pl);
+              g_m.uniform_store->set_uniform(unif.name, unif.pl);
               break;
             case shader_uniform_storage::uniform_vec3:
-              g_m.uniform_store ->set_uniform(unif.name, unif.v3);
+              g_m.uniform_store->set_uniform(unif.name, unif.v3);
               break;
             case shader_uniform_storage::uniform_int32:
-              g_m.uniform_store ->set_uniform(unif.name, unif.i32);
-              break;	  
+              g_m.uniform_store->set_uniform(unif.name, unif.i32);
+              break;
             case shader_uniform_storage::uniform_float32:
               g_m.uniform_store->set_uniform(unif.name, unif.f32);
               break;
@@ -291,7 +290,7 @@ struct pass_info {
       init_fn();
       
       for (const auto& name: uniform_names) {
-	      g_m.uniform_store ->upload_uniform(name);
+	      g_m.uniform_store->upload_uniform(name);
       }
 
       g_m.graph->select_draw(select_draw_predicate);

@@ -87,7 +87,6 @@ struct dpointlight {
 };
 
 struct module_programs : public type_module {
-
   using ptr_type = std::unique_ptr<module_programs>;
   
   struct attrib_layout {
@@ -240,7 +239,7 @@ struct module_programs : public type_module {
 
   static std::string gen_fshader( shadergen_flags_t flags, 
                                   fshader_params p=fshader_params{}, 
-                                  const std::string& name = "UNSPECIFIED") {
+                                  const std::string& name = "UNSPECIFIED" ) {
     std::stringstream ss;
 
     bool frag_position = flags & fshader_frag_position;
@@ -657,12 +656,13 @@ struct module_programs : public type_module {
       const auto& layout = attrib.second;
       
       GL_FN(glEnableVertexAttribArray(layout.index));
+    
       GL_FN(glVertexAttribPointer(layout.index,
                                   layout.size,
                                   layout.type,
                                   layout.normalized,
                                   layout.stride,
-                                  layout.pointer));                                 
+                                  layout.pointer));
     } 
   }
 
