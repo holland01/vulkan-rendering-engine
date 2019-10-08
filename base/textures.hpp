@@ -10,14 +10,22 @@
 
 #define ASSERT_FMT(fmt) ASSERT(fmt == GL_RGBA || fmt == GL_RGB || fmt == GL_DEPTH_COMPONENT)
 
-struct module_textures: public type_module {
-    std::vector<GLuint> tex_handles;
+using texparams_t = darray<GLenum>;
 
-    std::vector<uint32_t> widths;
-    std::vector<uint32_t> heights;
-    std::vector<uint32_t> num_channels;
-    mutable std::vector<GLenum> slots;
-    std::vector<GLenum> types;
+struct module_textures: public type_module {
+    darray<GLuint> tex_handles;
+
+    darray<uint32_t> widths;
+    darray<uint32_t> heights;
+    darray<uint32_t> num_channels;
+    darray<GLenum> internal_formats;
+    darray<GLenum> formats;
+    darray<uint8_t> num_levels; // only zero supported for now
+    darray<GLenum> min_filters;
+    darray<GLenum> mag_filters;
+    darray<GLenum> texel_types;
+    mutable darray<GLenum> slots;
+    darray<GLenum> types;
 
     using index_type = int16_t;
     using cubemap_paths_type = std::array<fs::path, 6>;
@@ -30,26 +38,73 @@ struct module_textures: public type_module {
     void bind(index_type id, int slot = 0) const;
 
     void unbind(index_type id) const;
-    
-    index_type new_texture(uint32_t width,
-			   uint32_t height,
-			   uint32_t channels,
-			   GLenum type,
-			   GLenum min_filter = GL_LINEAR,
-			   GLenum mag_filter = GL_LINEAR);
+
+    struct params {
+        darray<uint8_t> data{};
+
+        GLenum type {GL_TEXTURE_2D};
+        
+        GLenum format{GL_RGBA};
+        GLenum internal_format{GL_RGBA};
+        
+        GLenum min_filter {GL_LINEAR};
+        GLenum mag_filter {GL_LINEAR};
+
+        GLenum wrap_mode_s {GL_CLAMP_TO_EDGE};
+        GLenum wrap_mode_t {GL_CLAMP_TO_EDGE};
+        GLenum wrap_mode_r {GL_CLAMP_TO_EDGE};
+
+        GLenum mip_base_level{0};
+        GLenum mip_max_level{0};
+
+        GLenum texel_type{GL_UNSIGNED_BYTE};
+
+        uint32_t width{256}; 
+        uint32_t height{256}; 
+        uint32_t num_channels{4};
+
+        uint8_t num_levels{1};
+
+        auto post() const {
+            ASSERT(num_levels == 1);
+            ASSERT(mip_base_level == 0);
+            ASSERT(mip_max_level == 0);
+
+            darray<GLenum> v;
+
+            v.insert(v.end(), {
+                GL_TEXTURE_MIN_FILTER, min_filter,
+                GL_TEXTURE_MAG_FILTER, mag_filter,
+                GL_TEXTURE_WRAP_T, wrap_mode_s,
+                GL_TEXTURE_WRAP_S, wrap_mode_t,
+                GL_TEXTURE_BASE_LEVEL, mip_base_level,
+                GL_TEXTURE_MAX_LEVEL, mip_max_level 
+            });
+
+            if (type == GL_TEXTURE_CUBE_MAP) {
+                v.insert(v.end(), {
+                    GL_TEXTURE_WRAP_R, wrap_mode_r
+                });
+            }
+
+            ASSERT((v.size() & 1) == 0);
+
+            return v;
+        }
+    };
+
+    module_textures::params cubemap_params(uint32_t width, uint32_t height);
+    module_textures::params depthtexture_params(uint32_t width, uint32_t height);
+
+    index_type new_texture(const module_textures::params& p);
 
     void fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data);
 
-    int channels_from_format(GLenum format) const;
+    void fill_texture2d(GLenum paramtype, index_type tid, const uint8_t* data);
 
     GLenum format_from_channels(int channels) const;
-    
-    // creates a blank cubemap
-    index_type new_cubemap(int w, int h, GLenum format);
-    
+        
     index_type new_cubemap(cubemap_paths_type paths);
-    
-    void set_tex_2d(index_type tid, const uint8_t* pixels) const;
 
     index_type handle(index_type i) const;
 };

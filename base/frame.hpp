@@ -84,21 +84,14 @@ struct framebuffer_ops {
         auto add(const vec3_t& position, real_t radius) {           
             auto rcubeid = tex_color_handles.size();
 	    
-            tex_color_handles.push_back(g_m.textures->new_cubemap(cwidth,
-							       cheight,
-							       GL_RGBA));
+            tex_color_handles.push_back(g_m.textures->new_texture(g_m.textures->cubemap_params(cwidth, cheight)));
 
 #if defined(ENVMAP_CUBE_DEPTH)
             tex_depth_handles.push_back(g_m.textures->new_cubemap(cwidth,
                                                                cheight,
                                                                GL_DEPTH_COMPONENT));
 #else
-	    tex_depth_handles.push_back(g_m.textures->new_texture(cwidth,
-							       cheight,
-							       1,
-							       GL_TEXTURE_2D,
-							       GL_NEAREST,
-							       GL_NEAREST));
+	    tex_depth_handles.push_back(g_m.textures->new_texture(g_m.textures->depthtexture_params(cwidth, cheight)));
 #endif // ENVMAP_CUBE_DEPTH
 
 #if !defined(ENVMAP_CUBE_DEPTH)

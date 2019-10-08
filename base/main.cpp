@@ -479,7 +479,7 @@ static void init_api_data() {
     
     g_frame_model_map[g_m.models->modind_sphere] = fmod;
     
-    g_checkerboard_cubemap = g_m.textures->new_cubemap(256, 256, GL_RGBA);
+    g_checkerboard_cubemap = g_m.textures->new_texture(g_m.textures->cubemap_params(256, 256));
     
     real_t wall_size = R(15.0);
     

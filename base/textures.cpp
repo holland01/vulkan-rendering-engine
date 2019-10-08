@@ -17,51 +17,92 @@ void module_textures::unbind(module_textures::index_type id) const {
     GL_FN(glActiveTexture(GL_TEXTURE0 + slots.at(id)));
     GL_FN(glBindTexture(types[id], 0));
 }
+
+module_textures::params module_textures::cubemap_params(uint32_t width, uint32_t height) {
+    params p{};
+
+    p.width = width;
+    p.height = height;
+    p.num_channels = 4;
+    p.type = GL_TEXTURE_CUBE_MAP;
+    p.data.resize(p.width * p.height * p.num_channels, 0xFF);
     
-module_textures::index_type module_textures::new_texture(uint32_t width,
-					   uint32_t height,
-					   uint32_t channels,
-					   GLenum type,
-					   GLenum min_filter,
-					   GLenum mag_filter) {
+    puts("cmp");
+
+    return p;
+}
+
+module_textures::params module_textures::depthtexture_params(uint32_t width, uint32_t height) {
+    params p{};
+
+    p.width = width;
+    p.height = height;
+    p.num_channels = 4;
+    p.type = GL_TEXTURE_2D;
+    p.min_filter = GL_NEAREST;
+    p.mag_filter = GL_NEAREST;
+    p.format = GL_DEPTH_COMPONENT;
+    p.internal_format = GL_DEPTH_COMPONENT16;
+    p.texel_type = GL_FLOAT;
+    p.data.resize(p.width * p.height * sizeof(float), 0);
+    
+    float* f = reinterpret_cast<float*>(p.data.data());
+    
+    for (auto x = 0; x < p.width; ++x) {
+        for (auto y = 0; y < p.height; ++y) {
+            f[y * width + x] = 1.0f;
+        }
+    }
+
+    puts("dtp");
+
+    return p;
+}
+    
+module_textures::index_type module_textures::new_texture(const module_textures::params& p) {
     GLuint handle = 0;
+
     GL_FN(glGenTextures(1, &handle));
-    GL_FN(glBindTexture(type, handle));
+    GL_FN(glBindTexture(p.type, handle));
 
-    std::vector<GLenum> texparams;
+    auto iterable = p.post();
 
-    texparams.insert(texparams.end(), {
-	GL_TEXTURE_MIN_FILTER, min_filter,
-	  GL_TEXTURE_MAG_FILTER, mag_filter,
-	  GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE,
-	  GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE,
-	  GL_TEXTURE_BASE_LEVEL, 0,
-	  GL_TEXTURE_MAX_LEVEL,0
-	  });
-
-    if (type == GL_TEXTURE_CUBE_MAP) {
-      texparams.insert(texparams.end(),
-		       {
-			 GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE
-			   });
+    for (auto i = 0; i < iterable.size(); i += 2ULL) {
+        GL_FN(glTexParameteri(p.type, iterable[i], iterable[i + 1ULL]));
     }
 
-    ASSERT((texparams.size() & 1) == 0);
-
-    for (auto i = 0; i < texparams.size(); i += 2ULL) {
-        GL_FN(glTexParameteri(type, texparams[i], texparams[i + 1ULL]));
-    }
-
-    GL_FN(glBindTexture(type, 0));
+    GL_FN(glBindTexture(p.type, 0));
 
     auto index = static_cast<module_textures::index_type>(tex_handles.size());
 
     tex_handles.push_back(handle);
-    widths.push_back(width);
-    heights.push_back(height);
-    num_channels.push_back(channels);
-    types.push_back(type);
+    widths.push_back(p.width);
+    heights.push_back(p.height);
+    num_channels.push_back(p.num_channels);
+    internal_formats.push_back(p.internal_format);
+    formats.push_back(p.format);
+    num_levels.push_back(p.num_levels);
+    min_filters.push_back(p.min_filter);
+    mag_filters.push_back(p.mag_filter);
+    types.push_back(p.type);
+    texel_types.push_back(p.texel_type);
     slots.push_back(0);
+
+    bind(index);
+    switch (p.type) {
+        case GL_TEXTURE_CUBE_MAP: {
+            for (auto i = 0; i < 6; ++i) {
+                fill_texture2d( GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(i),
+                                index,
+                                p.data.data());
+            }
+        } break;
+
+        case GL_TEXTURE_2D:
+            fill_texture2d( GL_TEXTURE_2D, index, p.data.data());
+            break;
+    }
+    unbind(index);
 
     return index;
 }
@@ -69,10 +110,10 @@ module_textures::index_type module_textures::new_texture(uint32_t width,
 void module_textures::fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data) {
     ASSERT_FMT(fmt);
     GLenum ifmt = (fmt == GL_DEPTH_COMPONENT
-		   ? GL_DEPTH_COMPONENT24
-		   : (fmt == GL_SRGB
-		      ? GL_SRGB8_ALPHA8
-		      : fmt));
+                        ? GL_DEPTH_COMPONENT24
+                        : (fmt == GL_SRGB
+                                ? GL_SRGB8_ALPHA8
+                                : fmt));
 
     // ok for now as long as fmt is GL_RGBA, GL_RGB, GL_DEPTH_COMPONENT
 
@@ -88,22 +129,16 @@ void module_textures::fill_cubemap_face(uint32_t offset, int w, int h, GLenum fm
 
 }
 
-int module_textures::channels_from_format(GLenum format) const {
-    int channels = -1;
-
-    switch (format) {
-    case GL_RGBA:
-    case GL_DEPTH_COMPONENT:
-        channels = 4;
-        break;
-    case GL_RGB:
-        channels = 3;
-        break;
-    }
-        
-    ASSERT(channels != -1);
-
-    return channels;
+void module_textures::fill_texture2d(GLenum paramtype, index_type tid, const uint8_t* data) {
+    GL_FN(glTexImage2D(paramtype,
+                       0,
+                       internal_formats[tid],
+                       widths[tid],
+                       heights[tid],
+                       0,
+                       formats[tid],
+                       texel_types[tid],
+                       data));
 }
 
 GLenum module_textures::format_from_channels(int channels) const {
@@ -123,7 +158,7 @@ GLenum module_textures::format_from_channels(int channels) const {
     return format;
 }
 
-void fill_checkerboard(std::vector<uint8_t>& blank, int w, int h, glm::u8vec3 mask, int channels) {
+void fill_checkerboard(darray<uint8_t>& blank, int w, int h, glm::u8vec3 mask, int channels) {
   for (auto y = 0; y < h; ++y) {
     for (auto x = 0; x < w; ++x) {
       auto p = (y * w + x) * channels;
@@ -135,74 +170,16 @@ void fill_checkerboard(std::vector<uint8_t>& blank, int w, int h, glm::u8vec3 ma
       blank[p + 2] = c & mask[2];
       
       if (channels == 4) {
-	blank[p + 3] = 0xFF;
+        blank[p + 3] = 0xFF;
       }
     }
   }
 }
 
-// creates a blank cubemap
-module_textures::index_type module_textures::new_cubemap(int w, int h, GLenum format) {
-    int channels = channels_from_format(format);
 
-    GLenum min_mag_filter = format == GL_DEPTH_COMPONENT ? GL_NEAREST : GL_LINEAR;
-    
-    auto cmap_id = new_texture(w,
-			       h,
-			       channels,
-			       GL_TEXTURE_CUBE_MAP,
-			       min_mag_filter,
-			       min_mag_filter);
-
-    bind(cmap_id);
-
-    std::vector<uint8_t> blank(w * h * channels, 0);
-
-    if (format == GL_RGBA) {
-      fill_checkerboard(blank, w, h, glm::u8vec3(255, 255, 255), 4);     
-      fill_cubemap_face(0, w, h, format, &blank[0]);
-
-      fill_checkerboard(blank, w, h, glm::u8vec3(213, 213, 213), 4);
-      fill_cubemap_face(1, w, h, format, &blank[0]);
-
-      fill_checkerboard(blank, w, h, glm::u8vec3(171, 171, 171), 4);
-      fill_cubemap_face(2, w, h, format, &blank[0]);
-
-      fill_checkerboard(blank, w, h, glm::u8vec3(129, 129, 129), 4);
-      fill_cubemap_face(3, w, h, format, &blank[0]);
-
-      fill_checkerboard(blank, w, h, glm::u8vec3(87, 87, 87), 4);
-      fill_cubemap_face(4, w, h, format, &blank[0]);
-
-      fill_checkerboard(blank, w, h,  glm::u8vec3(45, 45, 45), 4);
-      fill_cubemap_face(5, w, h, format, &blank[0]);
-      
-    } else if (format == GL_DEPTH_COMPONENT) {
-      for (uint32_t i = 0; i < 6; ++i) {
-	fill_cubemap_face(i, w, h, format, NULL);
-      }
-    } else if (format == GL_RGB) {
-        for (auto y = 0; y < h; ++y) {
-	  for (auto x = 0; x < w; ++x) {
-	    auto p = (y * w + x) * channels;
-	    blank[p + 0] = (x & 0x1) == 1 ? 0xFF : 0x7f;
-	    blank[p + 1] = 0;
-	    blank[p + 2] = 0;
-	  }
-        }
-	
-	for (uint32_t i = 0; i < 6; ++i) {
-	  fill_cubemap_face(i, w, h, format, &blank[0]);
-	}
-    }
-
-    unbind(cmap_id);
-
-    return cmap_id;
-}
     
 module_textures::index_type module_textures::new_cubemap(cubemap_paths_type paths) {
-    auto cmap_id = new_texture(0, 0, 0, GL_TEXTURE_CUBE_MAP);
+    auto cmap_id = new_texture(cubemap_params(0, 0));
 
     bind(cmap_id);
 
@@ -252,21 +229,6 @@ module_textures::index_type module_textures::new_cubemap(cubemap_paths_type path
     return cmap_id;
 }
 
-void module_textures::set_tex_2d(module_textures::index_type tid, const uint8_t* pixels) const {
-    bind(tid);
-    GLenum format = format_from_channels(num_channels[tid]);
-    ASSERT_FMT(format);
-    GL_FN(glTexImage2D(GL_TEXTURE_2D,
-                       0,
-                       format,
-                       widths[tid], heights[tid],
-                       0,
-                       format,
-                       GL_UNSIGNED_BYTE,
-                       pixels));
-    unbind(tid);                           
-}
-    
 module_textures::index_type module_textures::handle(module_textures::index_type i) const {
     return tex_handles.at(i);
 }
