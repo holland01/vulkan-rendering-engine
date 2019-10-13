@@ -81,6 +81,13 @@ static inline darray<std::string> uniform_location_shine() {
   };
 }
 
+static inline darray<std::string> uniform_location_mv_proj() {
+  return {
+    "unif_ModelView",
+    "unif_Projection"
+  };
+}
+
 struct dpointlight {
   vec3_t position;
   vec3_t color;
@@ -412,6 +419,16 @@ struct module_programs : public type_module {
 
   darray<programdef> defs = {
     {
+      "basic",
+      gen_vshader(vshader_frag_color),
+      gen_fshader(fshader_frag_color),
+      uniform_location_mv_proj(),
+      {
+        attrib_layout_position(),
+        attrib_layout_color()
+      }
+    },
+    {
       "main",
       gen_vshader(VSHADER_POINTLIGHTS),
 
@@ -575,6 +592,7 @@ struct module_programs : public type_module {
 
   std::string current;
 
+  const std::string basic = "basic";
   const std::string default_fb = "main";
   const std::string default_rtq = "render_to_quad";
   const std::string default_mir = "reflection_sphere";
