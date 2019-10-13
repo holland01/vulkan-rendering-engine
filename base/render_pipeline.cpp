@@ -24,6 +24,29 @@ void shader_uniform_storage::set_uniform(const std::string& name,
   }
 }
 
+void shader_uniform_storage::set_uniform(const duniform& unif) {
+  switch (unif.type) {
+    case shader_uniform_storage::uniform_mat4x4:
+      set_uniform(unif.name, unif.m4);
+      break;
+    case shader_uniform_storage::uniform_pointlight:
+      set_uniform(unif.name, unif.pl);
+      break;
+    case shader_uniform_storage::uniform_material:
+      set_uniform(unif.name, unif.mat);
+      break;
+    case shader_uniform_storage::uniform_vec3:
+      set_uniform(unif.name, unif.v3);
+      break;
+    case shader_uniform_storage::uniform_int32:
+      set_uniform(unif.name, unif.i32);
+      break;
+    case shader_uniform_storage::uniform_float32:
+      set_uniform(unif.name, unif.f32);
+      break;
+  }
+}
+
 void shader_uniform_storage::set_uniform(const std::string& name, const mat4_t& m) {
   set_uniform<mat4_t, shader_uniform_storage::uniform_mat4x4>(name, m, mat4x4_store);
 }

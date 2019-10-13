@@ -53,6 +53,8 @@ struct shader_uniform_storage {
   void set_uniform(const std::string& name, float f);
   void set_uniform(const std::string& name, const dpointlight& pl);
   void set_uniform(const std::string& name, const dmaterial& m);
+
+  void set_uniform(const duniform& uniform);
   
   void upload_uniform(const std::string& name) const;
 };
@@ -280,26 +282,7 @@ struct pass_info {
       
       if (!uniforms.empty()) {
         for (const auto& unif: uniforms) {
-          switch (unif.type) {
-            case shader_uniform_storage::uniform_mat4x4:
-              g_m.uniform_store->set_uniform(unif.name, unif.m4);
-              break;
-            case shader_uniform_storage::uniform_pointlight:
-              g_m.uniform_store->set_uniform(unif.name, unif.pl);
-              break;
-            case shader_uniform_storage::uniform_material:
-              g_m.uniform_store->set_uniform(unif.name, unif.mat);
-              break;
-            case shader_uniform_storage::uniform_vec3:
-              g_m.uniform_store->set_uniform(unif.name, unif.v3);
-              break;
-            case shader_uniform_storage::uniform_int32:
-              g_m.uniform_store->set_uniform(unif.name, unif.i32);
-              break;
-            case shader_uniform_storage::uniform_float32:
-              g_m.uniform_store->set_uniform(unif.name, unif.f32);
-              break;
-          }
+          g_m.uniform_store->set_uniform(unif);
           uniform_names.push_back(unif.name);
         }
       }
