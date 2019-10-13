@@ -1,6 +1,32 @@
 #include "textures.hpp"
 #include "stb_image.h"
 
+using rgba4_t = std::array<uint8_t, 4>;
+
+namespace {
+    const rgba4_t k_room_red = { 200, 20, 0, 255 };
+    const rgba4_t k_room_white = { 200, 200, 150, 255 };
+    const rgba4_t k_room_blue = { 0, 50, 150, 255 };
+
+    void fill_texture_data_buffer_rgb4(module_textures::texture_data_buffer& buffer, 
+                                       uint32_t width, 
+                                       uint32_t height, 
+                                       const rgba4_t& color) {
+        buffer.resize(width * height * 4, 0);
+        uint8_t* pdata = buffer.data();
+        for (auto y = 0; y < height; ++y) {
+            for (auto x = 0; x < width; ++x) {
+                auto ofs = (y * width + x) << 2;
+
+                pdata[ofs + 0] = color.at(0);
+                pdata[ofs + 1] = color.at(1);
+                pdata[ofs + 2] = color.at(2);
+                pdata[ofs + 3] = color.at(3);
+            }
+        }
+    }
+}
+
 module_textures::~module_textures() {
     if (!tex_handles.empty()) {
         GL_FN(glDeleteTextures(static_cast<GLsizei>(tex_handles.size()), tex_handles.data()));
@@ -23,7 +49,42 @@ module_textures::params module_textures::cubemap_params(uint32_t width, uint32_t
     return cubemap_params(  width, 
                             height, 
                             channels, 
-                            cubemap_data::all(width, height, channels, 0xFF) );
+                            cubemap_data::all(width * height * channels, 0xFF) );
+}
+
+module_textures::params module_textures::cubemap_params(uint32_t width, uint32_t height, cubemap_preset preset) {
+    cubemap_data d{};
+    params p{};
+    auto channels = 4;
+    
+    switch (preset) {
+        case cubemap_preset_test_room_0: {
+            fill_texture_data_buffer_rgb4(d.px, width, height, k_room_white);
+            fill_texture_data_buffer_rgb4(d.nx, width, height, k_room_white);
+
+            fill_texture_data_buffer_rgb4(d.py, width, height, k_room_blue);
+            fill_texture_data_buffer_rgb4(d.ny, width, height, k_room_blue);
+
+            fill_texture_data_buffer_rgb4(d.pz, width, height, k_room_red);
+            fill_texture_data_buffer_rgb4(d.nz, width, height, k_room_red);
+
+             // the colors used here are currently specified in linear space,
+             // so it's best we _don't_ perform linearization when sampling automatically.
+            p.internal_format = GL_RGBA8;
+        } break;
+
+        default: 
+            ASSERT(false);
+            break;
+    }
+
+    p.width = width;
+    p.height = height;
+    p.num_channels = channels;
+    p.type = GL_TEXTURE_CUBE_MAP;
+    p.data.data = d;
+
+    return p;
 }
 
 module_textures::params module_textures::cubemap_params(uint32_t width, 

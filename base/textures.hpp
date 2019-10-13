@@ -47,12 +47,10 @@ struct module_textures: public type_module {
         texture_data_buffer py, ny;
         texture_data_buffer pz, nz;
 
-        static cubemap_data all(uint32_t width, 
-                                uint32_t height, 
-                                uint32_t bytes_per_pixel, 
+        static cubemap_data all(size_t size, 
                                 uint8_t init_pixel) {
 
-            texture_data_buffer set(width * height * bytes_per_pixel, init_pixel);
+            texture_data_buffer set(size, init_pixel);
             
             cubemap_data R;
             R.px = darray_clone(set);
@@ -132,8 +130,14 @@ struct module_textures: public type_module {
         }
     };
 
+    enum cubemap_preset {
+        cubemap_preset_test_room_0
+    };
+    
     module_textures::params cubemap_params(uint32_t width, uint32_t height);
     
+    module_textures::params cubemap_params(uint32_t width, uint32_t height, cubemap_preset preset);
+
     module_textures::params cubemap_params(uint32_t width, 
                                            uint32_t height, 
                                            uint32_t num_channels, 
