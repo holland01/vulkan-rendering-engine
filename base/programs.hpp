@@ -376,10 +376,6 @@ struct module_programs : public type_module {
       ss << GLSL_TL(out_color = texture(unif_TexCubeMap, frag_TexCoord););
     }
 
-    if (!(reflect || frag_texcoord)) {
-      ss << GLSL_TL(out_color = frag_Color;);
-    }
-
     if (lights) {
       ASSERT(frag_position);
       ASSERT(frag_color);
@@ -396,8 +392,13 @@ struct module_programs : public type_module {
           << GLSL_TL(out_color.xyz *= applyPointLights(vposition, vnormal, numLights, invertNormals););
     }
     
-    ss << GLSL_TL(fb_Color = out_color * frag_Color;)
-       << GLSL_L(});
+    if (reflect || lights || frag_texcoord) {
+      ss << GLSL_TL(fb_Color = out_color * frag_Color;);
+    } else {
+      ss << GLSL_TL(fb_Color = frag_Color;);
+    }
+
+    ss << GLSL_L(});
 
     auto s = ss.str();
 
