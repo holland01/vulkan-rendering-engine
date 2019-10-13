@@ -640,7 +640,7 @@ struct module_programs : public type_module {
     GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
   }
 
-  void up_pointlight(const std::string& name, const dpointlight& pl) {
+  void up_pointlight(const std::string& name, const dpointlight& pl) const {
     GL_FN(glUniform3fv(uniform(name + ".position"), 1, &pl.position[0]));
     GL_FN(glUniform3fv(uniform(name + ".color"), 1, &pl.color[0]));    
   }
