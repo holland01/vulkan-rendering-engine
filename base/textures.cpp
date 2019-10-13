@@ -19,15 +19,24 @@ void module_textures::unbind(module_textures::index_type id) const {
 }
 
 module_textures::params module_textures::cubemap_params(uint32_t width, uint32_t height) {
+    auto channels = 4;
+    return cubemap_params(  width, 
+                            height, 
+                            channels, 
+                            cubemap_data::all(width, height, channels, 0xFF) );
+}
+
+module_textures::params module_textures::cubemap_params(uint32_t width, 
+                                                        uint32_t height,
+                                                        uint32_t num_channels, 
+                                                        cubemap_data data) {
     params p{};
 
     p.width = width;
     p.height = height;
-    p.num_channels = 4;
+    p.num_channels = num_channels;
     p.type = GL_TEXTURE_CUBE_MAP;
-    p.data.resize(p.width * p.height * p.num_channels, 0xFF);
-    
-    puts("cmp");
+    p.data.data = data;
 
     return p;
 }
@@ -44,9 +53,11 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
     p.format = GL_DEPTH_COMPONENT;
     p.internal_format = GL_DEPTH_COMPONENT16;
     p.texel_type = GL_FLOAT;
-    p.data.resize(p.width * p.height * sizeof(float), 0);
+
+    texture_data_buffer buffer;
+    buffer.resize(p.width * p.height * sizeof(float), 0);
     
-    float* f = reinterpret_cast<float*>(p.data.data());
+    float* f = reinterpret_cast<float*>(buffer.data());
     
     for (auto x = 0; x < p.width; ++x) {
         for (auto y = 0; y < p.height; ++y) {
@@ -54,7 +65,7 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
         }
     }
 
-    puts("dtp");
+    p.data.data = buffer;
 
     return p;
 }
@@ -91,16 +102,23 @@ module_textures::index_type module_textures::new_texture(const module_textures::
     bind(index);
     switch (p.type) {
         case GL_TEXTURE_CUBE_MAP: {
-            for (auto i = 0; i < 6; ++i) {
-                fill_texture2d( GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(i),
-                                index,
-                                p.data.data());
-            }
+            const auto& cubemap_d = std::get<cubemap_data>(p.data.data);
+            
+            fill_texture2d(GL_TEXTURE_CUBE_MAP_POSITIVE_X, index, cubemap_d.px.data());
+            fill_texture2d(GL_TEXTURE_CUBE_MAP_NEGATIVE_X, index, cubemap_d.nx.data());
+
+            fill_texture2d(GL_TEXTURE_CUBE_MAP_POSITIVE_Y, index, cubemap_d.py.data());
+            fill_texture2d(GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, index, cubemap_d.ny.data());
+
+            fill_texture2d(GL_TEXTURE_CUBE_MAP_POSITIVE_Z, index, cubemap_d.pz.data());
+            fill_texture2d(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, index, cubemap_d.nz.data());
         } break;
 
-        case GL_TEXTURE_2D:
-            fill_texture2d( GL_TEXTURE_2D, index, p.data.data());
-            break;
+        case GL_TEXTURE_2D: {
+            const auto& d = std::get<texture_data_buffer>(p.data.data);
+
+            fill_texture2d(GL_TEXTURE_2D, index, d.data());
+        } break;
     }
     unbind(index);
 

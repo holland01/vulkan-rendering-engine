@@ -7,6 +7,7 @@
 #include <vector>
 #include <array>
 #include <string>
+#include <variant>
 
 #define ASSERT_FMT(fmt) ASSERT(fmt == GL_RGBA || fmt == GL_RGB || fmt == GL_DEPTH_COMPONENT)
 
@@ -39,8 +40,46 @@ struct module_textures: public type_module {
 
     void unbind(index_type id) const;
 
+    using texture_data_buffer = darray<uint8_t>;
+
+    struct cubemap_data {
+        texture_data_buffer px, nx;
+        texture_data_buffer py, ny;
+        texture_data_buffer pz, nz;
+
+        static cubemap_data all(uint32_t width, 
+                                uint32_t height, 
+                                uint32_t bytes_per_pixel, 
+                                uint8_t init_pixel) {
+
+            texture_data_buffer set(width * height * bytes_per_pixel, init_pixel);
+            
+            cubemap_data R;
+            R.px = darray_clone(set);
+            R.nx = darray_clone(set);
+            
+            R.py = darray_clone(set);
+            R.ny = darray_clone(set);
+            
+            R.pz = darray_clone(set);
+            R.nz = darray_clone(set);
+
+            return R;
+        }
+    };
+
+    struct texture_data {
+        using data_type = std::variant<cubemap_data, texture_data_buffer>;
+        
+        data_type data;
+
+        texture_data(const cubemap_data& cd) : data(cd) {}
+        texture_data(const texture_data_buffer& db) : data(db) {}
+        texture_data() : data(texture_data_buffer()) {}
+    };
+
     struct params {
-        darray<uint8_t> data{};
+        texture_data data{};
 
         GLenum type {GL_TEXTURE_2D};
         
@@ -94,6 +133,12 @@ struct module_textures: public type_module {
     };
 
     module_textures::params cubemap_params(uint32_t width, uint32_t height);
+    
+    module_textures::params cubemap_params(uint32_t width, 
+                                           uint32_t height, 
+                                           uint32_t num_channels, 
+                                           cubemap_data data);
+
     module_textures::params depthtexture_params(uint32_t width, uint32_t height);
 
     index_type new_texture(const module_textures::params& p);

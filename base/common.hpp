@@ -160,3 +160,9 @@ template <typename T>
 static inline std::vector<T> operator+(const std::vector<T>& a, const std::vector<T>& b) {
   return vec_join(a, b);
 }
+
+template <class Type>
+static inline darray<Type> darray_clone(const darray<Type>& in) {
+  darray<Type> x{in.begin(), in.end()};
+  return x;
+}
