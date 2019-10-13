@@ -31,6 +31,7 @@ struct scene_graph {
     index_type skybox{unset<index_type>()};
     index_type area_sphere{unset<index_type>()};
     index_type floor{unset<index_type>()};
+    index_type pointlight{unset<index_type>()};
   };
 
   test_indices_s test_indices;

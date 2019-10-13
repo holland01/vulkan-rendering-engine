@@ -221,10 +221,18 @@ struct gl_clear_depth {
 #define DUNIFVEC3_XYZ(name, x, y, z) \
   duniform(vec3_t(R(x), R(y), R(z)), #name)
 
+#define POINTLIGHT_POSITION R3v(5, 5, 0)
+
+#define POINTLIGHT_EMIT_COLOR R3v(0.3, 0.3, 0.3)
+#define POINTLIGHT_MODEL_COLOR R4v(1, 0, 0, 1)
+#define POINTLIGHT_MODEL_SIZE R3v(1, 1, 1)
+
 static const dpointlight g_pointlight{
-  R3v(5.0, 5.0, 0),
-  R3v(0.3, 0.3, 0.3)
+  POINTLIGHT_POSITION,
+  POINTLIGHT_EMIT_COLOR
 };
+
+module_models::index_type g_pointlight_model_index{-1};
 
 void shader_pointlight_update() {
   g_m.uniform_store->set_uniform("unif_CameraPosition", g_m.view->position);
@@ -460,6 +468,41 @@ static void init_render_passes() {
 
     g_render_passes.push_back(room);
   }
+
+  {
+    gl_state state{};
+    
+    darray<duniform> unifs;
+		     
+    unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+
+    darray<bind_texture> tex_bindings{};
+    auto frametype = pass_info::frame_user;
+
+    auto select = scene_graph_select(n, n == g_m.graph->test_indices.pointlight);
+    auto shader = g_m.programs->basic;
+
+    auto init = []() {};
+      auto envmap_id = framebuffer_ops::k_uninit;
+    
+    auto active = true;
+
+    pass_info light_model{
+      "light_model",
+      state,
+      unifs,
+      tex_bindings,
+      frametype,
+      shader,
+      init,
+      select,
+      envmap_id,
+      active
+    };
+
+    g_render_passes.push_back(light_model);
+  }
 };
 
 static void init_api_data() {
@@ -515,6 +558,19 @@ static void init_api_data() {
       sphere.bvol = g_m.geom->make_bsphere(TEST_SPHERE_RADIUS, TEST_SPHERE_POS);
 
       g_m.graph->test_indices.sphere = g_m.graph->new_node(sphere);
+    }
+
+    {
+      scene_graph::init_info pointlight_model;
+
+      pointlight_model.position = POINTLIGHT_POSITION;
+      pointlight_model.scale = POINTLIGHT_MODEL_SIZE;
+      pointlight_model.angle = R3(0);
+
+      pointlight_model.model = g_pointlight_model_index = g_m.models->new_cube(POINTLIGHT_MODEL_COLOR);
+      pointlight_model.parent = g_m.graph->test_indices.area_sphere;
+
+      g_m.graph->test_indices.pointlight = g_m.graph->new_node(pointlight_model);
     }
     
     {
