@@ -11,12 +11,15 @@
 
 #include <sstream>
 
+struct duniform;
+
 struct shader_uniform_storage {  
   typedef uint8_t buffer_offset_t; 
   
   enum uniform_type {
     uniform_mat4x4 = 0,
     uniform_pointlight,
+    uniform_material,
     uniform_vec3,
     uniform_int32,
     uniform_float32
@@ -24,6 +27,7 @@ struct shader_uniform_storage {
 
   darray<mat4_t> mat4x4_store;
   darray<dpointlight> pointlight_store;
+  darray<dmaterial> material_store;
   darray<vec3_t> vec3_store;
   darray<int32_t> int32_store;
   darray<float> float32_store;
@@ -38,16 +42,17 @@ struct shader_uniform_storage {
   std::unordered_map<std::string, datum> datum_store;
 
   template <class uniformType,
-	    uniform_type unif_type>
+	          uniform_type unif_type>
   void set_uniform(const std::string& name,
-		   const uniformType& v,
-		   darray<uniformType>& store);
+                   const uniformType& v,
+                   darray<uniformType>& store);
 
   void set_uniform(const std::string& name, const mat4_t& m);
   void set_uniform(const std::string& name, const vec3_t& v);
   void set_uniform(const std::string& name, int32_t i);
   void set_uniform(const std::string& name, float f);
   void set_uniform(const std::string& name, const dpointlight& pl);
+  void set_uniform(const std::string& name, const dmaterial& m);
   
   void upload_uniform(const std::string& name) const;
 };
@@ -56,6 +61,7 @@ struct duniform {
   union {
     mat4_t m4;
     dpointlight pl;
+    dmaterial mat;
     vec3_t v3;
     int32_t i32;
     float f32;
@@ -75,6 +81,12 @@ struct duniform {
     : pl(p),
       name(n),
       type(shader_uniform_storage::uniform_pointlight)
+  {}
+
+  duniform(dmaterial m, const std::string& n) 
+    : mat(m),
+      name(n),
+      type(shader_uniform_storage::uniform_material)
   {}
 
   duniform(vec3_t v, const std::string& n)
@@ -242,6 +254,10 @@ struct pass_info {
     uniforms.push_back(duniform{pl, name});
   }
 
+  void add_material(const std::string& name, const dmaterial& m) {
+    uniforms.push_back(duniform{m, name});
+  }
+
   void add_vec3(const std::string& name, const vec3_t& v) {
     uniforms.push_back(duniform{v, name});
   }
@@ -255,6 +271,7 @@ struct pass_info {
       write_logf("pass: %s", name.c_str());
       
       g_m.vertex_buffer->bind();
+
       use_program u(shader);
       
       for (const auto& bind: tex_bindings) {
@@ -270,6 +287,9 @@ struct pass_info {
             case shader_uniform_storage::uniform_pointlight:
               g_m.uniform_store->set_uniform(unif.name, unif.pl);
               break;
+            case shader_uniform_storage::uniform_material:
+              g_m.uniform_store->set_uniform(unif.name, unif.mat);
+              break;
             case shader_uniform_storage::uniform_vec3:
               g_m.uniform_store->set_uniform(unif.name, unif.v3);
               break;
@@ -280,7 +300,6 @@ struct pass_info {
               g_m.uniform_store->set_uniform(unif.name, unif.f32);
               break;
           }
-
           uniform_names.push_back(unif.name);
         }
       }

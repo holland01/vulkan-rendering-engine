@@ -76,7 +76,7 @@ static inline darray<std::string> uniform_location_pointlight(uint32_t index) {
 
 static inline darray<std::string> uniform_location_shine() {
   return { 
-    "unif_MaterialSmooth", 
+    "unif_Material.smoothness", 
     "unif_CameraPosition" 
   };
 }
@@ -84,6 +84,10 @@ static inline darray<std::string> uniform_location_shine() {
 struct dpointlight {
   vec3_t position;
   vec3_t color;
+};
+
+struct dmaterial {
+  float smoothness;
 };
 
 struct module_programs : public type_module {
@@ -283,7 +287,10 @@ struct module_programs : public type_module {
 
     if (lights_shine_phong) {
       ASSERT(lights);
-      ss << GLSL_L(uniform float unif_MaterialSmooth;)
+      ss << GLSL_L(struct material {)
+         << GLSL_TL(float smoothness;)
+         << GLSL_L(};)
+         << GLSL_L(uniform material unif_Material;)
          << GLSL_L(uniform vec3 unif_CameraPosition;);
     }
 
@@ -306,13 +313,13 @@ struct module_programs : public type_module {
 
     if (lights_shine_phong) {
       ASSERT(lights);
-      ss  << GLSL_L(float phongShine(in vec3 vposition, 
-                                     in vec3 vnormal, 
-                                     in vec3 dirToViewer, 
+      ss  << GLSL_L(float phongShine(in vec3 vposition,
+                                     in vec3 vnormal,
+                                     in vec3 dirToViewer,
                                      in vec3 lightPos) {)
           << GLSL_TL(vec3 dirToLight = normalize(lightPos - vposition);)
           << GLSL_TL(vec3 reflectDir = reflect(-dirToLight, normalize(vnormal));)
-          << GLSL_TL(return pow(dot(reflectDir, dirToViewer), unif_MaterialSmooth);)
+          << GLSL_TL(return pow(dot(reflectDir, dirToViewer), unif_Material.smoothness);)
           << GLSL_L(});
     }
 
@@ -643,6 +650,10 @@ struct module_programs : public type_module {
   void up_pointlight(const std::string& name, const dpointlight& pl) const {
     GL_FN(glUniform3fv(uniform(name + ".position"), 1, &pl.position[0]));
     GL_FN(glUniform3fv(uniform(name + ".color"), 1, &pl.color[0]));    
+  }
+
+  void up_material(const std::string& name, const dmaterial& dm) const {
+    GL_FN(glUniform1f(uniform(name + ".smoothness"), dm.smoothness));
   }
   
   auto fetch_attrib(const std::string& program, const std::string& attrib) const {

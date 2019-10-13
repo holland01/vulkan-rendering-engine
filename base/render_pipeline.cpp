@@ -40,6 +40,10 @@ void shader_uniform_storage::set_uniform(const std::string& name, const dpointli
   set_uniform<dpointlight, shader_uniform_storage::uniform_pointlight>(name, pl, pointlight_store);
 }
 
+void shader_uniform_storage::set_uniform(const std::string& name, const dmaterial& m) {
+  set_uniform<dmaterial, shader_uniform_storage::uniform_material>(name, m, material_store);
+}
+
 void shader_uniform_storage::set_uniform(const std::string& name, float f) {
   set_uniform<float, shader_uniform_storage::uniform_float32>(name, f, float32_store);
 }
@@ -54,6 +58,10 @@ void shader_uniform_storage::upload_uniform(const std::string& name) const {
 
   case uniform_pointlight:
     g_m.programs->up_pointlight(name, pointlight_store.at(d.uniform_buffer_offset));
+    break;
+
+  case uniform_material:
+    g_m.programs->up_material(name, material_store.at(d.uniform_buffer_offset));
     break;
 
   case uniform_vec3:

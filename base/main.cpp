@@ -237,15 +237,15 @@ void add_pointlights(pass_info& p) {
   }
 
   if (p.name == "floor") {
-    p.add_float("unif_MaterialSmooth", 1.0);
+    p.add_material("unif_Material", { 1.0 });
   }
 
   if (p.name == "room") {
-    p.add_float("unif_MaterialSmooth", 1.0);
+    p.add_material("unif_Material", { 1.0 });
   }
 
   if (p.name == "envmap") {
-    p.add_float("unif_MaterialSmooth", 1.0);
+    p.add_material("unif_Material", { 1.0 });
   }
 }
 
