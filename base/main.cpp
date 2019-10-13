@@ -285,7 +285,7 @@ static void init_render_passes() {
 
     auto envmap_id = g_frame_model_map[g_m.models->modind_sphere].render_cube_id;
     
-    auto active = false;
+    auto active = true;
     
     pass_info envmap{
       "envmap",
