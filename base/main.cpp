@@ -479,7 +479,10 @@ static void init_api_data() {
     
     g_frame_model_map[g_m.models->modind_sphere] = fmod;
     
-    g_checkerboard_cubemap = g_m.textures->new_texture(g_m.textures->cubemap_params(256, 256));
+    g_checkerboard_cubemap = 
+      g_m.textures->new_texture(g_m.textures->cubemap_params( 256, 
+                                                              256, 
+                                                              module_textures::cubemap_preset_test_room_0));
     
     real_t wall_size = R(15.0);
     
@@ -517,11 +520,11 @@ static void init_api_data() {
     {
       scene_graph::init_info floor;
 
-      floor.position = vec3_t{0};
-      floor.scale = R3v(1.0, 1.0, 1.0);
+      floor.position = R3v(0, -5, 0);
+      floor.scale = R3v(20.0, 1.0, 20.0);
       floor.angle = vec3_t{0};
 
-      floor.model = g_m.models->new_wall(module_models::wall_bottom, R4v(1.0, 1.0, 1.0, 1.0));
+      floor.model = g_m.models->new_wall(module_models::wall_bottom, R4v(0.0, 0.0, 0.5, 1.0));
       
       floor.parent = g_m.graph->test_indices.area_sphere;
       
