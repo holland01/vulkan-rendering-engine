@@ -42,7 +42,7 @@ enum {
   fshader_reflect = 1 << 5,
   fshader_lights = 1 << 6,
   fshader_unif_model = 1 << 7,
-  fshader_lights_shine_phong = 1 << 8
+  fshader_lights_shine = 1 << 8,
 };
 
 struct fshader_params {
@@ -65,7 +65,7 @@ static constexpr shadergen_flags_t vshader_frag_pos_color_normal() {
 }
 
 #define VSHADER_POINTLIGHTS vshader_frag_pos_color_normal() | vshader_in_normal | vshader_unif_model
-#define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights | fshader_lights_shine_phong
+#define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights | fshader_lights_shine
 
 static inline darray<std::string> uniform_location_pointlight(uint32_t index) {
   return {
@@ -261,7 +261,7 @@ struct module_programs : public type_module {
     bool reflect = flags & fshader_reflect;
     bool lights = flags & fshader_lights;
     bool unif_model = flags & fshader_unif_model;
-    bool lights_shine_phong = flags & fshader_lights_shine_phong;
+    bool lights_shine = flags & fshader_lights_shine;
 
     if (reflect) {
       ASSERT(!frag_texcoord);
@@ -292,7 +292,7 @@ struct module_programs : public type_module {
          << GLSL_L(];);
     }
 
-    if (lights_shine_phong) {
+    if (lights_shine) {
       ASSERT(lights);
       ss << GLSL_L(struct material {)
          << GLSL_TL(float smoothness;)
@@ -318,15 +318,21 @@ struct module_programs : public type_module {
        << GLSL_TL(return min(max(normalize(v), vec3(0.0)), vec3(1.0));)
        << GLSL_L(});
 
-    if (lights_shine_phong) {
+    if (lights_shine) {
       ASSERT(lights);
-      ss  << GLSL_L(float phongShine(in vec3 vposition,
+      ss  << GLSL_L(float applySpecular(in vec3 vposition,
                                      in vec3 vnormal,
                                      in vec3 dirToViewer,
-                                     in vec3 lightPos) {)
+                                     in vec3 lightPos,
+                                     float angleOfIncidence) {)
           << GLSL_TL(vec3 dirToLight = normalize(lightPos - vposition);)
           << GLSL_TL(vec3 reflectDir = reflect(-dirToLight, normalize(vnormal));)
-          << GLSL_TL(return pow(dot(reflectDir, dirToViewer), unif_Material.smoothness);)
+          << GLSL_TL(vec3 halfAngle = normalize(dirToLight + dirToViewer);)
+          << GLSL_TL(float term = dot(halfAngle, vnormal);)
+          << GLSL_TL(term = clamp(term, 0, 1);)
+          << GLSL_TL(term = angleOfIncidence != 0.0 ? term : 0.0;)
+          << GLSL_TL(term = pow(term, unif_Material.smoothness);)
+          << GLSL_TL(return term;)
           << GLSL_L(});
     }
 
@@ -342,7 +348,7 @@ struct module_programs : public type_module {
           << GLSL_TL(const float c1 = 0.0;)
           << GLSL_TL(const float c2 = 0.0;)
           << GLSL_TL(const float c3 = invertNormals ? -1.0 : 1.0;);
-          if (lights_shine_phong) {
+          if (lights_shine) {
             ss << GLSL_TL(vec3 dirToViewer = normalize(unif_CameraPosition - vposition););
           }
           ss
@@ -351,8 +357,12 @@ struct module_programs : public type_module {
           << GLSL_TTL(float diff = max(dot(lightDir, c3 * normalize(vnormal)), 0.0);)
           << GLSL_TTL(vec3 diffuse = unif_Lights[i].color * diff * frag_Color.xyz;)
           << GLSL_TTL(vec3 result = diffuse;);
-          if (lights_shine_phong) {
-            ss << GLSL_TTL(result *= phongShine(vposition, vnormal, dirToViewer, unif_Lights[i].position););
+          if (lights_shine) {
+            ss << GLSL_TTL(result += applySpecular(vposition, 
+                                                   vnormal, 
+                                                   dirToViewer, 
+                                                   unif_Lights[i].position,
+                                                   diff););
           }
           ss
           #if 0
