@@ -95,6 +95,11 @@ module_textures::params module_textures::cubemap_params(uint32_t width,
 
     p.width = width;
     p.height = height;
+
+    // important assumption: a cubemap framebuffer should have these auto gamma correction properties,
+    // since writes to the primary framebuffer will perform auto de-linearization/gamma correction
+    // after the fragment shader has written its fragment. 
+    p.internal_format = GL_SRGB8_ALPHA8; 
     p.num_channels = num_channels;
     p.type = GL_TEXTURE_CUBE_MAP;
     p.data.data = data;
