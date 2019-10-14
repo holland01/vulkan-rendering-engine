@@ -223,9 +223,10 @@ struct gl_clear_depth {
 
 #define POINTLIGHT_POSITION R3v(5, 5, 0)
 
-#define POINTLIGHT_EMIT_COLOR R3v(0.3, 0.3, 0.3)
+#define POINTLIGHT_EMIT_COLOR R3v(1.0, 1.0, 1.0)
 #define POINTLIGHT_MODEL_COLOR R4v(1, 0, 0, 1)
-#define POINTLIGHT_MODEL_SIZE R3v(1, 1, 1)
+#define POINTLIGHT_MODEL_RADIUS 0.3
+#define POINTLIGHT_MODEL_SIZE R3(POINTLIGHT_MODEL_RADIUS)
 
 static const dpointlight g_pointlight{
   POINTLIGHT_POSITION,
@@ -567,8 +568,10 @@ static void init_api_data() {
       pointlight_model.scale = POINTLIGHT_MODEL_SIZE;
       pointlight_model.angle = R3(0);
 
-      pointlight_model.model = g_pointlight_model_index = g_m.models->new_cube(POINTLIGHT_MODEL_COLOR);
+      pointlight_model.model = g_pointlight_model_index = g_m.models->new_sphere(POINTLIGHT_MODEL_COLOR);
       pointlight_model.parent = g_m.graph->test_indices.area_sphere;
+      pointlight_model.pickable = true;
+      pointlight_model.bvol = g_m.geom->make_bsphere(1.0, POINTLIGHT_POSITION);
 
       g_m.graph->test_indices.pointlight = g_m.graph->new_node(pointlight_model);
     }
