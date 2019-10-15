@@ -198,13 +198,13 @@ struct framebuffer_ops {
         }
 
         void bind(index_type cube_id) const {
-            GL_FN(glBindFramebuffer(GL_FRAMEBUFFER,
-				    fbos.at(cube_id)));
-	    
-	    GL_FN(glViewport(0,
-			     0,
-			     cwidth,
-			     cheight));
+          GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 
+                                  fbos.at(cube_id)));
+
+          GL_FN(glViewport( 0,
+                            0,
+                            cwidth,
+                            cheight));
         }
 
         std::vector<uint8_t> get_pixels(index_type cube_id) const {
@@ -252,7 +252,7 @@ struct framebuffer_ops {
 
         void unbind() {
             GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
-	    GL_FN(glViewport(0, 0, self.width, self.height));
+	        GL_FN(glViewport(0, 0, self.width, self.height));
         }
     };
     

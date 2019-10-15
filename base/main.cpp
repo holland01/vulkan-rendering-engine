@@ -285,7 +285,9 @@ static void init_render_passes() {
     auto shader = g_m.programs->skybox;
 
     auto init = []() {
-      g_m.framebuffer->rcube->faces[0] = g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
+      g_m.framebuffer->rcube->faces[0] = 
+        g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, 
+                                                  TEST_SPHERE_RADIUS);
       g_frame_model_map[g_m.models->modind_sphere].needs_render = true;
       shader_pointlight_update();
     };
@@ -470,6 +472,7 @@ static void init_render_passes() {
     g_render_passes.push_back(room);
   }
 
+  // light model pass
   {
     gl_state state{};
     
@@ -574,7 +577,7 @@ static void init_api_data() {
     
     frame_model fmod{};
     fmod.render_cube_id = g_m.framebuffer->add_render_cube(TEST_SPHERE_POS,
-                                                  TEST_SPHERE_RADIUS);
+                                                           TEST_SPHERE_RADIUS);
     
     g_frame_model_map[g_m.models->modind_sphere] = fmod;
     
