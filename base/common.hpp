@@ -6,6 +6,8 @@
 
 #include <glm/glm.hpp>
 
+#define DEBUG_ASSERTS
+
 #if defined(_MSC_VER)
 #define OS_WINDOWS
 #elif defined(__linux__)
@@ -47,6 +49,11 @@ namespace fs = std::experimental::filesystem;
 
 #define DEBUGLINE write_logf("FILE:%s,LINE:%i\n", __FILE__, __LINE__)
 
+#ifdef DEBUG_ASSERTS
+#define ASSERT_CODE(expr) do { expr; } while (0)
+#else
+#define ASSERT_CODE(expr)
+#endif
 
 #define NOP ;
 
