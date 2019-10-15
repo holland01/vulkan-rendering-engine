@@ -125,6 +125,10 @@ struct duniform {
 struct gl_state {
   
   struct {
+    bool framebuffer_srgb{true};
+  } gamma{};
+
+  struct {
     double range_near{0.0}; // [0, 1.0]
     double range_far{1.0}; // [0, 1.0] (far can be less than near as well)
     
@@ -195,6 +199,12 @@ struct gl_state {
                          clear_buffers.color_value.g,
                          clear_buffers.color_value.b,
                          clear_buffers.color_value.a));
+    }
+
+    if (gamma.framebuffer_srgb) {
+      GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
+    } else {
+      GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
     }
 
     {
