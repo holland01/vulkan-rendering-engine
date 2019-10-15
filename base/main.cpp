@@ -1083,8 +1083,6 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
 int main(void) {
     g_key_states.fill(false);
 
-    g_m.init();
-
     GLFWwindow* window;
 
     glfwSetErrorCallback(error_callback);
@@ -1124,6 +1122,8 @@ int main(void) {
             goto error;
         }
     }
+
+    g_m.init();
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
