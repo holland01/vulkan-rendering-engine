@@ -164,25 +164,6 @@ struct framebuffer_ops {
 #else
 	    tex_depth_handles.push_back(g_m.textures->new_texture(g_m.textures->depthtexture_params(cwidth, cheight)));
 #endif // ENVMAP_CUBE_DEPTH
-
-#if !defined(ENVMAP_CUBE_DEPTH)
-	    {
-	      auto depth = tex_depth_handles[tex_depth_handles.size() - 1];
-	      g_m.textures->bind(depth, 0);
-	      
-	      GL_FN(glTexImage2D(GL_TEXTURE_2D,
-				 0,
-				 GL_DEPTH_COMPONENT24,
-				 cwidth, cheight,
-				 0,
-				 GL_DEPTH_COMPONENT,
-				 GL_FLOAT,
-				 NULL));
-
-	      g_m.textures->unbind(depth);
-	      
-	    }
-#endif // ENVMAP_CUBE_DEPTH
 	    
             positions.push_back(position);
             
