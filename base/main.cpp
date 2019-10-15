@@ -504,6 +504,61 @@ static void init_render_passes() {
 
     g_render_passes.push_back(light_model);
   }
+
+  // mouse pick
+  {
+    gl_state state{};
+    state.gamma.framebuffer_srgb = false;
+
+    state.draw_buffers.fbo = true;
+
+    state.clear_buffers.color = true;
+    state.clear_buffers.color_value = R4(0);
+    state.clear_buffers.color_value.a = R(1);
+
+    state.clear_buffers.depth_value = R(1);
+    state.clear_buffers.depth = true;
+    
+    darray<duniform> unifs;
+		     
+    unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+    unifs.push_back(duniform{R4(1.0f), "unif_Color"});
+
+    darray<bind_texture> tex_bindings{};
+    auto frametype = pass_info::frame_texture2d;
+
+    auto select = scene_graph_select(n, g_m.graph->pickable[n] == true);
+    auto shader = g_m.programs->mousepick;
+
+    auto init = []() {};
+    auto fbo_id = g_m.graph->pickfbo;
+    
+    auto active = true;
+
+    auto permodel_set = [](const scene_graph::index_type& id) {
+      if (g_m.graph->pickable[id]) {
+        g_m.uniform_store->set_uniform("unif_Color", g_m.graph->pickmap[id]);
+        g_m.uniform_store->upload_uniform("unif_Color");
+      }
+    };
+
+    pass_info mousepick{
+      "mousepick",
+      state,
+      unifs,
+      tex_bindings,
+      frametype,
+      shader,
+      init,
+      select,
+      fbo_id,
+      active,
+      permodel_set
+    };
+
+    g_render_passes.push_back(mousepick);
+  }
 };
 
 static void init_api_data() {
