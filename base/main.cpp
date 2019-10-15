@@ -292,7 +292,7 @@ static void init_render_passes() {
 
     auto select = scene_graph_select(n, n != g_m.graph->test_indices.sphere);
 
-    auto envmap_id = g_frame_model_map[g_m.models->modind_sphere].render_cube_id;
+    auto fbo_id = g_frame_model_map[g_m.models->modind_sphere].render_cube_id;
     
     auto active = true;
     
@@ -305,7 +305,7 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
 
@@ -339,7 +339,7 @@ static void init_render_passes() {
                                      g_m.models->type(g_m.graph->model_indices[n]) ==
                                      module_models::model_quad);
     
-    auto envmap_id = framebuffer_ops::k_uninit;
+    auto fbo_id = framebuffer_ops::k_uninit;
     
     auto active = true;
     
@@ -352,7 +352,7 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
     
@@ -396,7 +396,7 @@ static void init_render_passes() {
     auto select = scene_graph_select(n,
 				     n == g_m.graph->test_indices.sphere);
 
-    auto envmap_id = framebuffer_ops::k_uninit;
+    auto fbo_id = framebuffer_ops::k_uninit;
     auto active = true;
     
     pass_info reflect{
@@ -408,7 +408,7 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
 
@@ -448,7 +448,7 @@ static void init_render_passes() {
     
     auto select = scene_graph_select(n, n == g_m.graph->test_indices.area_sphere);
 
-    auto envmap_id = framebuffer_ops::k_uninit;
+    auto fbo_id = framebuffer_ops::k_uninit;
     
     auto active = true;
     
@@ -461,7 +461,7 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
 
@@ -485,8 +485,8 @@ static void init_render_passes() {
     auto shader = g_m.programs->basic;
 
     auto init = []() {};
-      auto envmap_id = framebuffer_ops::k_uninit;
     
+    auto fbo_id = framebuffer_ops::k_uninit;
     auto active = true;
 
     pass_info light_model{
@@ -498,7 +498,7 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
 

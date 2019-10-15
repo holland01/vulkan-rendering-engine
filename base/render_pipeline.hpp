@@ -258,7 +258,7 @@ struct pass_info {
 
   scene_graph::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
 
-  framebuffer_ops::index_type envmap_id{framebuffer_ops::k_uninit}; // optional
+  framebuffer_ops::index_type fbo_id{framebuffer_ops::k_uninit}; // optional
 
   bool active{true};
   
@@ -325,12 +325,12 @@ struct pass_info {
         } break;
 
         case frame_envmap: {
-          ASSERT(envmap_id != framebuffer_ops::k_uninit);
+          ASSERT(fbo_id != framebuffer_ops::k_uninit);
           g_m.models->framebuffer_pinned = true;
-          g_m.framebuffer->rcube->bind(envmap_id);
+          g_m.framebuffer->rcube->bind(fbo_id);
          
           for (auto i = 0; i < 6; ++i) {
-            g_m.view->bind_view(g_m.framebuffer->rcube->set_face(envmap_id, static_cast<framebuffer_ops::render_cube::axis>(i)));
+            g_m.view->bind_view(g_m.framebuffer->rcube->set_face(fbo_id, static_cast<framebuffer_ops::render_cube::axis>(i)));
             state.apply();
             draw();
           }
