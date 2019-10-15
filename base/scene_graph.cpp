@@ -1,7 +1,10 @@
 #include "scene_graph.hpp"
 
+#include <iostream>
+
 scene_graph::scene_graph()
-  : test_indices()
+  : test_indices(),
+    pickfbo(g_m.framebuffer->add_fbo(g_m.framebuffer->width, g_m.framebuffer->height))
 {
   // root initialization
   bound_volumes.push_back(module_geom::bvol{});
@@ -45,8 +48,47 @@ scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info
   
   make_node_id(index, depth(index));
 
+  if (info.pickable) {
+    ASSERT(index < 25); 
+    vec4_t color{ R(index) * R(10) * k_to_rgba8, R(0), R(0), 1 };
+    color.a = R(1);
+    std::cout << "(" << index << ") " << AS_STRING_GLM_SS(color) << std::endl;
+    pickmap[index] = color;
+  }
+
   return index;
 } 
+
+scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
+  u8vec4_t pixel{0};
+  g_m.framebuffer->fbos->bind(pickfbo);
+  // NOTE: GL_COLOR_ATTACHMENT0 should be the default read buffer for the FBO.
+  // We check this to ensure that's the case - if it isn't, then
+  // we need to make sure we know why.
+  #if 1
+  ASSERT_CODE(
+    GLint attach; 
+    glGetIntegerv(GL_READ_BUFFER, &attach);
+    ASSERT(attach == GL_COLOR_ATTACHMENT0));
+  #endif
+
+  GL_FN(glReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, &pixel[0]));
+  g_m.framebuffer->fbos->unbind(pickfbo);
+
+  vec4_t fpixel{R(pixel.r), R(pixel.g), R(pixel.b), R(pixel.a)};
+  fpixel *= k_to_rgba8;
+
+  scene_graph::index_type ret{unset<scene_graph::index_type>()};
+
+  for (auto [id, color]: pickmap) {
+    if (color == fpixel) {
+      ret = id;
+      break;
+    }
+  }
+
+  return ret;
+}
 
 void scene_graph::make_node_id(scene_graph::index_type node, int depth) {
   ASSERT(!is_root(node));
@@ -137,7 +179,10 @@ void scene_graph::draw_node(scene_graph::index_type node) {
     auto traverse = child_lists[0][id->peek()];
     id->pop();
 
-    draw_node(node, traverse, id, modaccum_transform(0));
+    draw_node(node, 
+              traverse, 
+              id, 
+              modaccum_transform(0));
   
     id->reset();
   }
@@ -147,6 +192,10 @@ void scene_graph::draw_all(index_type current, const mat4_t& world) const {
   mat4_t accum{world * modaccum_transform(current)};
 
   if (draw[current]) {
+    if (permodel_unif_set_fn) {
+      permodel_unif_set_fn(current);
+    }
+
     mat4_t raccum{world * model_transform(current)};
     g_m.models->render(model_indices[current], raccum);
   }

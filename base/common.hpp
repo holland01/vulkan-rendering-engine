@@ -63,6 +63,8 @@ using vec3_t = glm::vec3;
 using boolvec3_t = glm::bvec3;
 using vec4_t = glm::vec4;
 
+using u8vec4_t = glm::u8vec4;
+
 using mat4_t = glm::mat4;
 using mat3_t = glm::mat3;
 
@@ -149,6 +151,10 @@ static inline numType unset() {
 static inline mat4_t m4i() {
   return mat4_t{R(1)};
 }
+
+
+
+static const real_t k_to_rgba8 = R(1) / R(255);
 
 template <typename T>
 static inline bool vec_contains(const std::vector<T>& v, const T& t) {
