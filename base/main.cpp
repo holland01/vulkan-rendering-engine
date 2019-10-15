@@ -992,19 +992,19 @@ public:
     }
 
     void scan_object_selection() const {
-        auto filtered = 
-          g_m.graph->select(scene_graph_select(entity, 
-                                             g_m.models->type(g_m.graph->model_indices[entity]) == 
-                                              module_models::model_sphere && 
-                                              g_m.graph->pickable[entity] == true));
-        
-        for (auto id: filtered) {
-            if (cast_ray(id)) {
-                break;
-            }
-        }
+      scene_graph::index_type entity = 
+        g_m.graph->trypick(static_cast<int32_t>(g_cam_orient.prev_xpos),
+                            static_cast<int32_t>(g_cam_orient.prev_ypos));
+      
+      std::cout << "ID returned: " << entity << std::endl;
 
-        DEBUGLINE;
+      if (entity != unset<scene_graph::index_type>()) {
+        g_obj_manip->set_select_model_state(entity);
+      } else {
+        clear_model_selection();
+      }
+
+      DEBUGLINE;
     }
 
     void unselect() {
