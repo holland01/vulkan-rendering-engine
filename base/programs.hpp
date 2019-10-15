@@ -457,6 +457,15 @@ struct module_programs : public type_module {
       }
     },
     {
+      "single_color",
+      gen_vshader(0),
+      gen_fshader(fshader_unif_color),
+      uniform_location_mv_proj() + uniform_location_color(),
+      {
+        attrib_layout_position()
+      }
+    },
+    {
       "main",
       gen_vshader(VSHADER_POINTLIGHTS),
 
@@ -621,6 +630,7 @@ struct module_programs : public type_module {
   std::string current;
 
   const std::string basic = "basic";
+  const std::string mousepick = "single_color";
   const std::string default_fb = "main";
   const std::string default_rtq = "render_to_quad";
   const std::string default_mir = "reflection_sphere";
