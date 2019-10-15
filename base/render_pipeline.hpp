@@ -237,10 +237,12 @@ struct pass_info {
   
   enum frame_type {
     frame_user = 0,
-    frame_envmap
+    frame_envmap,
+    frame_texture2d
   };
   
   using draw_fn_type = std::function<void()>;
+  using init_fn_type = std::function<void()>;
 
   std::string name;
   
@@ -261,7 +263,9 @@ struct pass_info {
   framebuffer_ops::index_type fbo_id{framebuffer_ops::k_uninit}; // optional
 
   bool active{true};
-  
+
+  scene_graph::permodel_unif_fn_type permodel_unif_fn;
+
   darray<std::string> uniform_names; // no need to set this.
 
   darray<pass_info> subpasses;
@@ -316,12 +320,21 @@ struct pass_info {
       }
 
       g_m.graph->select_draw(select_draw_predicate);
+      g_m.graph->permodel_unif_set_fn = permodel_unif_fn;
       
       switch (frametype) {
         case frame_user: {
 	        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 	        state.apply();
 	        draw();
+        } break;
+
+        case frame_texture2d: {
+          ASSERT(fbo_id != framebuffer_ops::k_uninit);
+          g_m.framebuffer->fbos->bind(fbo_id);
+          state.apply();
+          draw();
+          g_m.framebuffer->fbos->unbind(fbo_id);
         } break;
 
         case frame_envmap: {
@@ -334,11 +347,15 @@ struct pass_info {
             state.apply();
             draw();
           }
+
           g_m.framebuffer->rcube->unbind();
           g_m.view->unbind_view();
           g_m.models->framebuffer_pinned = false;
         } break;
       }
+
+      g_m.graph->permodel_unif_set_fn = scene_graph::permodel_unif_fn_type();
+
       for (const auto& bind: tex_bindings) {
         g_m.textures->unbind(bind.id);
       }
