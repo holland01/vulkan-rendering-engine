@@ -107,6 +107,26 @@ module_textures::params module_textures::cubemap_params(uint32_t width,
     return p;
 }
 
+module_textures::params module_textures::texture2d_rgba_params( uint32_t width, 
+                                                                uint32_t height) {
+  params p{};
+
+  p.width = width;
+  p.height = height;
+  p.num_channels = 4;
+  p.type = GL_TEXTURE_2D;
+  p.min_filter = GL_LINEAR;
+  p.mag_filter = GL_LINEAR;
+  p.format = GL_RGBA;
+  p.internal_format = GL_RGBA8;
+  p.texel_type = GL_UNSIGNED_BYTE;
+
+  texture_data_buffer buffer(p.width * p.height * p.num_channels, 0);
+  p.data.data = buffer;
+
+  return p;
+}
+
 module_textures::params module_textures::depthtexture_params(uint32_t width, uint32_t height) {
     params p{};
 

@@ -143,6 +143,10 @@ struct module_textures: public type_module {
                                            uint32_t num_channels, 
                                            cubemap_data data);
 
+    // designed for operations that don't involve gamma correct colors
+    module_textures::params texture2d_rgba_params( uint32_t width, 
+                                                   uint32_t height);
+
     module_textures::params depthtexture_params(uint32_t width, uint32_t height);
 
     index_type new_texture(const module_textures::params& p);

@@ -18,35 +18,106 @@ struct framebuffer_ops {
 
     static const inline index_type k_uninit = -1;
     
-    struct render_cube {
-        std::vector<module_textures::index_type> tex_color_handles;
-        std::vector<module_textures::index_type> tex_depth_handles;
-        std::vector<GLuint> fbos;
-        std::vector<vec3_t> positions;
-        std::vector<face_mats_type> faces;
+    struct fbo2d {
+      darray<GLuint> fbos;
+      darray<uint32_t> widths;
+      darray<uint32_t> heights;
+      darray<module_textures::index_type> color_attachments;
+      darray<module_textures::index_type> depth_attachments;
 
-        const framebuffer_ops& self;
+      const framebuffer_ops& self;
 
-      uint32_t cwidth;
-      uint32_t cheight;
+      fbo2d(const framebuffer_ops& s) 
+        : self(s) {}
 
-        // According to  https://www.khronos.org/registry/OpenGL/api/GL/glext.h,
-        // the GL_TEXTURE_CUBE_MAP_*_(X|Y|Z)
-        // enums are provided in consecutive order.
-        // At the time of this writing, that order is as follows
-        enum axis {
-            pos_x = 0,
-            neg_x,
-            pos_y,
-            neg_y,
-            pos_z,
-            neg_z
-        };
+      ~fbo2d() {
+        // TODO:
+      }
 
-    render_cube(const framebuffer_ops& f) : self(f),
-	  cwidth(256),
-	  cheight(256){
-    }
+      auto make_fbo(uint32_t width, uint32_t height) {
+        GLuint fbo = 0;
+        GL_FN(glGenFramebuffers(1, &fbo));
+        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
+
+        auto depth_attachment = g_m.textures->new_texture(g_m.textures->depthtexture_params(width, height));
+        auto color_attachment = g_m.textures->new_texture(g_m.textures->texture2d_rgba_params(width, height));
+
+        GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER, 
+                                     GL_COLOR_ATTACHMENT0, 
+                                     GL_TEXTURE_2D, 
+                                     g_m.textures->handle(color_attachment), 
+                                     0));
+
+        GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER, 
+                                     GL_DEPTH_ATTACHMENT, 
+                                     GL_TEXTURE_2D, 
+                                     g_m.textures->handle(depth_attachment), 
+                                     0));
+
+        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+
+        index_type new_handle = fbos.size();
+        
+        fbos.push_back(fbo);
+        widths.push_back(width);
+        heights.push_back(height);
+        color_attachments.push_back(color_attachment);
+        depth_attachments.push_back(depth_attachment);
+
+        return new_handle;
+      }
+
+      void bind(index_type handle) const {
+        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbos[handle]));
+        GL_FN(glViewport(0, 0, widths[handle], heights[handle]));
+      }
+
+      void unbind(index_type handle) const {
+        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+
+        ASSERT_CODE(
+          GLint viewport[4] = { 0 }; 
+          GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
+          
+          ASSERT(viewport[0] == 0);
+          ASSERT(viewport[1] == 0);
+          ASSERT(viewport[2] == widths[handle]);
+          ASSERT(viewport[3] == heights[handle]);
+        );
+
+        GL_FN(glViewport(0, 0, self.width, self.height));
+      }
+    };
+
+  struct render_cube {
+    std::vector<module_textures::index_type> tex_color_handles;
+    std::vector<module_textures::index_type> tex_depth_handles;
+    std::vector<GLuint> fbos;
+    std::vector<vec3_t> positions;
+    std::vector<face_mats_type> faces;
+
+    const framebuffer_ops& self;
+
+    uint32_t cwidth;
+    uint32_t cheight;
+
+    // According to  https://www.khronos.org/registry/OpenGL/api/GL/glext.h,
+    // the GL_TEXTURE_CUBE_MAP_*_(X|Y|Z)
+    // enums are provided in consecutive order.
+    // At the time of this writing, that order is as follows
+    enum axis {
+        pos_x = 0,
+        neg_x,
+        pos_y,
+        neg_y,
+        pos_z,
+        neg_z
+    };
+
+  render_cube(const framebuffer_ops& f) : self(f),
+    cwidth(256),
+    cheight(256){
+  }
 
         auto calc_look_at_mats(const vec3_t& position, real_t radius) {
             real_t offset{R(1.0)};
@@ -187,18 +258,24 @@ struct framebuffer_ops {
     
 
     std::unique_ptr<render_cube> rcube;
+    std::unique_ptr<fbo2d> fbos;
     
     framebuffer_ops(uint32_t w, uint32_t h)
         :   count(0),
             width(w),
         height(h),
-        rcube{new render_cube(*this)}
+        rcube{new render_cube(*this)},
+        fbos{new fbo2d(*this)}
     {}
     
     void screenshot();
 
     auto add_render_cube(const vec3_t& position, real_t radius) {
         return rcube->add(position, radius);
+    }
+
+    auto add_fbo(uint32_t w, uint32_t h) {
+      return fbos->make_fbo(w, h);
     }
 
     auto render_cube_color_tex(index_type r) const {
