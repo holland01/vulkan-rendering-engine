@@ -43,6 +43,7 @@ enum {
   fshader_lights = 1 << 6,
   fshader_unif_model = 1 << 7,
   fshader_lights_shine = 1 << 8,
+  fshader_unif_color = 1 << 9
 };
 
 struct fshader_params {
@@ -85,6 +86,12 @@ static inline darray<std::string> uniform_location_mv_proj() {
   return {
     "unif_ModelView",
     "unif_Projection"
+  };
+}
+
+static inline darray<std::string> uniform_location_color() {
+  return {
+    "unif_Color"
   };
 }
 
@@ -261,7 +268,10 @@ struct module_programs : public type_module {
     bool reflect = flags & fshader_reflect;
     bool lights = flags & fshader_lights;
     bool unif_model = flags & fshader_unif_model;
+    bool unif_color = flags & fshader_unif_color;
     bool lights_shine = flags & fshader_lights_shine;
+
+    ASSERT(!(frag_color && unif_color)); // both of these enabled will probably be supported at some point, but we don't want it currently.
 
     if (reflect) {
       ASSERT(!frag_texcoord);
@@ -304,6 +314,10 @@ struct module_programs : public type_module {
     if (unif_model) { 
       ASSERT(lights); // only expected use case currently
       ss << GLSL_L(uniform mat4 unif_Model;);
+    }
+
+    if (unif_color) { 
+      ss << GLSL_L(uniform vec4 unif_Color;);
     }
 
     if (unif_texcubemap) ss << GLSL_L(uniform samplerCube unif_TexCubeMap;);
@@ -379,7 +393,11 @@ struct module_programs : public type_module {
     ss << GLSL_L(void main() {)
        << GLSL_TL(vec4 out_color = vec4(1.0););
 
-    if (!frag_color) {
+    // as implied by the assert above,
+    // unif_color and frag_color cannot both be true.
+    if (unif_color) {
+      ss << GLSL_TL(vec4 frag_Color = unif_Color;);
+    } else if (!frag_color) {
       ss << GLSL_TL(vec4 frag_Color = vec4(1.0););
     }
 
