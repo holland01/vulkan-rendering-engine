@@ -21,6 +21,7 @@ struct shader_uniform_storage {
     uniform_pointlight,
     uniform_material,
     uniform_vec3,
+    uniform_vec4,
     uniform_int32,
     uniform_float32
   };
@@ -29,6 +30,7 @@ struct shader_uniform_storage {
   darray<dpointlight> pointlight_store;
   darray<dmaterial> material_store;
   darray<vec3_t> vec3_store;
+  darray<vec4_t> vec4_store;
   darray<int32_t> int32_store;
   darray<float> float32_store;
 
@@ -49,6 +51,7 @@ struct shader_uniform_storage {
 
   void set_uniform(const std::string& name, const mat4_t& m);
   void set_uniform(const std::string& name, const vec3_t& v);
+  void set_uniform(const std::string& name, const vec4_t& v);
   void set_uniform(const std::string& name, int32_t i);
   void set_uniform(const std::string& name, float f);
   void set_uniform(const std::string& name, const dpointlight& pl);
@@ -65,6 +68,7 @@ struct duniform {
     dpointlight pl;
     dmaterial mat;
     vec3_t v3;
+    vec4_t v4;
     int32_t i32;
     float f32;
   };
@@ -95,6 +99,12 @@ struct duniform {
     : v3(v),
       name(n),
       type(shader_uniform_storage::uniform_vec3)
+  {}
+
+  duniform(vec4_t v, const std::string& n)
+    : v4(v),
+      name(n),
+      type(shader_uniform_storage::uniform_vec4)
   {}
 
   duniform(int i, const std::string& n)

@@ -38,6 +38,9 @@ void shader_uniform_storage::set_uniform(const duniform& unif) {
     case shader_uniform_storage::uniform_vec3:
       set_uniform(unif.name, unif.v3);
       break;
+    case shader_uniform_storage::uniform_vec4:
+      set_uniform(unif.name, unif.v4);
+      break;
     case shader_uniform_storage::uniform_int32:
       set_uniform(unif.name, unif.i32);
       break;
@@ -53,6 +56,10 @@ void shader_uniform_storage::set_uniform(const std::string& name, const mat4_t& 
 
 void shader_uniform_storage::set_uniform(const std::string& name, const vec3_t& v) {
   set_uniform<vec3_t, shader_uniform_storage::uniform_vec3>(name, v, vec3_store);
+}
+
+void shader_uniform_storage::set_uniform(const std::string& name, const vec4_t& v) {
+  set_uniform<vec4_t, shader_uniform_storage::uniform_vec4>(name, v, vec4_store);
 }
 
 void shader_uniform_storage::set_uniform(const std::string& name, int32_t i) {
@@ -89,6 +96,10 @@ void shader_uniform_storage::upload_uniform(const std::string& name) const {
 
   case uniform_vec3:
     g_m.programs->up_vec3(name, vec3_store.at(d.uniform_buffer_offset));
+    break;
+
+  case uniform_vec4:
+    g_m.programs->up_vec4(name, vec4_store.at(d.uniform_buffer_offset));
     break;
       
   case uniform_int32:
