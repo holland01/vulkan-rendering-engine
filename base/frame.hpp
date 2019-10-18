@@ -14,10 +14,17 @@ struct framebuffer_ops {
   uint32_t width;
   uint32_t height;
 
+  mutable bool has_bind;
+
   using face_mats_type = std::array<mat4_t, 6>;
 
   static const inline index_type k_uninit = -1;
   
+  #define PRE_BOUND ASSERT(self.has_bind)
+  #define PRE_UNBOUND ASSERT(!self.has_bind)
+  #define POST_BOUND self.has_bind = true
+  #define POST_UNBOUND self.has_bind = false
+
   struct fbo2d {
     darray<GLuint> fbos;
     darray<uint32_t> widths;
@@ -68,11 +75,19 @@ struct framebuffer_ops {
     }
 
     void bind(index_type handle) const {
+      PRE_UNBOUND;
+
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbos[handle]));
       GL_FN(glViewport(0, 0, widths[handle], heights[handle]));
+      
+      POST_BOUND;
+    }
+
     }
 
     void unbind(index_type handle) const {
+      PRE_BOUND;
+
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
       ASSERT_CODE(
@@ -86,6 +101,8 @@ struct framebuffer_ops {
       );
 
       GL_FN(glViewport(0, 0, self.width, self.height));
+
+      POST_UNBOUND;
     }
   };
 
@@ -178,6 +195,8 @@ struct framebuffer_ops {
     }
 
     void bind(index_type cube_id) const {
+      PRE_UNBOUND;
+
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 
                               fbos.at(cube_id)));
 
@@ -185,6 +204,8 @@ struct framebuffer_ops {
                         0,
                         cwidth,
                         cheight));
+
+      POST_BOUND;
     }
 
     std::vector<uint8_t> get_pixels(index_type cube_id) const {
@@ -231,8 +252,12 @@ struct framebuffer_ops {
     }
 
     void unbind() {
+      PRE_BOUND;
+
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
       GL_FN(glViewport(0, 0, self.width, self.height));
+
+      POST_UNBOUND;
     }
   };
     
@@ -243,6 +268,7 @@ struct framebuffer_ops {
     : count(0),
       width(w),
       height(h),
+      has_bind{false},
       rcube{new render_cube(*this)},
       fbos{new fbo2d(*this)}
   {}
