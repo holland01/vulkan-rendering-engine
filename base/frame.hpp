@@ -19,6 +19,20 @@ struct framebuffer_ops {
   using face_mats_type = std::array<mat4_t, 6>;
 
   static const inline index_type k_uninit = -1;
+
+  struct fbodata {
+    darray<uint8_t> data;
+    uint32_t width;
+    uint32_t height;
+    uint32_t bpp;
+
+    u8vec4_t get(int x, int y) const {
+      const uint8_t* p = &data[(y * width + x) * bpp];
+      return u8vec4_t(p[0], p[1], p[2], p[3]);
+    }
+  };
+
+  using fbodata_type = fbodata;
   
   #define PRE_BOUND ASSERT(self.has_bind)
   #define PRE_UNBOUND ASSERT(!self.has_bind)
@@ -86,6 +100,32 @@ struct framebuffer_ops {
       POST_BOUND;
     }
 
+    fbodata_type dump(index_type handle) const {
+      PRE_UNBOUND;
+
+      auto C = color_attachments.at(handle);
+      
+      darray<uint8_t> buffer(g_m.textures->width(C) * 
+                          g_m.textures->height(C) * 
+                          g_m.textures->bytes_per_pixel(C), 
+                          0);
+
+      bind(handle);
+      GL_FN(glReadBuffer(GL_COLOR_ATTACHMENT0));
+
+      GL_FN(glReadPixels(0, 
+                         0, 
+                         g_m.textures->width(C), 
+                         g_m.textures->height(C),
+                         g_m.textures->format(C), 
+                         g_m.textures->texel_type(C),
+                         buffer.data()));
+      unbind(handle);
+      
+      return {  buffer, 
+                g_m.textures->width(C), 
+                g_m.textures->height(C), 
+                g_m.textures->bytes_per_pixel(C) };
     }
 
     void unbind(index_type handle) const {
