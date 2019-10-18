@@ -334,7 +334,48 @@ module_textures::index_type module_textures::new_cubemap(cubemap_paths_type path
 }
 
 module_textures::index_type module_textures::handle(module_textures::index_type i) const {
-    return tex_handles.at(i);
+  return tex_handles.at(i);
+}
+
+uint32_t module_textures::width(index_type i) const {
+  return widths.at(i);
+}
+
+uint32_t module_textures::height(index_type i) const {
+  return heights.at(i);
+}
+
+GLenum module_textures::format(index_type i) const {
+  return formats.at(i);
+}
+
+GLenum module_textures::type(index_type i) const {
+  return types.at(i);
+}
+
+GLenum module_textures::texel_type(index_type i) const {
+  return texel_types.at(i);
+}
+
+uint32_t module_textures::bytes_per_pixel(index_type i) const {
+
+  uint32_t r = 1;
+  switch (internal_formats[i]) {
+    case GL_RGBA:
+    case GL_RGBA8:
+    case GL_SRGB8_ALPHA8:
+      r = 4;
+      break;
+    case GL_DEPTH_COMPONENT:
+      r = 4;
+      break;
+    default:
+      __FATAL__("unexpected format found: 0x% " PRIx64, 
+                internal_formats[i]);
+      break;
+  }
+
+  return num_channels.at(i);
 }
 
 

@@ -10,10 +10,14 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include <inttypes.h>
+
 #define write_logf(...) logf_impl(__LINE__, __func__, __FILE__, __VA_ARGS__) 
 
 // Macro'd out incase non-c++17 compilers are used.
 #define STATIC_IF(cond) if constexpr ((cond))
+
+#define __FATAL__(...) do { write_logf(__VA_ARGS__); ASSERT(false); } while (0)
 
 #define GLSL(src) "#version 450 core\n" #src
 
