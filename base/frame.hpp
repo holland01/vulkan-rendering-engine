@@ -46,8 +46,11 @@ struct framebuffer_ops {
       GL_FN(glGenFramebuffers(1, &fbo));
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
 
-      auto depth_attachment = g_m.textures->new_texture(g_m.textures->depthtexture_params(width, height));
-      auto color_attachment = g_m.textures->new_texture(g_m.textures->texture2d_rgba_params(width, height));
+      auto depth_attachment = 
+        g_m.textures->new_texture(g_m.textures->depthtexture_params(width, height));
+      
+      auto color_attachment = 
+        g_m.textures->new_texture(g_m.textures->texture2d_rgba_params(width, height));
 
       GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER, 
                                     GL_COLOR_ATTACHMENT0, 
@@ -133,7 +136,7 @@ struct framebuffer_ops {
 
     render_cube(const framebuffer_ops& f) : self(f),
       cwidth(256),
-      cheight(256){
+      cheight(256) {
     }
 
     auto calc_look_at_mats(const vec3_t& position, real_t radius) {
