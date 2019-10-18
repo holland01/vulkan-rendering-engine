@@ -1141,7 +1141,7 @@ int main(void) {
     //    toggle_framebuffer_srgb();
     
     while (!glfwWindowShouldClose(window)) {
-        (*g_m.view)(g_cam_move_state);
+        g_m.view->update(g_cam_move_state);
 
         if (g_obj_manip->has_select_model_state()) {
             g_obj_manip->update_select_model_state();
