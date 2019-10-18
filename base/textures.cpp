@@ -137,7 +137,7 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
     p.min_filter = GL_NEAREST;
     p.mag_filter = GL_NEAREST;
     p.format = GL_DEPTH_COMPONENT;
-    p.internal_format = GL_DEPTH_COMPONENT16;
+    p.internal_format = GL_DEPTH_COMPONENT;
     p.texel_type = GL_FLOAT;
 
     texture_data_buffer buffer;
