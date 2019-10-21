@@ -27,8 +27,8 @@
 
 namespace fs = std::experimental::filesystem;
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 1024
+#define SCREEN_WIDTH 1366
+#define SCREEN_HEIGHT 768
 
 #if defined (__GNUC__)
 #define TR_NOINLINE __attribute__ ((noinline))
