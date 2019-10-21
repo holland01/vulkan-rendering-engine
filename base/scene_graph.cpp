@@ -60,20 +60,31 @@ scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info
 } 
 
 scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
-  u8vec4_t pixel{0};
-  g_m.framebuffer->fbos->bind(pickfbo);
-  // NOTE: GL_COLOR_ATTACHMENT0 should be the default read buffer for the FBO.
-  // We check this to ensure that's the case - if it isn't, then
-  // we need to make sure we know why.
-  #if 1
+
   ASSERT_CODE(
+    // GL_COLOR_ATTACHMENT0 should be the default read buffer for the FBO.
+    // We check this to ensure that's the case - if it isn't, then
+    // we need to make sure we know why. 
+    
     GLint attach; 
     glGetIntegerv(GL_READ_BUFFER, &attach);
-    ASSERT(attach == GL_COLOR_ATTACHMENT0));
-  #endif
+    ASSERT(attach == GL_COLOR_ATTACHMENT0);
 
-  GL_FN(glReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, &pixel[0]));
-  g_m.framebuffer->fbos->unbind(pickfbo);
+    // Important that we ensure pickbufferdata
+    // is also not empty. A segfault is guaranteed,
+    // but more importantly we're calling trypick()
+    // with unexpected input.
+    ASSERT(!pickbufferdata.empty());
+    u8vec4_t clear_pixel(0, 0, 0, 255);
+
+    // If is_clear_color() returns true, then we know that
+    // the framebuffer only contains whatever the color buffer 
+    // attachment was cleared with. This means that whatever the user is
+    // seeing isn't being copied into the buffer properly.
+    ASSERT(!pickbufferdata.is_clear_color(clear_pixel))
+  );
+
+  u8vec4_t pixel = pickbufferdata.get(x, y);
 
   vec4_t fpixel{R(pixel.r), R(pixel.g), R(pixel.b), R(pixel.a)};
   fpixel *= k_to_rgba8;
@@ -86,6 +97,21 @@ scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
       break;
     }
   }
+
+  ASSERT_CODE(
+    // This helps verify a few things things:
+    // 1) we haven't drawn anything into the pickbuffer that we failed to account for
+    //    throughout other areas of the system
+    // 2) the fragment shader isn't writing out unexpected color values,
+    //    e.g. via delinearization or some kind of unaccounted for
+    //    post processing.
+    // 3) If we did change the clear color (yes, this should be made into a constant),
+    //    we need to update the value here, as well as 
+    //    in a few other areas.
+    if (ret == unset<scene_graph::index_type>()) {
+      ASSERT(fpixel == R4v(0, 0, 0, 1));
+    }
+  );
 
   return ret;
 }

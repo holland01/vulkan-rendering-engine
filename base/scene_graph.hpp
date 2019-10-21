@@ -31,6 +31,7 @@ struct scene_graph {
 
   pickmap_type pickmap;
   framebuffer_ops::index_type pickfbo;
+  framebuffer_ops::fbodata_type pickbufferdata;
 
   permodel_unif_fn_type permodel_unif_set_fn;
 
