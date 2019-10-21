@@ -324,7 +324,6 @@ struct pass_info {
       
       switch (frametype) {
         case frame_user: {
-	        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 	        state.apply();
 	        draw();
         } break;
