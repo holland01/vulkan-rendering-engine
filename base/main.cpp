@@ -1130,11 +1130,21 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
                               object_manip::mop_set);
         }
       DEBUGLINE;
-    } 
+    }
+
+    if (g_conf.quad_click_cursor) {
+      g_m.uniform_store->set_uniform("unif_ToggleQuadScreenXY", 
+                                      vec2_t{g_cam_orient.prev_xpos, g_cam_orient.prev_ypos});
+    }
 }
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
+      if (action == GLFW_PRESS) {
+        if (g_conf.quad_click_cursor) {
+          g_m.uniform_store->set_uniform("unif_ToggleQuadEnabled", 1);
+        }
+
         switch (g_click_state.mode) {
         case click_state::mode_select: {
           if (!g_cam_orient.active) {
@@ -1142,6 +1152,11 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
           }
         } break;
         }
+      } else {
+        if (g_conf.quad_click_cursor) {
+          g_m.uniform_store->set_uniform("unif_ToggleQuadEnabled", 0);
+        }
+      }
     }
 }
 
