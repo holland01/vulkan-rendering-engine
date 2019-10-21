@@ -67,9 +67,6 @@ modules g_m{};
 
 module_textures::index_type g_checkerboard_cubemap {module_textures::k_uninit};
 
-static bool g_framemodelmap = true;
-static bool g_reflect = true;
-
 static bool g_unif_gamma_correct = true;
 
 GLuint g_vao = 0;
@@ -798,12 +795,6 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 
             KEY_BLOCK(GLFW_KEY_R,
                       g_obj_manip->reset_select_model_state());
-
-	    KEY_BLOCK(GLFW_KEY_M,
-		      g_reflect = !g_reflect);
-
-	    KEY_BLOCK(GLFW_KEY_T,
-		      g_framemodelmap = !g_framemodelmap);
             
             MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
             MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
