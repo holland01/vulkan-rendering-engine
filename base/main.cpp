@@ -917,16 +917,13 @@ public:
         mouse.x = R(2.0) * mouse.x - R(1.0);
         mouse.y = R(2.0) * mouse.y - R(1.0);
 
-        std::cout << AS_STRING_SS(depth) SEP_SS AS_STRING_SS(x_offset) SEP_SS AS_STRING_SS(y_offset)
-                  << std::endl;
-
         return glm::inverse(g_m.view->proj * g_m.view->view()) * mouse;
     }
     
     bool cast_ray(scene_graph::index_type entity) const {
-        vec3_t nearp = screen_out();
+        vec3_t world_location = screen_out();
         module_geom::ray world_raycast{}; 
-        world_raycast.dir = glm::normalize(nearp - g_m.view->position);
+        world_raycast.dir = glm::normalize(world_location - g_m.view->position);
         world_raycast.orig = g_m.view->position;
 
         auto bvol = g_m.graph->bound_volumes[entity];
@@ -934,19 +931,10 @@ public:
         bool success = g_m.geom->test_ray_sphere(world_raycast, bvol);
         
         if (success) {
-            std::cout << "HIT\n";
             g_obj_manip->set_select_model_state(entity);
         } else {
-            std::cout << "NO HIT\n";
             clear_model_selection();
         }
-        #if 0
-        std::cout << AS_STRING_GLM_SS(nearp) << "\n";
-        std::cout << AS_STRING_GLM_SS(world_raycast.orig) << "\n";
-        std::cout << AS_STRING_GLM_SS(world_raycast.dir) << "\n";
-
-        std::cout << std::endl;
-        #endif
 
         return success;
     }
