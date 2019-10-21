@@ -248,7 +248,8 @@ struct pass_info {
   enum frame_type {
     frame_user = 0,
     frame_envmap,
-    frame_texture2d
+    frame_texture2d,
+    frame_render_to_quad
   };
   
   using draw_fn_type = std::function<void()>;
@@ -306,7 +307,9 @@ struct pass_info {
     if (active) {
       write_logf("pass: %s", name.c_str());
       
-      g_m.vertex_buffer->bind();
+      if (frametype != frame_render_to_quad) { 
+        g_m.vertex_buffer->bind();
+      }
 
       use_program u(shader);
       
@@ -343,6 +346,11 @@ struct pass_info {
 	        draw();
         } break;
 
+        case frame_render_to_quad:
+          state.apply();
+          GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+          break;
+
         case frame_texture2d: {
           ASSERT(fbo_id != framebuffer_ops::k_uninit);
           g_m.framebuffer->fbos->bind(fbo_id);
@@ -374,7 +382,10 @@ struct pass_info {
         g_m.textures->unbind(bind.id);
       }
 
-      g_m.vertex_buffer->unbind();
+      if (frametype != frame_render_to_quad) {
+        g_m.vertex_buffer->unbind();
+      }
     }
   }
 };
+
