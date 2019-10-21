@@ -1103,13 +1103,14 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
                                             : (g_cam_orient.dy == 0.0 
                                                                ? 0.0 
                                                                : -1.0));
+
+        g_cam_orient.prev_xpos = xpos;
+        g_cam_orient.prev_ypos = g_m.framebuffer->height - ypos;
     };
 
     if (g_cam_orient.active) {
         dxdy(0.01);
-        g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = ypos;
-
+        
         mat4_t xRot = glm::rotate(mat4_t(1.0f),
                                   static_cast<real_t>(g_cam_orient.dy),
                                   vec3_t(1.0f, 0.0f, 0.0f));
@@ -1121,8 +1122,6 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
         g_m.view->orient = mat3_t(yRot * xRot) * g_m.view->orient;
     } else {
         dxdy(1.0);
-        g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = ypos;
      
         if (g_obj_manip->has_select_model_state()) {
             g_obj_manip->move(g_obj_manip->entity_selected,
