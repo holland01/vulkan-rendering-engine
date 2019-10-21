@@ -323,13 +323,18 @@ struct pass_info {
 
 	    uniforms.clear();
 
-      init_fn();
+      if (init_fn) {
+        init_fn();
+      }
       
       for (const auto& name: uniform_names) {
 	      g_m.uniform_store->upload_uniform(name);
       }
 
-      g_m.graph->select_draw(select_draw_predicate);
+      if (select_draw_predicate) {
+        g_m.graph->select_draw(select_draw_predicate);
+      }
+      
       g_m.graph->permodel_unif_set_fn = permodel_unif_fn;
       
       switch (frametype) {
