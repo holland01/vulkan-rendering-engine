@@ -81,6 +81,8 @@ using darray = std::vector<T>;
 #define R4v(x,y,z,w) vec4_t{R(x), R(y), R(z), R(w)}
 #define R3v(x,y,z) vec3_t{R(x), R(y), R(z)}
 
+#define I(x) static_cast<int>(x)
+
 #define V3_UP R3v(0.0, 1.0, 0.0)
 #define V3_DOWN R3v(0.0, -1.0, 0.0)
 
