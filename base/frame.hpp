@@ -69,6 +69,8 @@ struct framebuffer_ops {
       // TODO:
     }
 
+    auto color_attachment(index_type id) const { return color_attachments.at(id); }
+
     auto make_fbo(uint32_t width, uint32_t height) {
       GLuint fbo = 0;
       GL_FN(glGenFramebuffers(1, &fbo));
