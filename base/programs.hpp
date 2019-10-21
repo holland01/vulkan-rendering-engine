@@ -428,12 +428,13 @@ struct module_programs : public type_module {
     }
     
     if (reflect || lights || frag_texcoord) {
-      ss << GLSL_TL(fb_Color = out_color * frag_Color;);
+      ss << GLSL_TL(vec4 interm1 = out_color * frag_Color;);
     } else {
-      ss << GLSL_TL(fb_Color = frag_Color;);
+      ss << GLSL_TL(vec4 interm1 = frag_Color;);
     }
 
-    ss << GLSL_L(});
+    ss << GLSL_TL(fb_Color = interm1;) 
+       << GLSL_L(});
 
     auto s = ss.str();
 
