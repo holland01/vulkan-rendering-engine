@@ -981,7 +981,8 @@ public:
       std::cout << "ID returned: " << entity << std::endl;
 
       if (entity != unset<scene_graph::index_type>()) {
-        g_obj_manip->set_select_model_state(entity);
+        //g_obj_manip->set_select_model_state(entity);
+        clear_model_selection();
       } else {
         clear_model_selection();
       }
