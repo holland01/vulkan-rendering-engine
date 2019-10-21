@@ -258,7 +258,7 @@ struct pass_info {
   
   gl_state state{};
   
-  darray<duniform> uniforms; // cleared after initial upload
+  mutable darray<duniform> uniforms; // cleared after initial upload
 
   darray<bind_texture> tex_bindings;
   
@@ -266,7 +266,7 @@ struct pass_info {
   
   module_programs::id_type shader;
 
-  std::function<void()> init_fn;
+  init_fn_type init_fn;
 
   scene_graph::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
 
@@ -276,7 +276,7 @@ struct pass_info {
 
   scene_graph::permodel_unif_fn_type permodel_unif_fn;
 
-  darray<std::string> uniform_names; // no need to set this.
+  mutable darray<std::string> uniform_names; // no need to set this.
 
   darray<pass_info> subpasses;
 
@@ -302,7 +302,7 @@ struct pass_info {
     uniforms.push_back(duniform{f, name});
   }
   
-  void apply() {
+  void apply() const {
     if (active) {
       write_logf("pass: %s", name.c_str());
       
