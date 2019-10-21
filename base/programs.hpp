@@ -43,7 +43,8 @@ enum {
   fshader_lights = 1 << 6,
   fshader_unif_model = 1 << 7,
   fshader_lights_shine = 1 << 8,
-  fshader_unif_color = 1 << 9
+  fshader_unif_color = 1 << 9,
+  fshader_toggle_quad = 1 << 10
 };
 
 struct fshader_params {
@@ -92,6 +93,14 @@ static inline darray<std::string> uniform_location_mv_proj() {
 static inline darray<std::string> uniform_location_color() {
   return {
     "unif_Color"
+  };
+}
+
+static inline darray<std::string> uniform_location_toggle_quad() {
+  return {
+    "unif_ToggleQuadColor",       // vec4
+    "unif_ToggleQuadScreenXY",    // vec2
+    "unif_ToggleQuadEnabled"      // int
   };
 }
 
@@ -270,6 +279,7 @@ struct module_programs : public type_module {
     bool unif_model = flags & fshader_unif_model;
     bool unif_color = flags & fshader_unif_color;
     bool lights_shine = flags & fshader_lights_shine;
+    bool toggle_quad = flags & fshader_toggle_quad;
 
     ASSERT(!(frag_color && unif_color)); // both of these enabled will probably be supported at some point, but we don't want it currently.
 
@@ -300,6 +310,12 @@ struct module_programs : public type_module {
          << GLSL_L(};)
          << GLSL_INL(uniform light unif_Lights[) << p.light_count 
          << GLSL_L(];);
+    }
+
+    if (toggle_quad) {
+      ss  << GLSL_L(uniform vec4 unif_ToggleQuadColor;)
+          << GLSL_L(uniform vec2 unif_ToggleQuadScreenXY;)
+          << GLSL_L(uniform int unif_ToggleQuadEnabled;);
     }
 
     if (lights_shine) {
@@ -347,6 +363,23 @@ struct module_programs : public type_module {
           << GLSL_TL(term = angleOfIncidence != 0.0 ? term : 0.0;)
           << GLSL_TL(term = pow(term, unif_Material.smoothness);)
           << GLSL_TL(return term;)
+          << GLSL_L(});
+    }
+
+    if (toggle_quad) {
+      ss  << GLSL_L(bool toggleQuad() {)
+          << GLSL_TL(bool ret = false;)
+          << GLSL_TL(if (unif_ToggleQuadEnabled == 1) {)
+          << GLSL_TTL(vec2 center = unif_ToggleQuadScreenXY;)
+          << GLSL_TTL(const float RADIUS = 50;)
+          << GLSL_TTL(float xmin = center.x - RADIUS;)
+          << GLSL_TTL(float xmax = center.x + RADIUS;)
+          << GLSL_TTL(float ymin = center.y - RADIUS;)
+          << GLSL_TTL(float ymax = center.y + RADIUS;)
+          << GLSL_TTL(ret = (xmin <= gl_FragCoord.x && gl_FragCoord.x <= xmax);)
+          << GLSL_TTL(ret = ret && (ymin <= gl_FragCoord.y && gl_FragCoord.y <= ymax);)
+          << GLSL_TL(})
+          << GLSL_TL(return ret;)
           << GLSL_L(});
     }
 
@@ -433,6 +466,12 @@ struct module_programs : public type_module {
       ss << GLSL_TL(vec4 interm1 = frag_Color;);
     }
 
+    if (toggle_quad) {
+      ss  << GLSL_TL(if (toggleQuad()) {)
+          << GLSL_TTL(interm1 = unif_ToggleQuadColor;)
+          << GLSL_TL(});
+    }
+
     ss << GLSL_TL(fb_Color = interm1;) 
        << GLSL_L(});
 
@@ -461,7 +500,9 @@ struct module_programs : public type_module {
       "single_color",
       gen_vshader(0),
       gen_fshader(fshader_unif_color),
-      uniform_location_mv_proj() + uniform_location_color(),
+      uniform_location_mv_proj() + 
+      uniform_location_color() + 
+      uniform_location_toggle_quad(),
       {
         attrib_layout_position()
       }
