@@ -30,6 +30,20 @@ struct framebuffer_ops {
       const uint8_t* p = &data[(y * width + x) * bpp];
       return u8vec4_t(p[0], p[1], p[2], p[3]);
     }
+
+    bool empty() const {
+      return data.empty();
+    }
+
+    bool is_clear_color(const u8vec4_t& test) const {
+      bool is_same = true;
+      for (auto y = 0; y < height && is_same; ++y) {
+        for (auto x = 0; x < width && is_same; ++x) {
+          is_same = get(x, y) == test;
+        }
+      }
+      return is_same;
+    }
   };
 
   using fbodata_type = fbodata;
