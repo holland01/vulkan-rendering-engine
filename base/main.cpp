@@ -1185,8 +1185,7 @@ int main(void) {
     glfwWindowHint(GLFW_BLUE_BITS, 8);
     glfwWindowHint(GLFW_ALPHA_BITS, 8);
     
-    
-    window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Boilerplate", NULL, NULL);
+    window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Boilerplate", g_conf.fullscreen ? glfwGetPrimaryMonitor() : NULL, NULL);
     if (!window) {
         goto error;
     }
