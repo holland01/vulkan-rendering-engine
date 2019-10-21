@@ -181,7 +181,18 @@ struct object_manip {
 
 static std::unique_ptr<object_manip> g_obj_manip{new object_manip()};
 
-darray<pass_info> g_render_passes{};
+using pass_map_t = std::unordered_map<std::string, pass_info>;
+
+pass_map_t g_render_passes{};
+
+void add_render_pass(const pass_info& p) {
+  g_render_passes[p.name] = p;
+}
+
+const pass_info& get_render_pass(const std::string& name) {
+  return g_render_passes.at(name);
+}
+
 
 std::unordered_map<module_models::index_type, frame_model> g_frame_model_map{};
 
@@ -311,7 +322,7 @@ static void init_render_passes() {
     };
 
     add_pointlights(envmap);
-    g_render_passes.push_back(envmap);
+    add_render_pass(envmap);
   }
 
   // wall render pass
@@ -359,7 +370,7 @@ static void init_render_passes() {
     
     add_pointlights(main);
 
-    g_render_passes.push_back(main);
+    add_render_pass(main);
   }
 
   // reflect pass
@@ -415,7 +426,7 @@ static void init_render_passes() {
 
     add_pointlights(reflect);
 
-    g_render_passes.push_back(reflect);
+    add_render_pass(reflect);
   }
 
   // room pass
@@ -468,7 +479,7 @@ static void init_render_passes() {
 
     add_pointlights(room);
 
-    g_render_passes.push_back(room);
+    add_render_pass(room);
   }
 
   // light model pass
@@ -504,15 +515,17 @@ static void init_render_passes() {
       active
     };
 
-    g_render_passes.push_back(light_model);
+    add_render_pass(light_model);
   }
+
+  constexpr bool mousepick_usefbo = true; 
 
   // mouse pick
   {
     gl_state state{};
     state.gamma.framebuffer_srgb = false;
 
-    state.draw_buffers.fbo = true;
+    state.draw_buffers.fbo = mousepick_usefbo;
 
     state.clear_buffers.color = true;
     state.clear_buffers.color_value = R4(0);
@@ -559,7 +572,56 @@ static void init_render_passes() {
       permodel_set
     };
 
-    g_render_passes.push_back(mousepick);
+    add_render_pass(mousepick);
+  }
+
+  // rendered quad
+  {
+    gl_state state{};
+
+    state.draw_buffers.fbo = false;
+
+    state.clear_buffers.color = true;
+    state.clear_buffers.color_value = R4(0);
+    state.clear_buffers.color_value.a = R(1);
+
+    state.clear_buffers.depth_value = R(1);
+    state.clear_buffers.depth = true;
+    
+    darray<duniform> unifs;
+
+    unifs.push_back(duniform(static_cast<int>(0), "unif_TexSampler"));
+
+    darray<bind_texture> tex_bindings {
+      { g_m.framebuffer->fbos->color_attachment(g_m.graph->pickfbo), 0 }
+    };
+    auto frametype = pass_info::frame_user;
+
+    auto select = nullptr;
+    auto shader = g_m.programs->mousepick;
+
+    auto init = nullptr;
+    auto fbo_id = unset<framebuffer_ops::index_type>();
+    
+    auto active = g_conf.dmode == runtime_config::drawmode_debug_mousepick;
+
+    pass_info rquad{
+      "rendered_quad",
+      state,
+      unifs,
+      tex_bindings,
+      frametype,
+      shader,
+      init,
+      select,
+      fbo_id,
+      active,
+      nullptr
+    };
+
+    add_render_pass(rquad);
+  }
+
   }
 };
 
@@ -669,8 +731,26 @@ static void render() {
 
   SET_CLEAR_COLOR_V4(background);
 
-  for (auto& pass: g_render_passes) {
-    pass.apply();
+  auto update_pickbuffer = []() -> void {
+    //GL_FN(glFinish());
+    g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
+  };
+
+  switch (g_conf.dmode) {
+    case runtime_config::drawmode_normal: {
+      for (auto& [name, pass]: g_render_passes) {
+        pass.apply();
+      }
+      update_pickbuffer();
+    } break;
+    
+    case runtime_config::drawmode_debug_mousepick: {
+      const auto& pass_pick = get_render_pass("mousepick");
+      const auto& pass_quad = get_render_pass("rendered_quad");
+      pass_pick.apply();
+      update_pickbuffer();
+      pass_quad.apply();
+    } break;
   }
 }
 
