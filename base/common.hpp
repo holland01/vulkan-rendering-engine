@@ -138,6 +138,23 @@ struct modules {
   void free();
 } extern g_m;
 
+struct runtime_config {
+  enum drawmode {
+    drawmode_normal,
+    drawmode_debug_mousepick
+  };
+
+#if CONFIG_QUAD_CLICK_CURSOR == 1
+  bool quad_click_cursor{true};
+#else
+  bool quad_click_cursor{false};
+#endif
+
+  bool fullscreen{false};
+
+  drawmode dmode{drawmode_normal};
+} extern g_conf;
+
 //extern std::vector<type_module*> g_modules;
 
 struct type_module {

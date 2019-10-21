@@ -65,6 +65,8 @@ void modules::free() {
 
 modules g_m{};
 
+runtime_config g_conf{};
+
 module_textures::index_type g_checkerboard_cubemap {module_textures::k_uninit};
 
 static bool g_unif_gamma_correct = true;
