@@ -1055,10 +1055,10 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         switch (g_click_state.mode) {
         case click_state::mode_select: {
-            if (!g_cam_orient.active) {
-                g_click_state.scan_object_selection();
-            }
-        }break;
+          if (!g_cam_orient.active) {
+            g_click_state.scan_object_selection();
+          }
+        } break;
         }
     }
 }
@@ -1112,13 +1112,11 @@ int main(void) {
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     maybe_enable_cursor(window);
-    
-    init_api_data();
-    init_render_passes();
 
     GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
     
-    //    toggle_framebuffer_srgb();
+    init_api_data();
+    init_render_passes();
     
     while (!glfwWindowShouldClose(window)) {
         g_m.view->update(g_cam_move_state);
