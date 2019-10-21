@@ -130,6 +130,14 @@ struct duniform {
   {}
 };
 
+static inline darray<duniform> duniform_toggle_quad() {
+  return {
+    duniform{R4v(0, 1, 1, 1), "unif_ToggleQuadColor"},
+    duniform{R2(0), "unif_ToggleQuadScreenXY"},
+    duniform{I(0), "unif_ToggleQuadEnabled"}
+  };
+}
+
 // TODO:
 // make these more type safe
 struct gl_state {
