@@ -2,6 +2,7 @@
 #include "common.hpp"
 #include "models.hpp"
 #include "geom.hpp"
+#include "frame.hpp"
 
 #include <glm/gtc/constants.hpp>
 
@@ -11,8 +12,10 @@ struct node_id;
 
 struct scene_graph {
   using index_type = int16_t;
-
+  using pickmap_type = std::unordered_map<index_type, vec4_t>;
   using predicate_fn_type = std::function<bool(const index_type& n)>;
+  using permodel_unif_fn_type = std::function<void(const scene_graph::index_type&)>;
+
   
   darray<darray<index_type>> child_lists;
   darray<module_geom::bvol> bound_volumes;
@@ -26,11 +29,18 @@ struct scene_graph {
   darray<bool> draw;
   darray<bool> pickable; // can be selected by the mouse
 
+  pickmap_type pickmap;
+  framebuffer_ops::index_type pickfbo;
+  framebuffer_ops::fbodata_type pickbufferdata;
+
+  permodel_unif_fn_type permodel_unif_set_fn;
+
   struct test_indices_s {
     index_type sphere{unset<index_type>()};
     index_type skybox{unset<index_type>()};
     index_type area_sphere{unset<index_type>()};
     index_type floor{unset<index_type>()};
+    index_type pointlight{unset<index_type>()};
   };
 
   test_indices_s test_indices;
@@ -57,6 +67,8 @@ struct scene_graph {
   scene_graph();
 
   index_type new_node(const scene_graph::init_info& info);
+
+  index_type trypick(int32_t screen_x, int32_t screen_y);
   
   bool is_root(index_type node) const { return parent_nodes[node] == unset<index_type>(); }
   

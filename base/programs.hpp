@@ -42,6 +42,9 @@ enum {
   fshader_reflect = 1 << 5,
   fshader_lights = 1 << 6,
   fshader_unif_model = 1 << 7,
+  fshader_lights_shine = 1 << 8,
+  fshader_unif_color = 1 << 9,
+  fshader_toggle_quad = 1 << 10
 };
 
 struct fshader_params {
@@ -64,12 +67,40 @@ static constexpr shadergen_flags_t vshader_frag_pos_color_normal() {
 }
 
 #define VSHADER_POINTLIGHTS vshader_frag_pos_color_normal() | vshader_in_normal | vshader_unif_model
-#define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights
+#define FSHADER_POINTLIGHTS fshader_pos_color_normal() | fshader_lights | fshader_lights_shine
 
-static inline std::vector<std::string> uniform_location_pointlight(uint32_t index) {
+static inline darray<std::string> uniform_location_pointlight(uint32_t index) {
   return {
     "unif_Lights[" + std::to_string(index) + "].position",
     "unif_Lights[" + std::to_string(index) + "].color"
+  };
+}
+
+static inline darray<std::string> uniform_location_shine() {
+  return { 
+    "unif_Material.smoothness", 
+    "unif_CameraPosition" 
+  };
+}
+
+static inline darray<std::string> uniform_location_mv_proj() {
+  return {
+    "unif_ModelView",
+    "unif_Projection"
+  };
+}
+
+static inline darray<std::string> uniform_location_color() {
+  return {
+    "unif_Color"
+  };
+}
+
+static inline darray<std::string> uniform_location_toggle_quad() {
+  return {
+    "unif_ToggleQuadColor",       // vec4
+    "unif_ToggleQuadScreenXY",    // vec2
+    "unif_ToggleQuadEnabled"      // int
   };
 }
 
@@ -78,8 +109,11 @@ struct dpointlight {
   vec3_t color;
 };
 
-struct module_programs : public type_module {
+struct dmaterial {
+  float smoothness;
+};
 
+struct module_programs : public type_module {
   using ptr_type = std::unique_ptr<module_programs>;
   
   struct attrib_layout {
@@ -99,7 +133,7 @@ struct module_programs : public type_module {
     std::string vertex;
     std::string fragment;
 
-    std::vector<std::string> uniforms;
+    darray<std::string> uniforms;
     attrib_map_type attribs;
   };
 
@@ -232,7 +266,7 @@ struct module_programs : public type_module {
 
   static std::string gen_fshader( shadergen_flags_t flags, 
                                   fshader_params p=fshader_params{}, 
-                                  const std::string& name = "UNSPECIFIED") {
+                                  const std::string& name = "UNSPECIFIED" ) {
     std::stringstream ss;
 
     bool frag_position = flags & fshader_frag_position;
@@ -243,6 +277,11 @@ struct module_programs : public type_module {
     bool reflect = flags & fshader_reflect;
     bool lights = flags & fshader_lights;
     bool unif_model = flags & fshader_unif_model;
+    bool unif_color = flags & fshader_unif_color;
+    bool lights_shine = flags & fshader_lights_shine;
+    bool toggle_quad = flags & fshader_toggle_quad;
+
+    ASSERT(!(frag_color && unif_color)); // both of these enabled will probably be supported at some point, but we don't want it currently.
 
     if (reflect) {
       ASSERT(!frag_texcoord);
@@ -273,9 +312,28 @@ struct module_programs : public type_module {
          << GLSL_L(];);
     }
 
+    if (toggle_quad) {
+      ss  << GLSL_L(uniform vec4 unif_ToggleQuadColor;)
+          << GLSL_L(uniform vec2 unif_ToggleQuadScreenXY;)
+          << GLSL_L(uniform int unif_ToggleQuadEnabled;);
+    }
+
+    if (lights_shine) {
+      ASSERT(lights);
+      ss << GLSL_L(struct material {)
+         << GLSL_TL(float smoothness;)
+         << GLSL_L(};)
+         << GLSL_L(uniform material unif_Material;)
+         << GLSL_L(uniform vec3 unif_CameraPosition;);
+    }
+
     if (unif_model) { 
       ASSERT(lights); // only expected use case currently
       ss << GLSL_L(uniform mat4 unif_Model;);
+    }
+
+    if (unif_color) { 
+      ss << GLSL_L(uniform vec4 unif_Color;);
     }
 
     if (unif_texcubemap) ss << GLSL_L(uniform samplerCube unif_TexCubeMap;);
@@ -290,6 +348,41 @@ struct module_programs : public type_module {
        << GLSL_TL(return min(max(normalize(v), vec3(0.0)), vec3(1.0));)
        << GLSL_L(});
 
+    if (lights_shine) {
+      ASSERT(lights);
+      ss  << GLSL_L(float applySpecular(in vec3 vposition,
+                                     in vec3 vnormal,
+                                     in vec3 dirToViewer,
+                                     in vec3 lightPos,
+                                     float angleOfIncidence) {)
+          << GLSL_TL(vec3 dirToLight = normalize(lightPos - vposition);)
+          << GLSL_TL(vec3 reflectDir = reflect(-dirToLight, normalize(vnormal));)
+          << GLSL_TL(vec3 halfAngle = normalize(dirToLight + dirToViewer);)
+          << GLSL_TL(float term = dot(halfAngle, vnormal);)
+          << GLSL_TL(term = clamp(term, 0, 1);)
+          << GLSL_TL(term = angleOfIncidence != 0.0 ? term : 0.0;)
+          << GLSL_TL(term = pow(term, unif_Material.smoothness);)
+          << GLSL_TL(return term;)
+          << GLSL_L(});
+    }
+
+    if (toggle_quad) {
+      ss  << GLSL_L(bool toggleQuad() {)
+          << GLSL_TL(bool ret = false;)
+          << GLSL_TL(if (unif_ToggleQuadEnabled == 1) {)
+          << GLSL_TTL(vec2 center = unif_ToggleQuadScreenXY;)
+          << GLSL_TTL(const float RADIUS = 50;)
+          << GLSL_TTL(float xmin = center.x - RADIUS;)
+          << GLSL_TTL(float xmax = center.x + RADIUS;)
+          << GLSL_TTL(float ymin = center.y - RADIUS;)
+          << GLSL_TTL(float ymax = center.y + RADIUS;)
+          << GLSL_TTL(ret = (xmin <= gl_FragCoord.x && gl_FragCoord.x <= xmax);)
+          << GLSL_TTL(ret = ret && (ymin <= gl_FragCoord.y && gl_FragCoord.y <= ymax);)
+          << GLSL_TL(})
+          << GLSL_TL(return ret;)
+          << GLSL_L(});
+    }
+
     if (lights) {
       /* TODO: eliminate conditional overhead associated with "invertNormals".
        * there is a function which allows direct bit manipulation of floats,
@@ -297,17 +390,28 @@ struct module_programs : public type_module {
        * function to perform the inversion when invertNormals == true, and
        * not invert when invertNormals == false.
        */
-
       ss  << GLSL_L(vec3 applyPointLights(in vec3 vposition, in vec3 vnormal, int numLights, bool invertNormals) {)
           << GLSL_TL(vec3 lightpass = vec3(0.0);)
           << GLSL_TL(const float c1 = 0.0;)
           << GLSL_TL(const float c2 = 0.0;)
-          << GLSL_TL(const float c3 = invertNormals ? -1.0 : 1.0;)
+          << GLSL_TL(const float c3 = invertNormals ? -1.0 : 1.0;);
+          if (lights_shine) {
+            ss << GLSL_TL(vec3 dirToViewer = normalize(unif_CameraPosition - vposition););
+          }
+          ss
           << GLSL_TL(for (int i = 0; i < numLights; ++i) {)
           << GLSL_TTL(vec3 lightDir = normalize(unif_Lights[i].position - vposition);)
           << GLSL_TTL(float diff = max(dot(lightDir, c3 * normalize(vnormal)), 0.0);)
           << GLSL_TTL(vec3 diffuse = unif_Lights[i].color * diff * frag_Color.xyz;)
-          << GLSL_TTL(vec3 result = diffuse;)
+          << GLSL_TTL(vec3 result = diffuse;);
+          if (lights_shine) {
+            ss << GLSL_TTL(result += applySpecular(vposition, 
+                                                   vnormal, 
+                                                   dirToViewer, 
+                                                   unif_Lights[i].position,
+                                                   diff););
+          }
+          ss
           #if 0
           << GLSL_TTL(float distance = length(unif_Lights[i].position - vposition);)
           << GLSL_TTL(result *= (1.0 / (1.0 + (c1 * distance) + (c2 * distance * distance)));)
@@ -322,7 +426,11 @@ struct module_programs : public type_module {
     ss << GLSL_L(void main() {)
        << GLSL_TL(vec4 out_color = vec4(1.0););
 
-    if (!frag_color) {
+    // as implied by the assert above,
+    // unif_color and frag_color cannot both be true.
+    if (unif_color) {
+      ss << GLSL_TL(vec4 frag_Color = unif_Color;);
+    } else if (!frag_color) {
       ss << GLSL_TL(vec4 frag_Color = vec4(1.0););
     }
 
@@ -334,10 +442,6 @@ struct module_programs : public type_module {
     
     if (frag_texcoord) {
       ss << GLSL_TL(out_color = texture(unif_TexCubeMap, frag_TexCoord););
-    }
-
-    if (!(reflect || frag_texcoord)) {
-      ss << GLSL_TL(out_color = frag_Color;);
     }
 
     if (lights) {
@@ -356,7 +460,19 @@ struct module_programs : public type_module {
           << GLSL_TL(out_color.xyz *= applyPointLights(vposition, vnormal, numLights, invertNormals););
     }
     
-    ss << GLSL_TL(fb_Color = out_color * frag_Color;)
+    if (reflect || lights || frag_texcoord) {
+      ss << GLSL_TL(vec4 interm1 = out_color * frag_Color;);
+    } else {
+      ss << GLSL_TL(vec4 interm1 = frag_Color;);
+    }
+
+    if (toggle_quad) {
+      ss  << GLSL_TL(if (toggleQuad()) {)
+          << GLSL_TTL(interm1 = unif_ToggleQuadColor;)
+          << GLSL_TL(});
+    }
+
+    ss << GLSL_TL(fb_Color = interm1;) 
        << GLSL_L(});
 
     auto s = ss.str();
@@ -369,7 +485,28 @@ struct module_programs : public type_module {
     return s;
   }
 
-  std::vector<programdef> defs = {
+  darray<programdef> defs = {
+    {
+      "basic",
+      gen_vshader(vshader_frag_color),
+      gen_fshader(fshader_frag_color),
+      uniform_location_mv_proj(),
+      {
+        attrib_layout_position(),
+        attrib_layout_color()
+      }
+    },
+    {
+      "single_color",
+      gen_vshader(0),
+      gen_fshader(fshader_unif_color),
+      uniform_location_mv_proj() + 
+      uniform_location_color() + 
+      uniform_location_toggle_quad(),
+      {
+        attrib_layout_position()
+      }
+    },
     {
       "main",
       gen_vshader(VSHADER_POINTLIGHTS),
@@ -377,12 +514,13 @@ struct module_programs : public type_module {
       gen_fshader(FSHADER_POINTLIGHTS,
                   {NUM_LIGHTS,
                   true}),
-      ([&]() -> std::vector<std::string> {
-        return std::vector<std::string>{
+      ([&]() -> darray<std::string> {
+        return darray<std::string> {
           "unif_ModelView",
           "unif_Projection",
           "unif_Model"
-        } + uniform_location_pointlight(0);
+        } + uniform_location_pointlight(0) 
+          + uniform_location_shine();
       })(),
       {
         attrib_layout_position(),
@@ -442,13 +580,14 @@ struct module_programs : public type_module {
                     NUM_LIGHTS, 
                     true        // invert normals
                   }),
-      ([&]() -> std::vector<std::string>  {
-        return std::vector<std::string>{
+      ([&]() -> darray<std::string>  {
+        return darray<std::string>{
           "unif_ModelView",
           "unif_Projection",
           "unif_TexCubeMap",
           "unif_Model"
-        }  + uniform_location_pointlight(0);
+        }  + uniform_location_pointlight(0)
+           + uniform_location_shine();
       })(),
       {
         attrib_layout_position(),
@@ -505,8 +644,8 @@ struct module_programs : public type_module {
                   fshader_unif_texcubemap |
                   fshader_reflect),
 #endif
-      ([&]() -> std::vector<std::string> { 
-        return std::vector<std::string> {
+      ([&]() -> darray<std::string> { 
+        return darray<std::string> {
           "unif_Model",
           "unif_ModelView",
           "unif_Projection",
@@ -532,6 +671,8 @@ struct module_programs : public type_module {
 
   std::string current;
 
+  const std::string basic = "basic";
+  const std::string mousepick = "single_color";
   const std::string default_fb = "main";
   const std::string default_rtq = "render_to_quad";
   const std::string default_mir = "reflection_sphere";
@@ -597,13 +738,29 @@ struct module_programs : public type_module {
     GL_FN(glUniform1i(uniform(name), i));
   }
 
+  void up_float(const std::string& name, float f) const {
+    GL_FN(glUniform1f(uniform(name), f));
+  }
+
+  void up_vec2(const std::string& name, const vec2_t& v) const {
+    GL_FN(glUniform2fv(uniform(name), 1, &v[0]));
+  }
+
   void up_vec3(const std::string& name, const vec3_t& v) const {
     GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
   }
 
-  void up_pointlight(const std::string& name, const dpointlight& pl) {
+  void up_vec4(const std::string& name, const vec4_t& v) const {
+    GL_FN(glUniform4fv(uniform(name), 1, &v[0]));
+  }
+
+  void up_pointlight(const std::string& name, const dpointlight& pl) const {
     GL_FN(glUniform3fv(uniform(name + ".position"), 1, &pl.position[0]));
     GL_FN(glUniform3fv(uniform(name + ".color"), 1, &pl.color[0]));    
+  }
+
+  void up_material(const std::string& name, const dmaterial& dm) const {
+    GL_FN(glUniform1f(uniform(name + ".smoothness"), dm.smoothness));
   }
   
   auto fetch_attrib(const std::string& program, const std::string& attrib) const {
@@ -617,12 +774,13 @@ struct module_programs : public type_module {
       const auto& layout = attrib.second;
       
       GL_FN(glEnableVertexAttribArray(layout.index));
+    
       GL_FN(glVertexAttribPointer(layout.index,
                                   layout.size,
                                   layout.type,
                                   layout.normalized,
                                   layout.stride,
-                                  layout.pointer));                                 
+                                  layout.pointer));
     } 
   }
 

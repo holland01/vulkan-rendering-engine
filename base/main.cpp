@@ -65,10 +65,9 @@ void modules::free() {
 
 modules g_m{};
 
-module_textures::index_type g_checkerboard_cubemap {module_textures::k_uninit};
+runtime_config g_conf{};
 
-static bool g_framemodelmap = true;
-static bool g_reflect = true;
+module_textures::index_type g_checkerboard_cubemap {module_textures::k_uninit};
 
 static bool g_unif_gamma_correct = true;
 
@@ -182,7 +181,18 @@ struct object_manip {
 
 static std::unique_ptr<object_manip> g_obj_manip{new object_manip()};
 
-darray<pass_info> g_render_passes{};
+using pass_map_t = std::unordered_map<std::string, pass_info>;
+
+pass_map_t g_render_passes{};
+
+void add_render_pass(const pass_info& p) {
+  g_render_passes[p.name] = p;
+}
+
+const pass_info& get_render_pass(const std::string& name) {
+  return g_render_passes.at(name);
+}
+
 
 std::unordered_map<module_models::index_type, frame_model> g_frame_model_map{};
 
@@ -221,14 +231,40 @@ struct gl_clear_depth {
 #define DUNIFVEC3_XYZ(name, x, y, z) \
   duniform(vec3_t(R(x), R(y), R(z)), #name)
 
+#define POINTLIGHT_POSITION R3v(5, 5, 0)
+
+#define POINTLIGHT_EMIT_COLOR R3v(1.0, 1.0, 1.0)
+#define POINTLIGHT_MODEL_COLOR R4v(1, 0, 0, 1)
+#define POINTLIGHT_MODEL_RADIUS 0.3
+#define POINTLIGHT_MODEL_SIZE R3(POINTLIGHT_MODEL_RADIUS)
+
 static const dpointlight g_pointlight{
-  R3v(5.0, 5.0, 0),
-  R3v(0, 1, 0)
+  POINTLIGHT_POSITION,
+  POINTLIGHT_EMIT_COLOR
 };
+
+module_models::index_type g_pointlight_model_index{-1};
+
+void shader_pointlight_update() {
+  g_m.uniform_store->set_uniform("unif_CameraPosition", g_m.view->position);
+}
 
 void add_pointlights(pass_info& p) {
   if (p.name == "floor" || p.name == "room" || p.name == "envmap") {
     p.add_pointlight(g_pointlight, 0);
+    p.add_vec3("unif_CameraPosition", vec3_t{});
+  }
+
+  if (p.name == "floor") {
+    p.add_material("unif_Material", { 1.0 });
+  }
+
+  if (p.name == "room") {
+    p.add_material("unif_Material", { 1.0 });
+  }
+
+  if (p.name == "envmap") {
+    p.add_material("unif_Material", { 1.0 });
   }
 }
 
@@ -259,13 +295,16 @@ static void init_render_passes() {
     auto shader = g_m.programs->skybox;
 
     auto init = []() {
-      g_m.framebuffer->rcube->faces[0] = g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
+      g_m.framebuffer->rcube->faces[0] = 
+        g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, 
+                                                  TEST_SPHERE_RADIUS);
       g_frame_model_map[g_m.models->modind_sphere].needs_render = true;
+      shader_pointlight_update();
     };
 
     auto select = scene_graph_select(n, n != g_m.graph->test_indices.sphere);
 
-    auto envmap_id = g_frame_model_map[g_m.models->modind_sphere].render_cube_id;
+    auto fbo_id = g_frame_model_map[g_m.models->modind_sphere].render_cube_id;
     
     auto active = true;
     
@@ -278,12 +317,12 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
 
     add_pointlights(envmap);
-    g_render_passes.push_back(envmap);
+    add_render_pass(envmap);
   }
 
   // wall render pass
@@ -304,13 +343,15 @@ static void init_render_passes() {
 
     auto shader = g_m.programs->default_fb;
 
-    auto init = []() {};
+    auto init = []() {
+      shader_pointlight_update();
+    };
 
     auto select = scene_graph_select(n,
-				     g_m.models->type(g_m.graph->model_indices[n]) ==
-				     module_models::model_quad);
+                                     g_m.models->type(g_m.graph->model_indices[n]) ==
+                                     module_models::model_quad);
     
-    auto envmap_id = framebuffer_ops::k_uninit;
+    auto fbo_id = framebuffer_ops::k_uninit;
     
     auto active = true;
     
@@ -323,13 +364,13 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
     
     add_pointlights(main);
 
-    g_render_passes.push_back(main);
+    add_render_pass(main);
   }
 
   // reflect pass
@@ -359,13 +400,15 @@ static void init_render_passes() {
     auto shader = g_m.programs->sphere_cubemap;
 
     auto init = []() {
+      // NOTE: unif_CameraPosition is also used for specular reflection - 
+      // this unif_CameraPosition does NOT correspond to that.
       g_m.uniform_store ->set_uniform("unif_CameraPosition", g_m.view->position);
     };
     
     auto select = scene_graph_select(n,
 				     n == g_m.graph->test_indices.sphere);
 
-    auto envmap_id = framebuffer_ops::k_uninit;
+    auto fbo_id = framebuffer_ops::k_uninit;
     auto active = true;
     
     pass_info reflect{
@@ -377,13 +420,13 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
 
     add_pointlights(reflect);
 
-    g_render_passes.push_back(reflect);
+    add_render_pass(reflect);
   }
 
   // room pass
@@ -411,11 +454,13 @@ static void init_render_passes() {
 
     auto shader = g_m.programs->skybox;
 
-    auto init = []() {};
+    auto init = []() {
+      shader_pointlight_update();
+    };
     
     auto select = scene_graph_select(n, n == g_m.graph->test_indices.area_sphere);
 
-    auto envmap_id = framebuffer_ops::k_uninit;
+    auto fbo_id = framebuffer_ops::k_uninit;
     
     auto active = true;
     
@@ -428,13 +473,155 @@ static void init_render_passes() {
       shader,
       init,
       select,
-      envmap_id,
+      fbo_id,
       active
     };
 
     add_pointlights(room);
 
-    g_render_passes.push_back(room);
+    add_render_pass(room);
+  }
+
+  // light model pass
+  {
+    gl_state state{};
+    
+    darray<duniform> unifs;
+		     
+    unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+
+    darray<bind_texture> tex_bindings{};
+    auto frametype = pass_info::frame_user;
+
+    auto select = scene_graph_select(n, n == g_m.graph->test_indices.pointlight);
+    auto shader = g_m.programs->basic;
+
+    auto init = []() {};
+    
+    auto fbo_id = framebuffer_ops::k_uninit;
+    auto active = true;
+
+    pass_info light_model{
+      "light_model",
+      state,
+      unifs,
+      tex_bindings,
+      frametype,
+      shader,
+      init,
+      select,
+      fbo_id,
+      active
+    };
+
+    add_render_pass(light_model);
+  }
+
+  constexpr bool mousepick_usefbo = true; 
+
+  // mouse pick
+  {
+    gl_state state{};
+    state.gamma.framebuffer_srgb = false;
+
+    state.draw_buffers.fbo = mousepick_usefbo;
+
+    state.clear_buffers.color = true;
+    state.clear_buffers.color_value = R4(0);
+    state.clear_buffers.color_value.a = R(1);
+
+    state.clear_buffers.depth_value = R(1);
+    state.clear_buffers.depth = true;
+    
+    darray<duniform> unifs;
+		     
+    unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
+    unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
+    unifs.push_back(duniform{R4(1.0f), "unif_Color"});
+
+    darray<bind_texture> tex_bindings{};
+    auto frametype = pass_info::frame_texture2d;
+
+    auto select = scene_graph_select(n, g_m.graph->pickable[n] == true);
+    auto shader = g_m.programs->mousepick;
+
+    auto init = []() {};
+    auto fbo_id = g_m.graph->pickfbo;
+    
+    auto active = true;
+
+    auto permodel_set = [](const scene_graph::index_type& id) {
+      if (g_m.graph->pickable[id]) {
+        g_m.uniform_store->set_uniform("unif_Color", g_m.graph->pickmap[id]);
+        g_m.uniform_store->upload_uniform("unif_Color");
+      }
+    };
+
+    pass_info mousepick{
+      "mousepick",
+      state,
+      unifs,
+      tex_bindings,
+      frametype,
+      shader,
+      init,
+      select,
+      fbo_id,
+      active,
+      permodel_set
+    };
+
+    add_render_pass(mousepick);
+  }
+
+  // rendered quad
+  {
+    gl_state state{};
+
+    state.draw_buffers.fbo = false;
+
+    state.clear_buffers.color = true;
+    state.clear_buffers.color_value = R4(0);
+    state.clear_buffers.color_value.a = R(1);
+
+    state.clear_buffers.depth_value = R(1);
+    state.clear_buffers.depth = true;
+    
+    darray<duniform> unifs;
+
+    unifs.push_back(duniform(static_cast<int>(0), "unif_TexSampler"));
+
+    darray<bind_texture> tex_bindings {
+      { g_m.framebuffer->fbos->color_attachment(g_m.graph->pickfbo), 0 }
+    };
+    auto frametype = pass_info::frame_user;
+
+    auto select = nullptr;
+    auto shader = g_m.programs->mousepick;
+
+    auto init = nullptr;
+    auto fbo_id = unset<framebuffer_ops::index_type>();
+    
+    auto active = g_conf.dmode == runtime_config::drawmode_debug_mousepick;
+
+    pass_info rquad{
+      "rendered_quad",
+      state,
+      unifs,
+      tex_bindings,
+      frametype,
+      shader,
+      init,
+      select,
+      fbo_id,
+      active,
+      nullptr
+    };
+
+    add_render_pass(rquad);
+  }
+
   }
 };
 
@@ -451,11 +638,14 @@ static void init_api_data() {
     
     frame_model fmod{};
     fmod.render_cube_id = g_m.framebuffer->add_render_cube(TEST_SPHERE_POS,
-                                                  TEST_SPHERE_RADIUS);
+                                                           TEST_SPHERE_RADIUS);
     
     g_frame_model_map[g_m.models->modind_sphere] = fmod;
     
-    g_checkerboard_cubemap = g_m.textures->new_cubemap(256, 256, GL_RGBA);
+    g_checkerboard_cubemap = 
+      g_m.textures->new_texture(g_m.textures->cubemap_params( 256, 
+                                                              256, 
+                                                              module_textures::cubemap_preset_test_room_0));
     
     real_t wall_size = R(15.0);
     
@@ -489,15 +679,30 @@ static void init_api_data() {
 
       g_m.graph->test_indices.sphere = g_m.graph->new_node(sphere);
     }
+
+    {
+      scene_graph::init_info pointlight_model;
+
+      pointlight_model.position = POINTLIGHT_POSITION;
+      pointlight_model.scale = POINTLIGHT_MODEL_SIZE;
+      pointlight_model.angle = R3(0);
+
+      pointlight_model.model = g_pointlight_model_index = g_m.models->new_sphere(POINTLIGHT_MODEL_COLOR);
+      pointlight_model.parent = g_m.graph->test_indices.area_sphere;
+      pointlight_model.pickable = true;
+      pointlight_model.bvol = g_m.geom->make_bsphere(1.0, POINTLIGHT_POSITION);
+
+      g_m.graph->test_indices.pointlight = g_m.graph->new_node(pointlight_model);
+    }
     
     {
       scene_graph::init_info floor;
 
-      floor.position = vec3_t{0};
-      floor.scale = R3v(1.0, 1.0, 1.0);
+      floor.position = R3v(0, -5, 0);
+      floor.scale = R3v(20.0, 1.0, 20.0);
       floor.angle = vec3_t{0};
 
-      floor.model = g_m.models->new_wall(module_models::wall_bottom, R4v(1.0, 1.0, 1.0, 1.0));
+      floor.model = g_m.models->new_wall(module_models::wall_bottom, R4v(0.0, 0.0, 0.5, 1.0));
       
       floor.parent = g_m.graph->test_indices.area_sphere;
       
@@ -526,8 +731,26 @@ static void render() {
 
   SET_CLEAR_COLOR_V4(background);
 
-  for (auto& pass: g_render_passes) {
-    pass.apply();
+  auto update_pickbuffer = []() -> void {
+    //GL_FN(glFinish());
+    g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
+  };
+
+  switch (g_conf.dmode) {
+    case runtime_config::drawmode_normal: {
+      for (auto& [name, pass]: g_render_passes) {
+        pass.apply();
+      }
+      update_pickbuffer();
+    } break;
+    
+    case runtime_config::drawmode_debug_mousepick: {
+      const auto& pass_pick = get_render_pass("mousepick");
+      const auto& pass_quad = get_render_pass("rendered_quad");
+      pass_pick.apply();
+      update_pickbuffer();
+      pass_quad.apply();
+    } break;
   }
 }
 
@@ -654,12 +877,6 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 
             KEY_BLOCK(GLFW_KEY_R,
                       g_obj_manip->reset_select_model_state());
-
-	    KEY_BLOCK(GLFW_KEY_M,
-		      g_reflect = !g_reflect);
-
-	    KEY_BLOCK(GLFW_KEY_T,
-		      g_framemodelmap = !g_framemodelmap);
             
             MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
             MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
@@ -782,16 +999,13 @@ public:
         mouse.x = R(2.0) * mouse.x - R(1.0);
         mouse.y = R(2.0) * mouse.y - R(1.0);
 
-        std::cout << AS_STRING_SS(depth) SEP_SS AS_STRING_SS(x_offset) SEP_SS AS_STRING_SS(y_offset)
-                  << std::endl;
-
         return glm::inverse(g_m.view->proj * g_m.view->view()) * mouse;
     }
     
     bool cast_ray(scene_graph::index_type entity) const {
-        vec3_t nearp = screen_out();
+        vec3_t world_location = screen_out();
         module_geom::ray world_raycast{}; 
-        world_raycast.dir = glm::normalize(nearp - g_m.view->position);
+        world_raycast.dir = glm::normalize(world_location - g_m.view->position);
         world_raycast.orig = g_m.view->position;
 
         auto bvol = g_m.graph->bound_volumes[entity];
@@ -799,19 +1013,10 @@ public:
         bool success = g_m.geom->test_ray_sphere(world_raycast, bvol);
         
         if (success) {
-            std::cout << "HIT\n";
             g_obj_manip->set_select_model_state(entity);
         } else {
-            std::cout << "NO HIT\n";
             clear_model_selection();
         }
-        #if 0
-        std::cout << AS_STRING_GLM_SS(nearp) << "\n";
-        std::cout << AS_STRING_GLM_SS(world_raycast.orig) << "\n";
-        std::cout << AS_STRING_GLM_SS(world_raycast.dir) << "\n";
-
-        std::cout << std::endl;
-        #endif
 
         return success;
     }
@@ -851,19 +1056,20 @@ public:
     }
 
     void scan_object_selection() const {
-        auto filtered = 
-          g_m.graph->select(scene_graph_select(entity, 
-                                             g_m.models->type(g_m.graph->model_indices[entity]) == 
-                                              module_models::model_sphere && 
-                                              g_m.graph->pickable[entity] == true));
-        
-        for (auto id: filtered) {
-            if (cast_ray(id)) {
-                break;
-            }
-        }
+      scene_graph::index_type entity = 
+        g_m.graph->trypick(static_cast<int32_t>(g_cam_orient.prev_xpos),
+                            static_cast<int32_t>(g_cam_orient.prev_ypos));
+      
+      std::cout << "ID returned: " << entity << std::endl;
 
-        DEBUGLINE;
+      if (entity != unset<scene_graph::index_type>()) {
+        //g_obj_manip->set_select_model_state(entity);
+        clear_model_selection();
+      } else {
+        clear_model_selection();
+      }
+
+      DEBUGLINE;
     }
 
     void unselect() {
@@ -897,13 +1103,14 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
                                             : (g_cam_orient.dy == 0.0 
                                                                ? 0.0 
                                                                : -1.0));
+
+        g_cam_orient.prev_xpos = xpos;
+        g_cam_orient.prev_ypos = g_m.framebuffer->height - ypos;
     };
 
     if (g_cam_orient.active) {
         dxdy(0.01);
-        g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = ypos;
-
+        
         mat4_t xRot = glm::rotate(mat4_t(1.0f),
                                   static_cast<real_t>(g_cam_orient.dy),
                                   vec3_t(1.0f, 0.0f, 0.0f));
@@ -915,8 +1122,6 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
         g_m.view->orient = mat3_t(yRot * xRot) * g_m.view->orient;
     } else {
         dxdy(1.0);
-        g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = ypos;
      
         if (g_obj_manip->has_select_model_state()) {
             g_obj_manip->move(g_obj_manip->entity_selected,
@@ -924,25 +1129,38 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
                               object_manip::mop_set);
         }
       DEBUGLINE;
-    } 
+    }
+
+    if (g_conf.quad_click_cursor) {
+      g_m.uniform_store->set_uniform("unif_ToggleQuadScreenXY", 
+                                      vec2_t{g_cam_orient.prev_xpos, g_cam_orient.prev_ypos});
+    }
 }
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
+      if (action == GLFW_PRESS) {
+        if (g_conf.quad_click_cursor) {
+          g_m.uniform_store->set_uniform("unif_ToggleQuadEnabled", 1);
+        }
+
         switch (g_click_state.mode) {
         case click_state::mode_select: {
-            if (!g_cam_orient.active) {
-                g_click_state.scan_object_selection();
-            }
-        }break;
+          if (!g_cam_orient.active) {
+            g_click_state.scan_object_selection();
+          }
+        } break;
         }
+      } else {
+        if (g_conf.quad_click_cursor) {
+          g_m.uniform_store->set_uniform("unif_ToggleQuadEnabled", 0);
+        }
+      }
     }
 }
 
 int main(void) {
     g_key_states.fill(false);
-
-    g_m.init();
 
     GLFWwindow* window;
 
@@ -966,8 +1184,7 @@ int main(void) {
     glfwWindowHint(GLFW_BLUE_BITS, 8);
     glfwWindowHint(GLFW_ALPHA_BITS, 8);
     
-    
-    window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Boilerplate", NULL, NULL);
+    window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Boilerplate", g_conf.fullscreen ? glfwGetPrimaryMonitor() : NULL, NULL);
     if (!window) {
         goto error;
     }
@@ -984,20 +1201,20 @@ int main(void) {
         }
     }
 
+    g_m.init();
+
     glfwSetKeyCallback(window, key_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     maybe_enable_cursor(window);
-    
-    init_api_data();
-    init_render_passes();
 
     GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
     
-    //    toggle_framebuffer_srgb();
+    init_api_data();
+    init_render_passes();
     
     while (!glfwWindowShouldClose(window)) {
-        (*g_m.view)(g_cam_move_state);
+        g_m.view->update(g_cam_move_state);
 
         if (g_obj_manip->has_select_model_state()) {
             g_obj_manip->update_select_model_state();

@@ -6,6 +6,8 @@
 
 #include <glm/glm.hpp>
 
+#define DEBUG_ASSERTS
+
 #if defined(_MSC_VER)
 #define OS_WINDOWS
 #elif defined(__linux__)
@@ -25,8 +27,8 @@
 
 namespace fs = std::experimental::filesystem;
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 1024
+#define SCREEN_WIDTH 1366
+#define SCREEN_HEIGHT 768
 
 #if defined (__GNUC__)
 #define TR_NOINLINE __attribute__ ((noinline))
@@ -47,6 +49,11 @@ namespace fs = std::experimental::filesystem;
 
 #define DEBUGLINE write_logf("FILE:%s,LINE:%i\n", __FILE__, __LINE__)
 
+#ifdef DEBUG_ASSERTS
+#define ASSERT_CODE(expr) do { expr; } while (0)
+#else
+#define ASSERT_CODE(expr)
+#endif
 
 #define NOP ;
 
@@ -55,6 +62,8 @@ using vec2_t = glm::vec2;
 using vec3_t = glm::vec3;
 using boolvec3_t = glm::bvec3;
 using vec4_t = glm::vec4;
+
+using u8vec4_t = glm::u8vec4;
 
 using mat4_t = glm::mat4;
 using mat3_t = glm::mat3;
@@ -71,6 +80,8 @@ using darray = std::vector<T>;
 
 #define R4v(x,y,z,w) vec4_t{R(x), R(y), R(z), R(w)}
 #define R3v(x,y,z) vec3_t{R(x), R(y), R(z)}
+
+#define I(x) static_cast<int>(x)
 
 #define V3_UP R3v(0.0, 1.0, 0.0)
 #define V3_DOWN R3v(0.0, -1.0, 0.0)
@@ -129,6 +140,23 @@ struct modules {
   void free();
 } extern g_m;
 
+struct runtime_config {
+  enum drawmode {
+    drawmode_normal,
+    drawmode_debug_mousepick
+  };
+
+#if CONFIG_QUAD_CLICK_CURSOR == 1
+  bool quad_click_cursor{true};
+#else
+  bool quad_click_cursor{false};
+#endif
+
+  bool fullscreen{false};
+
+  drawmode dmode{drawmode_normal};
+} extern g_conf;
+
 //extern std::vector<type_module*> g_modules;
 
 struct type_module {
@@ -142,6 +170,10 @@ static inline numType unset() {
 static inline mat4_t m4i() {
   return mat4_t{R(1)};
 }
+
+
+
+static const real_t k_to_rgba8 = R(1) / R(255);
 
 template <typename T>
 static inline bool vec_contains(const std::vector<T>& v, const T& t) {
@@ -159,4 +191,10 @@ static inline std::vector<T> vec_join(const std::vector<T>& a, const std::vector
 template <typename T>
 static inline std::vector<T> operator+(const std::vector<T>& a, const std::vector<T>& b) {
   return vec_join(a, b);
+}
+
+template <class Type>
+static inline darray<Type> darray_clone(const darray<Type>& in) {
+  darray<Type> x{in.begin(), in.end()};
+  return x;
 }
