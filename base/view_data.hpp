@@ -191,7 +191,7 @@ struct view_data {
     this->position += view_##dir() * this->step;  \
   }
   
-  void operator ()(move_state m) {
+  void update(move_state m) {
     TESTDIR(m, up);
     TESTDIR(m, down);
     TESTDIR(m, right);

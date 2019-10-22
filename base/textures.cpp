@@ -107,6 +107,26 @@ module_textures::params module_textures::cubemap_params(uint32_t width,
     return p;
 }
 
+module_textures::params module_textures::texture2d_rgba_params( uint32_t width, 
+                                                                uint32_t height) {
+  params p{};
+
+  p.width = width;
+  p.height = height;
+  p.num_channels = 4;
+  p.type = GL_TEXTURE_2D;
+  p.min_filter = GL_LINEAR;
+  p.mag_filter = GL_LINEAR;
+  p.format = GL_RGBA;
+  p.internal_format = GL_RGBA8;
+  p.texel_type = GL_UNSIGNED_BYTE;
+
+  texture_data_buffer buffer(p.width * p.height * p.num_channels, 0);
+  p.data.data = buffer;
+
+  return p;
+}
+
 module_textures::params module_textures::depthtexture_params(uint32_t width, uint32_t height) {
     params p{};
 
@@ -117,7 +137,7 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
     p.min_filter = GL_NEAREST;
     p.mag_filter = GL_NEAREST;
     p.format = GL_DEPTH_COMPONENT;
-    p.internal_format = GL_DEPTH_COMPONENT16;
+    p.internal_format = GL_DEPTH_COMPONENT;
     p.texel_type = GL_FLOAT;
 
     texture_data_buffer buffer;
@@ -314,7 +334,48 @@ module_textures::index_type module_textures::new_cubemap(cubemap_paths_type path
 }
 
 module_textures::index_type module_textures::handle(module_textures::index_type i) const {
-    return tex_handles.at(i);
+  return tex_handles.at(i);
+}
+
+uint32_t module_textures::width(index_type i) const {
+  return widths.at(i);
+}
+
+uint32_t module_textures::height(index_type i) const {
+  return heights.at(i);
+}
+
+GLenum module_textures::format(index_type i) const {
+  return formats.at(i);
+}
+
+GLenum module_textures::type(index_type i) const {
+  return types.at(i);
+}
+
+GLenum module_textures::texel_type(index_type i) const {
+  return texel_types.at(i);
+}
+
+uint32_t module_textures::bytes_per_pixel(index_type i) const {
+
+  uint32_t r = 1;
+  switch (internal_formats[i]) {
+    case GL_RGBA:
+    case GL_RGBA8:
+    case GL_SRGB8_ALPHA8:
+      r = 4;
+      break;
+    case GL_DEPTH_COMPONENT:
+      r = 4;
+      break;
+    default:
+      __FATAL__("unexpected format found: 0x% " PRIx64, 
+                internal_formats[i]);
+      break;
+  }
+
+  return num_channels.at(i);
 }
 
 

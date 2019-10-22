@@ -20,7 +20,9 @@ struct shader_uniform_storage {
     uniform_mat4x4 = 0,
     uniform_pointlight,
     uniform_material,
+    uniform_vec2,
     uniform_vec3,
+    uniform_vec4,
     uniform_int32,
     uniform_float32
   };
@@ -28,7 +30,9 @@ struct shader_uniform_storage {
   darray<mat4_t> mat4x4_store;
   darray<dpointlight> pointlight_store;
   darray<dmaterial> material_store;
+  darray<vec2_t> vec2_store;
   darray<vec3_t> vec3_store;
+  darray<vec4_t> vec4_store;
   darray<int32_t> int32_store;
   darray<float> float32_store;
 
@@ -48,7 +52,9 @@ struct shader_uniform_storage {
                    darray<uniformType>& store);
 
   void set_uniform(const std::string& name, const mat4_t& m);
+  void set_uniform(const std::string& name, const vec2_t& v);
   void set_uniform(const std::string& name, const vec3_t& v);
+  void set_uniform(const std::string& name, const vec4_t& v);
   void set_uniform(const std::string& name, int32_t i);
   void set_uniform(const std::string& name, float f);
   void set_uniform(const std::string& name, const dpointlight& pl);
@@ -64,7 +70,9 @@ struct duniform {
     mat4_t m4;
     dpointlight pl;
     dmaterial mat;
+    vec2_t v2;
     vec3_t v3;
+    vec4_t v4;
     int32_t i32;
     float f32;
   };
@@ -91,10 +99,22 @@ struct duniform {
       type(shader_uniform_storage::uniform_material)
   {}
 
+  duniform(vec2_t v, const std::string& n)
+    : v2(v),
+      name(n),
+      type(shader_uniform_storage::uniform_vec2)
+  {}
+
   duniform(vec3_t v, const std::string& n)
     : v3(v),
       name(n),
       type(shader_uniform_storage::uniform_vec3)
+  {}
+
+  duniform(vec4_t v, const std::string& n)
+    : v4(v),
+      name(n),
+      type(shader_uniform_storage::uniform_vec4)
   {}
 
   duniform(int i, const std::string& n)
@@ -110,10 +130,22 @@ struct duniform {
   {}
 };
 
+static inline darray<duniform> duniform_toggle_quad() {
+  return {
+    duniform{R4v(0, 1, 1, 1), "unif_ToggleQuadColor"},
+    duniform{R2(0), "unif_ToggleQuadScreenXY"},
+    duniform{I(0), "unif_ToggleQuadEnabled"}
+  };
+}
+
 // TODO:
 // make these more type safe
 struct gl_state {
   
+  struct {
+    bool framebuffer_srgb{true};
+  } gamma{};
+
   struct {
     double range_near{0.0}; // [0, 1.0]
     double range_far{1.0}; // [0, 1.0] (far can be less than near as well)
@@ -187,6 +219,12 @@ struct gl_state {
                          clear_buffers.color_value.a));
     }
 
+    if (gamma.framebuffer_srgb) {
+      GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
+    } else {
+      GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
+    }
+
     {
       GLenum bits = 0;
       bits = clear_buffers.color ? (bits | GL_COLOR_BUFFER_BIT) : bits;
@@ -217,16 +255,19 @@ struct pass_info {
   
   enum frame_type {
     frame_user = 0,
-    frame_envmap
+    frame_envmap,
+    frame_texture2d,
+    frame_render_to_quad
   };
   
   using draw_fn_type = std::function<void()>;
+  using init_fn_type = std::function<void()>;
 
   std::string name;
   
   gl_state state{};
   
-  darray<duniform> uniforms; // cleared after initial upload
+  mutable darray<duniform> uniforms; // cleared after initial upload
 
   darray<bind_texture> tex_bindings;
   
@@ -234,15 +275,17 @@ struct pass_info {
   
   module_programs::id_type shader;
 
-  std::function<void()> init_fn;
+  init_fn_type init_fn;
 
   scene_graph::predicate_fn_type select_draw_predicate; // determines which objects are to be rendered
 
-  framebuffer_ops::index_type envmap_id{framebuffer_ops::k_uninit}; // optional
+  framebuffer_ops::index_type fbo_id{framebuffer_ops::k_uninit}; // optional
 
   bool active{true};
-  
-  darray<std::string> uniform_names; // no need to set this.
+
+  scene_graph::permodel_unif_fn_type permodel_unif_fn;
+
+  mutable darray<std::string> uniform_names; // no need to set this.
 
   darray<pass_info> subpasses;
 
@@ -268,11 +311,13 @@ struct pass_info {
     uniforms.push_back(duniform{f, name});
   }
   
-  void apply() {
+  void apply() const {
     if (active) {
       write_logf("pass: %s", name.c_str());
       
-      g_m.vertex_buffer->bind();
+      if (frametype != frame_render_to_quad) { 
+        g_m.vertex_buffer->bind();
+      }
 
       use_program u(shader);
       
@@ -289,41 +334,66 @@ struct pass_info {
 
 	    uniforms.clear();
 
-      init_fn();
+      if (init_fn) {
+        init_fn();
+      }
       
       for (const auto& name: uniform_names) {
 	      g_m.uniform_store->upload_uniform(name);
       }
 
-      g_m.graph->select_draw(select_draw_predicate);
+      if (select_draw_predicate) {
+        g_m.graph->select_draw(select_draw_predicate);
+      }
+      
+      g_m.graph->permodel_unif_set_fn = permodel_unif_fn;
       
       switch (frametype) {
         case frame_user: {
-	        GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 	        state.apply();
 	        draw();
         } break;
 
+        case frame_render_to_quad:
+          state.apply();
+          GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+          break;
+
+        case frame_texture2d: {
+          ASSERT(fbo_id != framebuffer_ops::k_uninit);
+          g_m.framebuffer->fbos->bind(fbo_id);
+          state.apply();
+          draw();
+          g_m.framebuffer->fbos->unbind(fbo_id);
+        } break;
+
         case frame_envmap: {
-          ASSERT(envmap_id != framebuffer_ops::k_uninit);
+          ASSERT(fbo_id != framebuffer_ops::k_uninit);
           g_m.models->framebuffer_pinned = true;
-          g_m.framebuffer->rcube->bind(envmap_id);
+          g_m.framebuffer->rcube->bind(fbo_id);
          
           for (auto i = 0; i < 6; ++i) {
-            g_m.view->bind_view(g_m.framebuffer->rcube->set_face(envmap_id, static_cast<framebuffer_ops::render_cube::axis>(i)));
+            g_m.view->bind_view(g_m.framebuffer->rcube->set_face(fbo_id, static_cast<framebuffer_ops::render_cube::axis>(i)));
             state.apply();
             draw();
           }
+
           g_m.framebuffer->rcube->unbind();
           g_m.view->unbind_view();
           g_m.models->framebuffer_pinned = false;
         } break;
       }
+
+      g_m.graph->permodel_unif_set_fn = scene_graph::permodel_unif_fn_type();
+
       for (const auto& bind: tex_bindings) {
         g_m.textures->unbind(bind.id);
       }
 
-      g_m.vertex_buffer->unbind();
+      if (frametype != frame_render_to_quad) {
+        g_m.vertex_buffer->unbind();
+      }
     }
   }
 };
+

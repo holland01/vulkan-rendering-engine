@@ -43,6 +43,8 @@ enum {
   fshader_lights = 1 << 6,
   fshader_unif_model = 1 << 7,
   fshader_lights_shine = 1 << 8,
+  fshader_unif_color = 1 << 9,
+  fshader_toggle_quad = 1 << 10
 };
 
 struct fshader_params {
@@ -85,6 +87,20 @@ static inline darray<std::string> uniform_location_mv_proj() {
   return {
     "unif_ModelView",
     "unif_Projection"
+  };
+}
+
+static inline darray<std::string> uniform_location_color() {
+  return {
+    "unif_Color"
+  };
+}
+
+static inline darray<std::string> uniform_location_toggle_quad() {
+  return {
+    "unif_ToggleQuadColor",       // vec4
+    "unif_ToggleQuadScreenXY",    // vec2
+    "unif_ToggleQuadEnabled"      // int
   };
 }
 
@@ -261,7 +277,11 @@ struct module_programs : public type_module {
     bool reflect = flags & fshader_reflect;
     bool lights = flags & fshader_lights;
     bool unif_model = flags & fshader_unif_model;
+    bool unif_color = flags & fshader_unif_color;
     bool lights_shine = flags & fshader_lights_shine;
+    bool toggle_quad = flags & fshader_toggle_quad;
+
+    ASSERT(!(frag_color && unif_color)); // both of these enabled will probably be supported at some point, but we don't want it currently.
 
     if (reflect) {
       ASSERT(!frag_texcoord);
@@ -292,6 +312,12 @@ struct module_programs : public type_module {
          << GLSL_L(];);
     }
 
+    if (toggle_quad) {
+      ss  << GLSL_L(uniform vec4 unif_ToggleQuadColor;)
+          << GLSL_L(uniform vec2 unif_ToggleQuadScreenXY;)
+          << GLSL_L(uniform int unif_ToggleQuadEnabled;);
+    }
+
     if (lights_shine) {
       ASSERT(lights);
       ss << GLSL_L(struct material {)
@@ -304,6 +330,10 @@ struct module_programs : public type_module {
     if (unif_model) { 
       ASSERT(lights); // only expected use case currently
       ss << GLSL_L(uniform mat4 unif_Model;);
+    }
+
+    if (unif_color) { 
+      ss << GLSL_L(uniform vec4 unif_Color;);
     }
 
     if (unif_texcubemap) ss << GLSL_L(uniform samplerCube unif_TexCubeMap;);
@@ -333,6 +363,23 @@ struct module_programs : public type_module {
           << GLSL_TL(term = angleOfIncidence != 0.0 ? term : 0.0;)
           << GLSL_TL(term = pow(term, unif_Material.smoothness);)
           << GLSL_TL(return term;)
+          << GLSL_L(});
+    }
+
+    if (toggle_quad) {
+      ss  << GLSL_L(bool toggleQuad() {)
+          << GLSL_TL(bool ret = false;)
+          << GLSL_TL(if (unif_ToggleQuadEnabled == 1) {)
+          << GLSL_TTL(vec2 center = unif_ToggleQuadScreenXY;)
+          << GLSL_TTL(const float RADIUS = 50;)
+          << GLSL_TTL(float xmin = center.x - RADIUS;)
+          << GLSL_TTL(float xmax = center.x + RADIUS;)
+          << GLSL_TTL(float ymin = center.y - RADIUS;)
+          << GLSL_TTL(float ymax = center.y + RADIUS;)
+          << GLSL_TTL(ret = (xmin <= gl_FragCoord.x && gl_FragCoord.x <= xmax);)
+          << GLSL_TTL(ret = ret && (ymin <= gl_FragCoord.y && gl_FragCoord.y <= ymax);)
+          << GLSL_TL(})
+          << GLSL_TL(return ret;)
           << GLSL_L(});
     }
 
@@ -379,7 +426,11 @@ struct module_programs : public type_module {
     ss << GLSL_L(void main() {)
        << GLSL_TL(vec4 out_color = vec4(1.0););
 
-    if (!frag_color) {
+    // as implied by the assert above,
+    // unif_color and frag_color cannot both be true.
+    if (unif_color) {
+      ss << GLSL_TL(vec4 frag_Color = unif_Color;);
+    } else if (!frag_color) {
       ss << GLSL_TL(vec4 frag_Color = vec4(1.0););
     }
 
@@ -410,12 +461,19 @@ struct module_programs : public type_module {
     }
     
     if (reflect || lights || frag_texcoord) {
-      ss << GLSL_TL(fb_Color = out_color * frag_Color;);
+      ss << GLSL_TL(vec4 interm1 = out_color * frag_Color;);
     } else {
-      ss << GLSL_TL(fb_Color = frag_Color;);
+      ss << GLSL_TL(vec4 interm1 = frag_Color;);
     }
 
-    ss << GLSL_L(});
+    if (toggle_quad) {
+      ss  << GLSL_TL(if (toggleQuad()) {)
+          << GLSL_TTL(interm1 = unif_ToggleQuadColor;)
+          << GLSL_TL(});
+    }
+
+    ss << GLSL_TL(fb_Color = interm1;) 
+       << GLSL_L(});
 
     auto s = ss.str();
 
@@ -436,6 +494,17 @@ struct module_programs : public type_module {
       {
         attrib_layout_position(),
         attrib_layout_color()
+      }
+    },
+    {
+      "single_color",
+      gen_vshader(0),
+      gen_fshader(fshader_unif_color),
+      uniform_location_mv_proj() + 
+      uniform_location_color() + 
+      uniform_location_toggle_quad(),
+      {
+        attrib_layout_position()
       }
     },
     {
@@ -603,6 +672,7 @@ struct module_programs : public type_module {
   std::string current;
 
   const std::string basic = "basic";
+  const std::string mousepick = "single_color";
   const std::string default_fb = "main";
   const std::string default_rtq = "render_to_quad";
   const std::string default_mir = "reflection_sphere";
@@ -672,8 +742,16 @@ struct module_programs : public type_module {
     GL_FN(glUniform1f(uniform(name), f));
   }
 
+  void up_vec2(const std::string& name, const vec2_t& v) const {
+    GL_FN(glUniform2fv(uniform(name), 1, &v[0]));
+  }
+
   void up_vec3(const std::string& name, const vec3_t& v) const {
     GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
+  }
+
+  void up_vec4(const std::string& name, const vec4_t& v) const {
+    GL_FN(glUniform4fv(uniform(name), 1, &v[0]));
   }
 
   void up_pointlight(const std::string& name, const dpointlight& pl) const {
