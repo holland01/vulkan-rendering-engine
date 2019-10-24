@@ -629,9 +629,9 @@ static void init_render_passes() {
       nullptr
     };
 
-    add_render_pass(rquad);
-  }
-
+    if (active) {
+      add_render_pass(rquad);
+    }
   }
 };
 
