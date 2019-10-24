@@ -37,6 +37,7 @@
 #define ROOM_SPHERE_RADIUS R(30)
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
+const real_t PI_OVER_6 = (PI_OVER_2 / R(6));
 void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
   programs = new module_programs();
@@ -1085,9 +1086,15 @@ void clear_model_selection() {
 }
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+    ypos = g_m.framebuffer->height - ypos;
+    
     auto dxdy = [xpos, ypos](double scale) {
-        g_cam_orient.dx = xpos - g_cam_orient.prev_xpos;
-        g_cam_orient.dy = ypos - g_cam_orient.prev_ypos; //g_cam_orient.prev_ypos - ypos;
+        real_t testdx = xpos - g_cam_orient.prev_xpos; 
+
+        real_t testdy = -1.0 * (ypos - g_cam_orient.prev_ypos);
+
+        g_cam_orient.dx = testdx;
+        g_cam_orient.dy = testdy; //g_cam_orient.prev_ypos - ypos;
 
         g_cam_orient.dx *= scale;
         g_cam_orient.dy *= scale;
@@ -1105,7 +1112,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
                                                                : -1.0));
 
         g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = g_m.framebuffer->height - ypos;
+        g_cam_orient.prev_ypos = ypos;
     };
 
     if (g_cam_orient.active) {

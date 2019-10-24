@@ -81,6 +81,11 @@ using darray = std::vector<T>;
 #define R4v(x,y,z,w) vec4_t{R(x), R(y), R(z), R(w)}
 #define R3v(x,y,z) vec3_t{R(x), R(y), R(z)}
 
+#define PI_OVER_2 glm::half_pi<real_t>()
+#define PI glm::pi<real_t>()
+
+extern const real_t PI_OVER_6;
+
 #define I(x) static_cast<int>(x)
 
 #define V3_UP R3v(0.0, 1.0, 0.0)
@@ -197,4 +202,17 @@ template <class Type>
 static inline darray<Type> darray_clone(const darray<Type>& in) {
   darray<Type> x{in.begin(), in.end()};
   return x;
+}
+
+
+template <class T>
+static inline bool in_range(const T& a, const T& x, const T& b) {
+  return a <= x && x <= b;
+}
+
+
+static inline bool reqeps(real_t a, real_t b) {
+  real_t e = 0.01;
+  real_t d = a - b;
+  return -e <= d && d <= e;
 }
