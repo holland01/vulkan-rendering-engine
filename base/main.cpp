@@ -551,7 +551,7 @@ static void init_render_passes() {
     unifs.push_back(duniform{R4(1.0f), "unif_Color"});
 
     darray<bind_texture> tex_bindings{};
-    auto frametype = pass_info::frame_texture2d;
+    auto frametype = mousepick_usefbo ? pass_info::frame_texture2d : pass_info::frame_user;
 
     auto select = scene_graph_select(n, g_m.graph->pickable[n] == true);
     auto shader = g_m.programs->mousepick;
