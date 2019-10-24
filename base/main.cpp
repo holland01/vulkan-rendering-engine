@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <iostream>
 #include <unordered_map>
+#include <map>
 #include <limits>
 
 #include "textures.hpp"
@@ -182,16 +183,24 @@ struct object_manip {
 
 static std::unique_ptr<object_manip> g_obj_manip{new object_manip()};
 
-using pass_map_t = std::unordered_map<std::string, pass_info>;
+using pass_map_t = std::map<int, pass_info>;
 
 pass_map_t g_render_passes{};
 
 void add_render_pass(const pass_info& p) {
-  g_render_passes[p.name] = p;
+  g_render_passes[g_render_passes.size()] = p;
 }
 
 const pass_info& get_render_pass(const std::string& name) {
-  return g_render_passes.at(name);
+  int key = -1;
+  for (const auto& kv: g_render_passes) {
+    if (kv.second.name == name) {
+      key = kv.first;
+      break;
+    }
+  }
+  ASSERT(key != -1);
+  return g_render_passes.at(key);
 }
 
 
