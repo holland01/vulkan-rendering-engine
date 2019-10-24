@@ -1100,56 +1100,42 @@ void clear_model_selection() {
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     ypos = g_m.framebuffer->height - ypos;
-    
-    auto dxdy = [xpos, ypos](double scale) {
-        real_t testdx = xpos - g_cam_orient.prev_xpos; 
-
-        real_t testdy = -1.0 * (ypos - g_cam_orient.prev_ypos);
-
-        g_cam_orient.dx = testdx;
-        g_cam_orient.dy = testdy; //g_cam_orient.prev_ypos - ypos;
-
-        g_cam_orient.dx *= scale;
-        g_cam_orient.dy *= scale;
-
-        g_cam_orient.sdx = (g_cam_orient.dx > 0.0 
-                                            ? 1.0 
-                                            : (g_cam_orient.dx == 0.0 
-                                                               ? 0.0 
-                                                               : -1.0));
-
-        g_cam_orient.sdy = (g_cam_orient.dy < 0.0 
-                                            ? 1.0 
-                                            : (g_cam_orient.dy == 0.0 
-                                                               ? 0.0 
-                                                               : -1.0));
-
-        g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = ypos;
-    };
 
     if (g_cam_orient.active) {
-        dxdy(0.01);
-        
-        mat4_t xRot = glm::rotate(mat4_t(1.0f),
-                                  static_cast<real_t>(g_cam_orient.dy),
-                                  vec3_t(1.0f, 0.0f, 0.0f));
+      real_t testdx = xpos - g_cam_orient.prev_xpos; 
 
-        mat4_t yRot = glm::rotate(mat4_t(1.0f),
-                                  static_cast<real_t>(g_cam_orient.dx),
-                                  vec3_t(0.0f, 1.0f, 0.0f));
+      real_t testdy = -1.0 * (ypos - g_cam_orient.prev_ypos);
 
-        g_m.view->orient = mat3_t(yRot * xRot) * g_m.view->orient;
-    } else {
-        dxdy(1.0);
-     
-        if (g_obj_manip->has_select_model_state()) {
-            g_obj_manip->move(g_obj_manip->entity_selected,
-                              g_click_state.calc_new_selected_position(),
-                              object_manip::mop_set);
-        }
-      DEBUGLINE;
+      g_cam_orient.dx = testdx;
+      g_cam_orient.dy = testdy; //g_cam_orient.prev_ypos - ypos;
+
+      g_cam_orient.dx *= 0.01;
+      g_cam_orient.dy *= 0.01;
+
+      g_cam_orient.sdx = (g_cam_orient.dx > 0.0 
+                                          ? 1.0 
+                                          : (g_cam_orient.dx == 0.0 
+                                                              ? 0.0 
+                                                              : -1.0));
+
+      g_cam_orient.sdy = (g_cam_orient.dy < 0.0 
+                                          ? 1.0 
+                                          : (g_cam_orient.dy == 0.0 
+                                                              ? 0.0 
+                                                              : -1.0));
+      mat4_t xRot = glm::rotate(mat4_t(1.0f),
+                                static_cast<real_t>(g_cam_orient.dy),
+                                vec3_t(1.0f, 0.0f, 0.0f));
+
+      mat4_t yRot = glm::rotate(mat4_t(1.0f),
+                                static_cast<real_t>(g_cam_orient.dx),
+                                vec3_t(0.0f, 1.0f, 0.0f));
+
+      g_m.view->orient = mat3_t(yRot * xRot) * g_m.view->orient;
     }
+
+    g_cam_orient.prev_xpos = xpos;
+    g_cam_orient.prev_ypos = ypos;
 
     if (g_conf.quad_click_cursor) {
       g_m.uniform_store->set_uniform("unif_ToggleQuadScreenXY", 
