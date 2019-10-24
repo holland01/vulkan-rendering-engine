@@ -24,6 +24,9 @@
 
 #include <vector>
 #include <algorithm>
+#include <limits>
+
+#include "util.hpp"
 
 namespace fs = std::experimental::filesystem;
 
@@ -210,6 +213,12 @@ static inline bool in_range(const T& a, const T& x, const T& b) {
   return a <= x && x <= b;
 }
 
+template <class T>
+static inline T neg_1_to_1(const T& x) {
+  static_assert(std::numeric_limits<T>::is_signed);
+  ASSERT(T(0) <= x && x <= T(1));
+  return T(2) * x - T(1);
+}
 
 static inline bool reqeps(real_t a, real_t b) {
   real_t e = 0.01;
