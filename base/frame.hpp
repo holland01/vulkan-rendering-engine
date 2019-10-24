@@ -127,6 +127,17 @@ struct framebuffer_ops {
                           0);
 
       bind(handle);
+
+      ASSERT_CODE(
+        // GL_COLOR_ATTACHMENT0 should be the default read buffer for the FBO.
+        // We check this to ensure that's the case - if it isn't, then
+        // we need to make sure we know why. 
+        
+        GLint attach; 
+        glGetIntegerv(GL_READ_BUFFER, &attach);
+        ASSERT(attach == GL_COLOR_ATTACHMENT0);
+      );
+
       GL_FN(glReadBuffer(GL_COLOR_ATTACHMENT0));
 
       GL_FN(glReadPixels(0, 

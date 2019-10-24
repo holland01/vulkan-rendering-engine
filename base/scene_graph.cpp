@@ -62,14 +62,6 @@ scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info
 scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
 
   ASSERT_CODE(
-    // GL_COLOR_ATTACHMENT0 should be the default read buffer for the FBO.
-    // We check this to ensure that's the case - if it isn't, then
-    // we need to make sure we know why. 
-    
-    GLint attach; 
-    glGetIntegerv(GL_READ_BUFFER, &attach);
-    ASSERT(attach == GL_COLOR_ATTACHMENT0);
-
     // Important that we ensure pickbufferdata
     // is also not empty. A segfault is guaranteed,
     // but more importantly we're calling trypick()
