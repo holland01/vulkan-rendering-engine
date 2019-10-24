@@ -24,6 +24,7 @@
 
 #include <vector>
 #include <algorithm>
+#include "util.hpp"
 
 namespace fs = std::experimental::filesystem;
 
