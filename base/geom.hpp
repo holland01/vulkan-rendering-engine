@@ -20,6 +20,14 @@ struct module_geom {
         }
     };
 
+    struct plane {
+      real_t d;
+      vec3_t normal;
+      vec3_t point;
+    };
+
+    const plane k_plane_yz{R(0), R3v(1, 0, 0), R3v(0, 1, 1)};
+
     struct bvol {
         enum volume_type {
             type_sphere = 0,
@@ -100,17 +108,25 @@ struct module_geom {
         return true;
     }
 
-    real_t dist_point_plane(const vec3_t& p, const vec3_t& normal, const vec3_t& plane_p) {
-        vec3_t pl2p{p - plane_p};
-        return glm::length(glm::proj(pl2p, normal));        
+    real_t dist_point_plane(const vec3_t& p, const vec3_t& normal, const vec3_t& plane_p) const {
+      vec3_t pl2p{p - plane_p};
+      return glm::length(glm::proj(pl2p, normal));        
     }
 
-    vec3_t proj_point_plane(const vec3_t& p, const vec3_t& normal, const vec3_t& plane_p) {
-        ASSERT(glm::length(normal) <= R(1.2) && glm::length(normal) >= R(0.8));
+    real_t dist_point_plane(const vec3_t& p, const plane& P) const {
+      return dist_point_plane(p, P.normal, P.point);
+    }
 
-        real_t alpha = dist_point_plane(p, normal, plane_p);
-        vec3_t N{normal * alpha};
-        return p + (-N);
+    vec3_t proj_point_plane(const vec3_t& p, const vec3_t& normal, const vec3_t& plane_p) const {
+      ASSERT(glm::length(normal) <= R(1.2) && glm::length(normal) >= R(0.8));
+
+      real_t alpha = dist_point_plane(p, normal, plane_p);
+      vec3_t N{normal * alpha};
+      return p + (-N);
+    }
+
+    vec3_t proj_point_plane(const vec3_t& p, const plane& P) const {
+      return proj_point_plane(p, P.normal, P.point);
     }
 
   // a, b, and c are assumed to be
