@@ -37,6 +37,7 @@
 #define ROOM_SPHERE_RADIUS R(30)
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
+const real_t PI_OVER_6 = (PI_OVER_2 / R(6));
 void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
   programs = new module_programs();
