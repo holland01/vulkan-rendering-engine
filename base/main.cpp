@@ -1086,9 +1086,15 @@ void clear_model_selection() {
 }
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+    ypos = g_m.framebuffer->height - ypos;
+    
     auto dxdy = [xpos, ypos](double scale) {
-        g_cam_orient.dx = xpos - g_cam_orient.prev_xpos;
-        g_cam_orient.dy = ypos - g_cam_orient.prev_ypos; //g_cam_orient.prev_ypos - ypos;
+        real_t testdx = xpos - g_cam_orient.prev_xpos; 
+
+        real_t testdy = -1.0 * (ypos - g_cam_orient.prev_ypos);
+
+        g_cam_orient.dx = testdx;
+        g_cam_orient.dy = testdy; //g_cam_orient.prev_ypos - ypos;
 
         g_cam_orient.dx *= scale;
         g_cam_orient.dy *= scale;
@@ -1106,7 +1112,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
                                                                : -1.0));
 
         g_cam_orient.prev_xpos = xpos;
-        g_cam_orient.prev_ypos = g_m.framebuffer->height - ypos;
+        g_cam_orient.prev_ypos = ypos;
     };
 
     if (g_cam_orient.active) {
