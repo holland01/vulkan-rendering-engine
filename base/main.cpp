@@ -1070,6 +1070,8 @@ public:
     }
 
     void scan_object_selection() const {
+      ASSERT(!g_obj_manip->has_select_model_state());
+
       scene_graph::index_type entity = 
         g_m.graph->trypick(static_cast<int32_t>(g_cam_orient.prev_xpos),
                             static_cast<int32_t>(g_cam_orient.prev_ypos));
@@ -1077,13 +1079,8 @@ public:
       std::cout << "ID returned: " << entity << std::endl;
 
       if (entity != unset<scene_graph::index_type>()) {
-        //g_obj_manip->set_select_model_state(entity);
-        clear_model_selection();
-      } else {
-        clear_model_selection();
+        g_obj_manip->set_select_model_state(entity);
       }
-
-      DEBUGLINE;
     }
 
     void unselect() {
@@ -1143,26 +1140,72 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
     }
 }
 
-static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT) {
-      if (action == GLFW_PRESS) {
-        if (g_conf.quad_click_cursor) {
-          g_m.uniform_store->set_uniform("unif_ToggleQuadEnabled", 1);
-        }
+struct eventpath {
+  using T = std::string;
+  using cont_type = darray<T>;
+  T mb_left{"mouse_button_left"};
+  T mb_right{"mouse_button_right"};
+  T act_press{"action_press"};
+  T act_release{"action_release"};
+  T state_sel{"state_selected"};
+  T state_unsel{"state_unselected"};
+  T term_try_sel{"term_try_select"};
+  T term_deselect{"term_deselect"};
+  T term_move{"term_move"};
 
-        switch (g_click_state.mode) {
-        case click_state::mode_select: {
-          if (!g_cam_orient.active) {
-            g_click_state.scan_object_selection();
+  void trace(cont_type in) const {
+    std::stringstream ss;
+    auto i = 0;
+    for (const auto& p: in) {
+      ss << p;
+      if (i < in.size() - 1) {
+        ss << "->";
+      }
+      i++;
+    }
+    std::cout << ss.str() << std::endl;
+  }
+} g_epath{};
+
+static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
+  switch (button) {
+    case GLFW_MOUSE_BUTTON_LEFT: {
+      switch (action) {
+        case GLFW_PRESS: {
+          if (g_conf.quad_click_cursor) {
+            g_m.uniform_store->set_uniform("unif_ToggleQuadEnabled", 1);
+          }
+
+          if (g_click_state.mode == click_state::mode_select) {
+            if (!g_cam_orient.active) {
+              if (!g_obj_manip->has_select_model_state()) {
+                g_epath.trace({g_epath.mb_left, g_epath.act_press, g_epath.state_unsel, g_epath.term_try_sel});
+                g_click_state.scan_object_selection();
+              } else {
+                g_epath.trace({g_epath.mb_left, g_epath.act_press, g_epath.state_sel, g_epath.term_move});
+                g_click_state.calc_new_selected_position();
+              }
+            }
           }
         } break;
-        }
-      } else {
-        if (g_conf.quad_click_cursor) {
-          g_m.uniform_store->set_uniform("unif_ToggleQuadEnabled", 0);
-        }
+        case GLFW_RELEASE: {
+          if (g_conf.quad_click_cursor) {
+            g_m.uniform_store->set_uniform("unif_ToggleQuadEnabled", 0);
+          }
+        } break;
+      } 
+    } break;
+    case GLFW_MOUSE_BUTTON_RIGHT:
+      switch (action) {
+        case GLFW_PRESS:
+          if (g_obj_manip->has_select_model_state()) {
+            g_epath.trace({g_epath.mb_right, g_epath.act_press, g_epath.state_sel, g_epath.term_deselect});
+            g_obj_manip->clear_select_model_state();
+          }
+          break;
       }
-    }
+      break;
+  } 
 }
 
 int main(void) {
