@@ -748,8 +748,8 @@ static void render() {
 
   switch (g_conf.dmode) {
     case runtime_config::drawmode_normal: {
-      for (auto& [name, pass]: g_render_passes) {
-        pass.apply();
+      for (const auto& kv: g_render_passes) {
+        kv.second.apply();
       }
       update_pickbuffer();
     } break;
