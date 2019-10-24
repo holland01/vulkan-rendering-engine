@@ -1093,9 +1093,9 @@ public:
 } g_click_state;
 
 void clear_model_selection() {
-    g_obj_manip->clear_select_model_state();
-    DEBUGLINE;
-    g_click_state.unselect();
+  g_obj_manip->clear_select_model_state();
+  DEBUGLINE;
+  g_click_state.unselect();
 }
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
