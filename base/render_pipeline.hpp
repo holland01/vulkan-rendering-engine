@@ -287,8 +287,6 @@ struct pass_info {
 
   mutable darray<std::string> uniform_names; // no need to set this.
 
-  darray<pass_info> subpasses;
-
   void draw() const {
     g_m.graph->draw_all();
   }
