@@ -99,6 +99,8 @@ struct scene_graph {
 
   void select_draw(predicate_fn_type func);
   darray<index_type> select(predicate_fn_type func) const;
+
+  const vec3_t& position(index_type node) const { return positions.at(node); }
 };
 
 struct node_id {
