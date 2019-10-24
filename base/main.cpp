@@ -96,6 +96,10 @@ struct object_manip {
   vec3_t entity_select_reset_pos{R(0)};
   index_type entity_selected{k_unset};
 
+  auto selected() const {
+    return entity_selected;
+  }
+
   void clear_select_model_state() {
     if (entity_selected != k_unset) {
       // TODO: cleanup select state for previous model here
