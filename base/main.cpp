@@ -959,8 +959,7 @@ public:
     //
     // cast_ray - used for mouse picking
     //
-    // Creates an inverse transform, designed to map coordinates in screen_space back to worldspace. The coordinates
-    // being mapped are the current coordinates of the mouse cursor.
+
     //
     // A raycast is used to determine whether or not an intersection has occurred
     //
@@ -976,97 +975,131 @@ public:
         real_t d;
         bool calc{true};
     } mutable select;
-    
-    vec3_t screen_out() const {
-        int32_t x_offset = 0;
-        int32_t y_offset = 0;
-        
-        real_t depth{};
 
-        // This will read from GL_BACK by default
-        GL_FN(glReadPixels(static_cast<int32_t>(g_cam_orient.prev_xpos),
-                           static_cast<int32_t>(g_cam_orient.prev_ypos),
-                           1, 1,
-                           GL_DEPTH_COMPONENT, OPENGL_REAL,
-                           &depth));
-        
-        vec4_t mouse( R(g_cam_orient.prev_xpos) + R(x_offset), 
-                      R(g_cam_orient.prev_ypos) + R(y_offset),
-                      -depth,
-                      R(1.0));
+    static constexpr bool debug_screen_out{false};
+    static constexpr bool debug_calc_selected_pos{false};
+    
+    //
+    // screen_out()
+    //
+    // For reference on how these coordinate transforms
+    // are derived, please see pages 438 and 439 of
+    // https://www.khronos.org/registry/OpenGL/specs/gl/glspec45.core.pdf
+    //
+    // screen_out() Creates an inverse transform, designed to map 
+    // coordinates in screen_space back to worldspace. The coordinates
+    // being mapped are the current coordinates of the mouse cursor.
+    //
+    // What's needed by the caller is the appropriate w_clip value to use, and the ndc_depth
+    // to use as a reference, since this computation is plane-bound.
+    //
+    // w_clip is the w coordinate in the 4D clip space position vector.
+    // To elaborate, if we have a world space vertex 'v', a view transform V,
+    // and projection transform, we end up with a 4D clip vector 'c' like so:
+    //
+    // c = PVv.
+    //
+    // w_clip is the w coordinate of 'c'.
+    //
+    // g_cam_orient.prev_ypos has been computed already with the GLFW vs OpenGL
+    // window coordinate conversation taken into account, so there is no need
+    // to be concerned with the origin upper left vs origin lower left
+    // issue in this function.
+    vec4_t screen_out(real_t w_clip=R(1), real_t ndc_depth=R(1)) const {
+        // The window depth computation commented below is unnecessary, but it's 
+        // kept here for sake of completeness/future freference,
+        // as it's helped with overall derivation. If we were to use it for some reason,
+        // it technically would be a part of the window_coords vector,
+        // which would then be a vec3_t instead of vec2_t
+
+/*
+        real_t F{g_m.view->farp};
+        real_t N{g_m.view->nearp};
+        real_t window_depth{((F - N) * R(0.5) * ndc_depth) + ((F + N) * R(0.5))};
+*/
+
+        vec2_t window_coords{ R(g_cam_orient.prev_xpos), 
+                              R(g_cam_orient.prev_ypos) };
 
         // TODO: cache screen_sp and clip_to_ndc, since they're essentially static data
         mat4_t screen_sp{R(1.0)};
         screen_sp[0][0] = R(g_m.view->view_width);
         screen_sp[1][1] = R(g_m.view->view_height);
 
-        // OpenGL viewport origin is lower left, GLFW's is upper left.
-        mouse.y = screen_sp[1][1] - mouse.y;
-
-        mouse.x /= screen_sp[0][0];
-        mouse.y /= screen_sp[1][1];
-
-          // In screen space the range is is [0, width] and [0, height],
+        // In screen space the range is [0, width] and [0, height],
         // so after normalization we're in [0, 1].
         // NDC is in [-1, 1], so we scale from [0, 1] to [-1, 1],
-        // to complete the NDC transform
-        mouse.x = R(2.0) * mouse.x - R(1.0);
-        mouse.y = R(2.0) * mouse.y - R(1.0);
+        // to complete the NDC transform (depth has already been
+        // accounted for here)
+        vec3_t ndc_coords{};
+        ndc_coords.x = neg_1_to_1(window_coords.x / screen_sp[0][0]);
+        ndc_coords.y = neg_1_to_1(window_coords.y / screen_sp[1][1]);
+        ndc_coords.z = ndc_depth;
 
-        return glm::inverse(g_m.view->proj * g_m.view->view()) * mouse;
-    }
-    
-    bool cast_ray(scene_graph::index_type entity) const {
-        vec3_t world_location = screen_out();
-        module_geom::ray world_raycast{}; 
-        world_raycast.dir = glm::normalize(world_location - g_m.view->position);
-        world_raycast.orig = g_m.view->position;
+        vec4_t clip_coords{};
+        clip_coords.x = ndc_coords.x * w_clip;
+        clip_coords.y = ndc_coords.y * w_clip;
+        clip_coords.z = ndc_coords.z * w_clip;
+        clip_coords.w = w_clip;
 
-        auto bvol = g_m.graph->bound_volumes[entity];
-
-        bool success = g_m.geom->test_ray_sphere(world_raycast, bvol);
-        
-        if (success) {
-            g_obj_manip->set_select_model_state(entity);
-        } else {
-            clear_model_selection();
+        STATIC_IF(debug_screen_out) {
+          std::cout << "----------------------------------------\n";
+          std::cout << AS_STRING_SS(w_clip) << "\n";
+          std::cout << AS_STRING_GLM_SS(ndc_coords) << "\n";
+          std::cout << AS_STRING_GLM_SS(clip_coords) << std::endl;
         }
 
-        return success;
-    }
-
-    auto coeff(real_t d) const {
-        real_t base = R(250);
-        real_t logb_d = glm::log(d) / glm::log(base);
-        return R(1); //std::min(logb_d, R(1.0));
+        return glm::inverse(g_m.view->proj * g_m.view->view()) * clip_coords;
     }
     
-    auto calc_new_selected_position() const {
-        if (select.calc) {
-            //ASSERT(false);
-            
-            vec3_t Po{g_m.graph->positions[g_obj_manip->entity_selected]}; 
+    //
+    // calc_new_selected_position()
+    //
+    // Computes the currently selected object's new location,
+    // based on the mouse location of the screen. The computations
+    // are primarily compmuted in view space.
+    //
+    // We begin first by taking the current object's world position 'p'
+    // and transforming it to view space as 'v'. Then we transform 'v'
+    // to clip space as 'c'.
+    // 
+    // We use the w-coordinate of 'c' to compute the world-space position
+    // of the newly desired location, which is dictaed by the mouse.
+    //
+    // The new world space position 't' has been derived
+    // from the following values:
+    //  - X mouse coordinate
+    //  - Y mouse coordinate
+    //  - NDC-space object depth
+    //  - clip-space object w-coordinate 
+    //
+    // This can certainly be fine tuned as time goes on, but for now it works.
 
-            vec3_t Fo{Po - g_m.view->position}; // negated z-axis of transform defined by the plane of interest
+    void calc_new_selected_position() const {
+      ASSERT(g_obj_manip->has_select_model_state());
 
-            select.normal = -glm::normalize(Fo);
-            select.d = glm::abs(glm::dot(select.normal, Po));
-            select.point = Po;
-            select.calc = false;
-        }
-        
-        vec3_t s2w{screen_out()};
-        s2w.x *= 10.0;
-        s2w.y *= 2.0;
-        //s2w.y *= 10.0;
-        std::cout << AS_STRING_GLM_SS(s2w) << std::endl;
+      const vec3_t& opos = g_m.graph->position(g_obj_manip->selected());
+      vec4_t opos_view{g_m.view->view() * vec4_t{opos, R(1)}};
+      vec4_t opos_clip{g_m.view->proj * opos_view};
 
-        //s2w.x += g_cam_orient.sdx * 3.0;
-        //s2w.y += g_cam_orient.sdy * 3.0;
+      real_t ndc_depth = opos_clip.z / opos_clip.w;
 
-        vec3_t new_pos{g_m.geom->proj_point_plane(s2w, select.normal, select.point)};
+      module_geom::plane P{
+        opos_view.z, // d 
+        V3_BACKWARD, // normal
+        opos_view
+      };
 
-        return new_pos;
+      vec4_t t{screen_out(opos_clip.z, ndc_depth)};
+
+      g_obj_manip->move(g_obj_manip->selected(), t, object_manip::mop_set);
+
+      STATIC_IF (debug_calc_selected_pos) {
+        std::cout << AS_STRING_GLM_SS(opos) << "\n"
+                  << AS_STRING_GLM_SS(opos_view) << "\n"
+                  << AS_STRING_GLM_SS(opos_clip) << "\n"
+                  << AS_STRING_GLM_SS(t) << std::endl;
+      }
     }
 
     void scan_object_selection() const {
