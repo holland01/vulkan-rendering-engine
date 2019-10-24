@@ -39,6 +39,7 @@
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
 const real_t PI_OVER_6 = (PI_OVER_2 / R(6));
+
 void modules::init() {
   framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
   programs = new module_programs();
@@ -552,8 +553,9 @@ static void init_render_passes() {
 		     
     unifs.push_back(DUNIFMAT4X4_R(unif_ModelView, 1.0));
     unifs.push_back(DUNIFMAT4X4_R(unif_Projection, 1.0));
-    unifs.push_back(duniform{R4(1.0f), "unif_Color"});
 
+    unifs.push_back(duniform{R4(1.0f), "unif_Color"});
+    
     darray<bind_texture> tex_bindings{};
     auto frametype = mousepick_usefbo ? pass_info::frame_texture2d : pass_info::frame_user;
 
@@ -788,7 +790,7 @@ struct camera_orientation {
 } static g_cam_orient = {
     0.0, 
     0.0,
-    
+
     0.0, 
     0.0,
     
@@ -1120,6 +1122,7 @@ public:
         select.calc = true;
         select.plane = mat4_t{R(1.0)};
     }
+
 } g_click_state;
 
 void clear_model_selection() {
@@ -1303,7 +1306,6 @@ int main(void) {
         }
 
         render();
-
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
