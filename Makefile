@@ -20,8 +20,8 @@ CXXFLAGS=-std=c++17
 CFLAGS=
 
 ifdef DEBUG
-	CXXFLAGS += -g -ggdb
-	CFLAGS += -g -ggdb
+	CXXFLAGS += -g -ggdb -O0
+	CFLAGS += -g -ggdb -O0
 else
 	CXXFLAGS += -O2
 	CFLAGS += -O2
