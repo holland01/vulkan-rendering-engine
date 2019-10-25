@@ -7,8 +7,11 @@
 
 #include <functional>
 
-struct module_models {
+struct model_material {
+  float smooth; // for phong, range is (0, inf)
+};
 
+struct module_models {
   enum model_type {
     model_unknown = 0,
     model_tri,
@@ -36,6 +39,7 @@ struct module_models {
   darray<model_type> model_types;
   darray<index_type> vertex_offsets;
   darray<index_type> vertex_counts;
+  darray<model_material> material_info;
 
   vec3_t model_select_reset_pos{glm::zero<vec3_t>()};
     
@@ -58,7 +62,8 @@ struct module_models {
   auto new_model(
     model_type mt,
     index_type vbo_offset = 0,
-    index_type num_vertices = 0) {
+    index_type num_vertices = 0,
+    model_material m = model_material{}) {
 
     index_type id = static_cast<index_type>(model_count);
 
@@ -66,6 +71,8 @@ struct module_models {
 
     vertex_offsets.push_back(vbo_offset);
     vertex_counts.push_back(num_vertices);
+
+    material_info.push_back(m);
     
     model_count++;
 
