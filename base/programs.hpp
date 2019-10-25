@@ -360,7 +360,7 @@ struct module_programs : public type_module {
           << GLSL_TL(vec3 halfAngle = normalize(dirToLight + dirToViewer);)
           << GLSL_TL(float term = dot(halfAngle, vnormal);)
           << GLSL_TL(term = clamp(term, 0, 1);)
-          << GLSL_TL(term = angleOfIncidence != 0.0 ? term : 0.0;)
+          //<< GLSL_TL(term = angleOfIncidence != 0.0 ? term : 0.0;)
           << GLSL_TL(term = pow(term, unif_Material.smoothness);)
           << GLSL_TL(return term;)
           << GLSL_L(});
