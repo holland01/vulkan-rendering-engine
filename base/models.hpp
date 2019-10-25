@@ -97,20 +97,18 @@ struct module_models {
         auto d = cart(phi + step, theta);
 
         g_m.vertex_buffer->add_triangle(a, color, a,
-                                     d, color, d,
-                                     c, color, c);
+                                        d, color, d,
+                                        c, color, c);
 
         g_m.vertex_buffer->add_triangle(c, color, c,
-                                     a, color, a,
-                                     b, color, b);
+                                        a, color, a,
+                                        b, color, b);
         
 	      count += 6;
       }
     }
 
-    return new_model(model_sphere,
-		     offset,
-		     count);
+    return new_model(model_sphere, offset, count);
   }
     
   auto new_wall(
