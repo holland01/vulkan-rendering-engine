@@ -69,8 +69,8 @@ struct view_data {
     skyproj = glm::perspective(45.0f, calc_aspect(), skynearp, skyfarp);
     cubeproj = glm::perspective(45.0f, calc_aspect(), nearp, farp);
 
-    real_t w = view_width * 0.5;
-    real_t h = view_height * 0.5;
+    real_t w = R(view_width) * R(0.5);
+    real_t h = R(view_height) * R(0.5);
 
     ortho = glm::orthoRH(-w, w, -h, h, nearp, farp);
   }

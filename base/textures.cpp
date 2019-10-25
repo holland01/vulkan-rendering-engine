@@ -12,10 +12,10 @@ void fill_texture_data_buffer_rgb4(module_textures::texture_data_buffer& buffer,
                                    uint32_t width,
                                    uint32_t height,
                                    const rgba4_t& color) {
-  buffer.resize(width * height * 4, 0);
+  buffer.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * 4ull, 0);
   uint8_t* pdata = buffer.data();
-  for (auto y = 0; y < height; ++y) {
-    for (auto x = 0; x < width; ++x) {
+  for (auto y{0u}; y < height; ++y) {
+    for (auto x{0u}; x < width; ++x) {
       auto ofs = (y * width + x) << 2;
 
       pdata[ofs + 0] = color.at(0);
@@ -146,8 +146,8 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
 
   float* f = reinterpret_cast<float*>(buffer.data());
 
-  for (auto x = 0; x < p.width; ++x) {
-    for (auto y = 0; y < p.height; ++y) {
+  for (auto x{0u}; x < p.width; ++x) {
+    for (auto y{0u}; y < p.height; ++y) {
       f[y * width + x] = 1.0f;
     }
   }

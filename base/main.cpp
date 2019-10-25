@@ -188,12 +188,12 @@ struct object_manip {
 
 static std::unique_ptr<object_manip> g_obj_manip {new object_manip()};
 
-using pass_map_t = std::map<int, pass_info>;
+using pass_map_t = std::map<int32_t, pass_info>;
 
 pass_map_t g_render_passes {};
 
 void add_render_pass(const pass_info& p) {
-  g_render_passes[g_render_passes.size()] = p;
+  g_render_passes[I(g_render_passes.size())] = p;
 }
 
 const pass_info& get_render_pass(const std::string& name) {
@@ -1138,9 +1138,8 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
   ypos = g_m.framebuffer->height - ypos;
 
   if (g_cam_orient.active) {
-    real_t testdx = xpos - g_cam_orient.prev_xpos;
-
-    real_t testdy = -1.0 * (ypos - g_cam_orient.prev_ypos);
+    double testdx = xpos - g_cam_orient.prev_xpos;
+    double testdy = -1.0 * ypos - g_cam_orient.prev_ypos;
 
     g_cam_orient.dx = testdx;
     g_cam_orient.dy = testdy; //g_cam_orient.prev_ypos - ypos;
@@ -1159,13 +1158,13 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
                                         : (g_cam_orient.dy == 0.0
                                            ? 0.0
                                            : -1.0));
-    mat4_t xRot = glm::rotate(mat4_t(1.0f),
-                              static_cast<real_t>(g_cam_orient.dy),
-                              vec3_t(1.0f, 0.0f, 0.0f));
+    mat4_t xRot = glm::rotate(mat4_t(R(1.0)),
+                              R(g_cam_orient.dy),
+                              R3v(1.0, 0.0, 0.0));
 
-    mat4_t yRot = glm::rotate(mat4_t(1.0f),
-                              static_cast<real_t>(g_cam_orient.dx),
-                              vec3_t(0.0f, 1.0f, 0.0f));
+    mat4_t yRot = glm::rotate(mat4_t(R(1.0)),
+                              R(g_cam_orient.dx),
+                              R3v(0.0, 1.0, 0.0));
 
     g_m.view->orient = mat3_t(yRot * xRot) * g_m.view->orient;
   }

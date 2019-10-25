@@ -37,8 +37,8 @@ struct framebuffer_ops {
 
     bool is_clear_color(const u8vec4_t& test) const {
       bool is_same = true;
-      for (auto y = 0; y < height && is_same; ++y) {
-        for (auto x = 0; x < width && is_same; ++x) {
+      for (auto y{0u}; y < height && is_same; ++y) {
+        for (auto x{0u}; x < width && is_same; ++x) {
           is_same = get(x, y) == test;
         }
       }
@@ -96,7 +96,7 @@ struct framebuffer_ops {
 
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
-      index_type new_handle = fbos.size();
+      index_type new_handle = I(fbos.size());
 
       fbos.push_back(fbo);
       widths.push_back(width);

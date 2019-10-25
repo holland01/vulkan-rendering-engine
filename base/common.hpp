@@ -28,6 +28,8 @@
 #include <sstream>
 #include <array>
 
+#include <stdint.h>
+
 #include "util.hpp"
 
 namespace fs = std::experimental::filesystem;
@@ -94,6 +96,7 @@ using darray = std::vector<T>;
 extern const real_t PI_OVER_6;
 
 #define I(x) static_cast<int>(x)
+#define U32(x) static_cast<uint32_t>(x)
 
 #define V3_UP R3v(0.0, 1.0, 0.0)
 #define V3_DOWN R3v(0.0, -1.0, 0.0)
@@ -225,7 +228,7 @@ static inline T neg_1_to_1(const T& x) {
 }
 
 static inline bool reqeps(real_t a, real_t b) {
-  real_t e = 0.01;
+  real_t e = R(0.01);
   real_t d = a - b;
   return -e <= d && d <= e;
 }

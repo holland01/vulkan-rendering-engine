@@ -27,7 +27,7 @@ scene_graph::scene_graph()
 }
 
 scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info) {
-  auto index = child_lists.size();
+  auto index = static_cast<scene_graph::index_type>(child_lists.size());
 
   bound_volumes.push_back(info.bvol);
   child_lists.push_back(darray<index_type>());

@@ -1,12 +1,9 @@
 #pragma once
 
-
-
 #include "common.hpp"
-#include "util.hpp"
 #include <inttypes.h>
-
 #include <unordered_map>
+
 #define GLSL_INL(code) #code
 #define GLSL_L(code) #code "\n"
 #define GLSL_TL(code) "\t" #code "\n"
