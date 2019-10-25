@@ -140,6 +140,8 @@ struct scene_graph;
 struct shader_uniform_storage;
 struct view_data;
 
+class device_context;
+
 struct modules {
   framebuffer_ops* framebuffer {nullptr};
   module_programs* programs {nullptr};
@@ -150,8 +152,9 @@ struct modules {
   scene_graph* graph {nullptr};
   shader_uniform_storage* uniform_store {nullptr};
   view_data* view {nullptr};
+  device_context* device_ctx {nullptr};
 
-  void init();
+  bool init();
   void free();
 } extern g_m;
 

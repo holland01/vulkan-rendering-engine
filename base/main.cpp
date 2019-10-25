@@ -24,6 +24,7 @@
 #include "scene_graph.hpp"
 
 #include "render_pipeline.hpp"
+#include "device_context.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -40,30 +41,40 @@
 
 const real_t PI_OVER_6 = (PI_OVER_2 / R(6));
 
-void modules::init() {
-  framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
-  programs = new module_programs();
-  textures = new module_textures();
-  vertex_buffer = new module_vertex_buffer();
-  models = new module_models();
-  geom = new module_geom();
+bool modules::init() {
+  device_ctx = new device_context();
+  
+  if (device_ctx->init(SCREEN_WIDTH, SCREEN_HEIGHT)) {
+    framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
+    programs = new module_programs();
+    textures = new module_textures();
+    vertex_buffer = new module_vertex_buffer();
+    models = new module_models();
+    geom = new module_geom();
 
-  view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
-  graph = new scene_graph();
+    view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
+    graph = new scene_graph();
 
-  uniform_store = new shader_uniform_storage();
+    uniform_store = new shader_uniform_storage();
+  }
+
+  return device_ctx->ok();
 }
 
 void modules::free() {
-  delete view;
-  delete framebuffer;
-  delete uniform_store;
-  delete programs;
-  delete textures;
-  delete geom;
-  delete models;
-  delete graph;
-  delete vertex_buffer;
+  if (device_ctx->ok()) {
+    delete view;
+    delete framebuffer;
+    delete uniform_store;
+    delete programs;
+    delete textures;
+    delete geom;
+    delete models;
+    delete graph;
+    delete vertex_buffer;
+  }
+
+  delete device_ctx;
 }
 
 modules g_m {};
@@ -772,9 +783,7 @@ static void render() {
   }
 }
 
-static void error_callback(int error, const char* description) {
-  fputs(description, stdout);
-}
+
 
 // origin for coordinates is the top left
 // of the window
@@ -840,112 +849,6 @@ void toggle_framebuffer_srgb() {
 }
 
 void clear_model_selection();
-
-// this callback is a slew of macros to make changes and adaptations easier
-// to materialize: much of this is likely to be altered as new needs are met,
-// and there are many situations that call for redundant expressions that may
-// as well be abstracted away
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-#define MAP_MOVE_STATE_TRUE(key, dir) case key: g_cam_move_state.dir = true; break
-#define MAP_MOVE_STATE_FALSE(key, dir) case key: g_cam_move_state.dir = false; break
-
-#define MAP_MOVE_SELECT_STATE_TRUE(key, dir)    \
-    case key: {                                 \
-        if (g_obj_manip->has_select_model_state()){ \
-            g_select_move_state.dir = true;     \
-        }                                       \
-    } break
-
-#define MAP_MOVE_SELECT_STATE_FALSE(key, dir) case key: g_select_move_state.dir = false; break
-
-#define KEY_BLOCK(key, expr)                    \
-  case key: {                                   \
-      if (keydown_if_not(key)) {                \
-          expr;                                 \
-      }                                         \
-  } break
-
-  if (action == GLFW_PRESS) {
-    switch (key) {
-    case GLFW_KEY_ESCAPE:
-      glfwSetWindowShouldClose(window, GL_TRUE);
-      break;
-
-      KEY_BLOCK(GLFW_KEY_U,
-                screen_cube_index = (screen_cube_index + 1) % 6);
-
-      KEY_BLOCK(GLFW_KEY_I,
-                screen_cube_index = screen_cube_index == 0 ? 5 : screen_cube_index - 1);
-
-      KEY_BLOCK(GLFW_KEY_F1,
-                g_cam_orient.active = !g_cam_orient.active;
-      if (g_cam_orient.active) {
-        clear_model_selection();
-      }
-      maybe_enable_cursor(window));
-
-      KEY_BLOCK(GLFW_KEY_N,
-                g_m.models->new_sphere());
-
-      KEY_BLOCK(GLFW_KEY_F2,
-                g_m.framebuffer->screenshot());
-
-      KEY_BLOCK(GLFW_KEY_G,
-                g_unif_gamma_correct = !g_unif_gamma_correct;
-      toggle_framebuffer_srgb());
-
-      KEY_BLOCK(GLFW_KEY_R,
-                g_obj_manip->reset_select_model_state());
-
-      MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
-      MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
-      MAP_MOVE_STATE_TRUE(GLFW_KEY_A, left);
-      MAP_MOVE_STATE_TRUE(GLFW_KEY_D, right);
-      MAP_MOVE_STATE_TRUE(GLFW_KEY_SPACE, up);
-      MAP_MOVE_STATE_TRUE(GLFW_KEY_LEFT_SHIFT, down);
-
-      // These select movement key binds will eventually
-      // be replaced with a more user friendly movement scheme involving
-      // mouse drag selection. For  now, the goal is simply to
-      // have a driver that allows for ease of testing.
-      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_UP, front);
-      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_DOWN, back);
-      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT, right);
-      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_LEFT, left);
-      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT_SHIFT, up);
-      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT_CONTROL, down);
-
-    default:
-      keydown_if_not(key);
-      break;
-    }
-  }
-  else if (action == GLFW_RELEASE) {
-    switch (key) {
-
-      MAP_MOVE_STATE_FALSE(GLFW_KEY_W, front);
-      MAP_MOVE_STATE_FALSE(GLFW_KEY_S, back);
-      MAP_MOVE_STATE_FALSE(GLFW_KEY_A, left);
-      MAP_MOVE_STATE_FALSE(GLFW_KEY_D, right);
-      MAP_MOVE_STATE_FALSE(GLFW_KEY_SPACE, up);
-      MAP_MOVE_STATE_FALSE(GLFW_KEY_LEFT_SHIFT, down);
-
-      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_UP, front);
-      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_DOWN, back);
-      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT, right);
-      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_LEFT, left);
-      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT_SHIFT, up);
-      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT_CONTROL, down);
-
-    default:
-      g_key_states[key] = false;
-      break;
-    }
-  }
-
-#undef MAP_MOVE_STATE_TRUE
-#undef MAP_MOVE_STATE_FALSE
-}
 
 
 struct click_state {
@@ -1134,12 +1037,123 @@ void clear_model_selection() {
   g_click_state.unselect();
 }
 
-static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+
+void error_callback(int error, const char* description) {
+  fputs(description, stdout);
+}
+
+// this callback is a slew of macros to make changes and adaptations easier
+// to materialize: much of this is likely to be altered as new needs are met,
+// and there are many situations that call for redundant expressions that may
+// as well be abstracted away
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+#define MAP_MOVE_STATE_TRUE(key, dir) case key: g_cam_move_state.dir = true; break
+#define MAP_MOVE_STATE_FALSE(key, dir) case key: g_cam_move_state.dir = false; break
+
+#define MAP_MOVE_SELECT_STATE_TRUE(key, dir)    \
+    case key: {                                 \
+        if (g_obj_manip->has_select_model_state()){ \
+            g_select_move_state.dir = true;     \
+        }                                       \
+    } break
+
+#define MAP_MOVE_SELECT_STATE_FALSE(key, dir) case key: g_select_move_state.dir = false; break
+
+#define KEY_BLOCK(key, expr)                    \
+  case key: {                                   \
+      if (keydown_if_not(key)) {                \
+          expr;                                 \
+      }                                         \
+  } break
+
+  if (action == GLFW_PRESS) {
+    switch (key) {
+    case GLFW_KEY_ESCAPE:
+      glfwSetWindowShouldClose(window, GL_TRUE);
+      break;
+
+      KEY_BLOCK(GLFW_KEY_U,
+                screen_cube_index = (screen_cube_index + 1) % 6);
+
+      KEY_BLOCK(GLFW_KEY_I,
+                screen_cube_index = screen_cube_index == 0 ? 5 : screen_cube_index - 1);
+
+      KEY_BLOCK(GLFW_KEY_F1,
+                g_cam_orient.active = !g_cam_orient.active;
+      if (g_cam_orient.active) {
+        clear_model_selection();
+      }
+      maybe_enable_cursor(window));
+
+      KEY_BLOCK(GLFW_KEY_N,
+                g_m.models->new_sphere());
+
+      KEY_BLOCK(GLFW_KEY_F2,
+                g_m.framebuffer->screenshot());
+
+      KEY_BLOCK(GLFW_KEY_G,
+                g_unif_gamma_correct = !g_unif_gamma_correct;
+      toggle_framebuffer_srgb());
+
+      KEY_BLOCK(GLFW_KEY_R,
+                g_obj_manip->reset_select_model_state());
+
+      MAP_MOVE_STATE_TRUE(GLFW_KEY_W, front);
+      MAP_MOVE_STATE_TRUE(GLFW_KEY_S, back);
+      MAP_MOVE_STATE_TRUE(GLFW_KEY_A, left);
+      MAP_MOVE_STATE_TRUE(GLFW_KEY_D, right);
+      MAP_MOVE_STATE_TRUE(GLFW_KEY_SPACE, up);
+      MAP_MOVE_STATE_TRUE(GLFW_KEY_LEFT_SHIFT, down);
+
+      // These select movement key binds will eventually
+      // be replaced with a more user friendly movement scheme involving
+      // mouse drag selection. For  now, the goal is simply to
+      // have a driver that allows for ease of testing.
+      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_UP, front);
+      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_DOWN, back);
+      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT, right);
+      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_LEFT, left);
+      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT_SHIFT, up);
+      MAP_MOVE_SELECT_STATE_TRUE(GLFW_KEY_RIGHT_CONTROL, down);
+
+    default:
+      keydown_if_not(key);
+      break;
+    }
+  }
+  else if (action == GLFW_RELEASE) {
+    switch (key) {
+
+      MAP_MOVE_STATE_FALSE(GLFW_KEY_W, front);
+      MAP_MOVE_STATE_FALSE(GLFW_KEY_S, back);
+      MAP_MOVE_STATE_FALSE(GLFW_KEY_A, left);
+      MAP_MOVE_STATE_FALSE(GLFW_KEY_D, right);
+      MAP_MOVE_STATE_FALSE(GLFW_KEY_SPACE, up);
+      MAP_MOVE_STATE_FALSE(GLFW_KEY_LEFT_SHIFT, down);
+
+      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_UP, front);
+      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_DOWN, back);
+      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT, right);
+      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_LEFT, left);
+      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT_SHIFT, up);
+      MAP_MOVE_SELECT_STATE_FALSE(GLFW_KEY_RIGHT_CONTROL, down);
+
+    default:
+      g_key_states[key] = false;
+      break;
+    }
+  }
+
+#undef MAP_MOVE_STATE_TRUE
+#undef MAP_MOVE_STATE_FALSE
+}
+
+void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
   ypos = g_m.framebuffer->height - ypos;
 
   if (g_cam_orient.active) {
     double testdx = xpos - g_cam_orient.prev_xpos;
-    double testdy = -1.0 * ypos - g_cam_orient.prev_ypos;
+    double testdy = -1.0 * (ypos - g_cam_orient.prev_ypos);
 
     g_cam_orient.dx = testdx;
     g_cam_orient.dy = testdy; //g_cam_orient.prev_ypos - ypos;
@@ -1205,7 +1219,7 @@ struct eventpath {
   }
 } g_epath {};
 
-static void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods) {
   switch (button) {
   case GLFW_MOUSE_BUTTON_LEFT:
   {
@@ -1253,77 +1267,29 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
 int main(void) {
   g_key_states.fill(false);
 
-  GLFWwindow* window;
+  if (g_m.init()) {
+    maybe_enable_cursor(g_m.device_ctx->window());
 
-  glfwSetErrorCallback(error_callback);
+    GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
 
-  if (!glfwInit())
-    exit(EXIT_FAILURE);
+    init_api_data();
+    init_render_passes();
 
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OPENGL_VERSION_MAJOR);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OPENGL_VERSION_MINOR);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_FALSE);
-  glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-  glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
-  glfwWindowHint(GLFW_DOUBLEBUFFER, GL_TRUE);
+    while (!glfwWindowShouldClose(g_m.device_ctx->window())) {
+      g_m.view->update(g_cam_move_state);
 
-  glfwWindowHint(GLFW_DEPTH_BITS, 24);
+      if (g_obj_manip->has_select_model_state()) {
+        g_obj_manip->update_select_model_state();
+      }
 
-  glfwWindowHint(GLFW_RED_BITS, 8);
-  glfwWindowHint(GLFW_GREEN_BITS, 8);
-  glfwWindowHint(GLFW_BLUE_BITS, 8);
-  glfwWindowHint(GLFW_ALPHA_BITS, 8);
-
-  window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Boilerplate", g_conf.fullscreen ? glfwGetPrimaryMonitor() : NULL, NULL);
-  if (!window) {
-    goto error;
-  }
-
-  glfwMakeContextCurrent(window);
-
-  glewExperimental = GL_TRUE;
-
-  {
-    GLenum r = glewInit();
-    if (r != GLEW_OK) {
-      printf("Glew ERROR: %s\n", glewGetErrorString(r));
-      goto error;
+      render();
+      glfwSwapBuffers(g_m.device_ctx->window());
+      glfwPollEvents();
     }
-  }
-
-  g_m.init();
-
-  glfwSetKeyCallback(window, key_callback);
-  glfwSetCursorPosCallback(window, cursor_position_callback);
-  glfwSetMouseButtonCallback(window, mouse_button_callback);
-  maybe_enable_cursor(window);
-
-  GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
-
-  init_api_data();
-  init_render_passes();
-
-  while (!glfwWindowShouldClose(window)) {
-    g_m.view->update(g_cam_move_state);
-
-    if (g_obj_manip->has_select_model_state()) {
-      g_obj_manip->update_select_model_state();
-    }
-
-    render();
-    glfwSwapBuffers(window);
-    glfwPollEvents();
   }
 
   g_m.free();
 
-  glfwDestroyWindow(window);
-
-  glfwTerminate();
-  exit(EXIT_SUCCESS);
-
-error:
-  glfwTerminate();
-  exit(EXIT_FAILURE);
+  
+  return 0;
 }
