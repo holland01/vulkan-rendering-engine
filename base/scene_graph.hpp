@@ -16,6 +16,7 @@ struct scene_graph {
   using predicate_fn_type = std::function<bool(const index_type& n)>;
   using permodel_unif_fn_type = std::function<void(const scene_graph::index_type&)>;
 
+  static constexpr index_type k_root{0};
 
   darray<darray<index_type>> child_lists;
   darray<module_geom::bvol> bound_volumes;

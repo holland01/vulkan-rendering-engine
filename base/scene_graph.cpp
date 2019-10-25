@@ -225,7 +225,8 @@ void scene_graph::draw_all(index_type current, const mat4_t& world) const {
 }
 
 void scene_graph::draw_all() const {
-  draw_all(0, m4i());
+  ASSERT(draw[k_root] == false);
+  draw_all(k_root, m4i());
 }
 
 int scene_graph::depth(scene_graph::index_type node) const {
@@ -243,9 +244,10 @@ int scene_graph::depth(scene_graph::index_type node) const {
 }
 
 void scene_graph::select_draw(predicate_fn_type func) {
-  for (auto i = 0; i < child_lists.size(); ++i) {
+  for (auto i = 1; i < child_lists.size(); ++i) {
     draw[i] = func(i);
   }
+  ASSERT(draw[k_root] == false);
 }
 
 darray<scene_graph::index_type> scene_graph::select(predicate_fn_type func) const {
