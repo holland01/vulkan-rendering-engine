@@ -152,19 +152,26 @@
   <ItemGroup>
     <ClCompile Include="frame.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="render_pipeline.cpp" />
+    <ClCompile Include="scene_graph.cpp" />
     <ClCompile Include="stb_image.c" />
     <ClCompile Include="textures.cpp" />
     <ClCompile Include="util.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="common.h" />
-    <ClInclude Include="frame.h" />
-    <ClInclude Include="geom.h" />
-    <ClInclude Include="programs.h" />
+    <ClInclude Include="common.hpp" />
+    <ClInclude Include="frame.hpp" />
+    <ClInclude Include="geom.hpp" />
+    <ClInclude Include="models.hpp" />
+    <ClInclude Include="programs.hpp" />
+    <ClInclude Include="render_pipeline.hpp" />
+    <ClInclude Include="scene_graph.hpp" />
     <ClInclude Include="stb_image_write.h" />
-    <ClInclude Include="textures.h" />
-    <ClInclude Include="util.h" />
     <ClInclude Include="stb_image.h" />
+    <ClInclude Include="textures.hpp" />
+    <ClInclude Include="util.hpp" />
+    <ClInclude Include="vertex_buffer.hpp" />
+    <ClInclude Include="view_data.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
