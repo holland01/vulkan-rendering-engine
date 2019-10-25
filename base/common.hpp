@@ -25,6 +25,8 @@
 #include <vector>
 #include <algorithm>
 #include <limits>
+#include <sstream>
+#include <array>
 
 #include "util.hpp"
 
@@ -35,9 +37,11 @@ namespace fs = std::experimental::filesystem;
 
 #if defined (__GNUC__)
 #define TR_NOINLINE __attribute__ ((noinline))
+#elif defined (_MSC_VER)
+#define TR_NOINLINE __declspec(noinline)
 #else
 #error "Check for noinline support for this compiler"
-#define TR_NOINLINE
+#define TR_NOINLINE 
 #endif
 
 // Assumes that v is an ADT with a to_string(std::string) method,
