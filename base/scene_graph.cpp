@@ -4,26 +4,26 @@
 
 scene_graph::scene_graph()
   : test_indices(),
-    pickfbo(g_m.framebuffer->add_fbo(g_m.framebuffer->width, g_m.framebuffer->height))
+  pickfbo(g_m.framebuffer->add_fbo(g_m.framebuffer->width, g_m.framebuffer->height))
 {
   // root initialization
-  bound_volumes.push_back(module_geom::bvol{});
+  bound_volumes.push_back(module_geom::bvol {});
   child_lists.push_back(darray<index_type>());
-  positions.push_back(vec3_t{R(0)});
-  scales.push_back(vec3_t{R(1)});
-  angles.push_back(vec3_t{R(0)});
-  accum.push_back(boolvec3_t{false});
+  positions.push_back(vec3_t {R(0)});
+  scales.push_back(vec3_t {R(1)});
+  angles.push_back(vec3_t {R(0)});
+  accum.push_back(boolvec3_t {false});
   node_ids.push_back(node_id());
   model_indices.push_back(unset<module_models::index_type>());
   parent_nodes.push_back(unset<index_type>());
   draw.push_back(false);
   pickable.push_back(false);
 
-  #if 0
+#if 0
   test_indices.sphere = unset<index_type>();
   test_indices.area_sphere = unset<index_type>();
   test_indices.skybox = unset<index_type>();
-  #endif
+#endif
 }
 
 scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info) {
@@ -45,19 +45,19 @@ scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info
   ASSERT(info.parent < child_lists.size());
 
   child_lists[info.parent].push_back(index);
-  
+
   make_node_id(index, depth(index));
 
   if (info.pickable) {
-    ASSERT(index < 25); 
-    vec4_t color{ R(index) * R(10) * k_to_rgba8, R(0), R(0), 1 };
+    ASSERT(index < 25);
+    vec4_t color {R(index) * R(10) * k_to_rgba8, R(0), R(0), 1};
     color.a = R(1);
     std::cout << "(" << index << ") " << AS_STRING_GLM_SS(color) << std::endl;
     pickmap[index] = color;
   }
 
   return index;
-} 
+}
 
 scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
 
@@ -67,21 +67,21 @@ scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
     // but more importantly we're calling trypick()
     // with unexpected input.
     ASSERT(!pickbufferdata.empty());
-    u8vec4_t clear_pixel(0, 0, 0, 255);
+  u8vec4_t clear_pixel(0, 0, 0, 255);
 
-    // If is_clear_color() returns true, then we know that
-    // the framebuffer only contains whatever the color buffer 
-    // attachment was cleared with. This means that whatever the user is
-    // seeing isn't being copied into the buffer properly.
-    ASSERT(!pickbufferdata.is_clear_color(clear_pixel))
-  );
+  // If is_clear_color() returns true, then we know that
+  // the framebuffer only contains whatever the color buffer 
+  // attachment was cleared with. This means that whatever the user is
+  // seeing isn't being copied into the buffer properly.
+  ASSERT(!pickbufferdata.is_clear_color(clear_pixel))
+    );
 
   u8vec4_t pixel = pickbufferdata.get(x, y);
 
-  vec4_t fpixel{R(pixel.r), R(pixel.g), R(pixel.b), R(pixel.a)};
+  vec4_t fpixel {R(pixel.r), R(pixel.g), R(pixel.b), R(pixel.a)};
   fpixel *= k_to_rgba8;
 
-  scene_graph::index_type ret{unset<scene_graph::index_type>()};
+  scene_graph::index_type ret {unset<scene_graph::index_type>()};
 
   for (auto [id, color]: pickmap) {
     if (color == fpixel) {
@@ -110,17 +110,17 @@ scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
 
 void scene_graph::make_node_id(scene_graph::index_type node, int depth) {
   ASSERT(!is_root(node));
-  
+
   node_id nid(depth);
   int counter = depth - 1;
 
   auto inode = node;
-  
+
   while (!is_root(inode)) {
     ASSERT(counter >= 0);
 
-    auto parent = parent_nodes[inode]; 
-    
+    auto parent = parent_nodes[inode];
+
     auto offset = 0;
     {
       const auto& children = child_lists[parent];
@@ -159,8 +159,8 @@ mat4_t scene_graph::model_transform(scene_graph::index_type node) const {
 }
 
 mat4_t scene_graph::modaccum_transform(scene_graph::index_type node) const {
-  mat4_t m{m4i()};
-  
+  mat4_t m {m4i()};
+
   if (accum[node][0]) m *= translate(node);
   if (accum[node][1]) m *= rotate(node);
   if (accum[node][2]) m *= scale(node);
@@ -169,19 +169,20 @@ mat4_t scene_graph::modaccum_transform(scene_graph::index_type node) const {
 }
 
 void scene_graph::draw_node(scene_graph::index_type node,
-			    scene_graph::index_type traverse_node,
-			    node_id* id,
-			    const mat4_t& world) {  
+          scene_graph::index_type traverse_node,
+          node_id* id,
+          const mat4_t& world) {
   if (id->finished()) {
     ASSERT(traverse_node == node);
-    
-    mat4_t world_accum{world * model_transform(node)};
-    
+
+    mat4_t world_accum {world * model_transform(node)};
+
     g_m.models->render(model_indices[node], world_accum);
-    
-  } else {
-    mat4_t world_accum{world * modaccum_transform(traverse_node)};
-    
+
+  }
+  else {
+    mat4_t world_accum {world * modaccum_transform(traverse_node)};
+
     auto traverse_next = child_lists[traverse_node][id->peek()];
     id->pop();
 
@@ -193,28 +194,28 @@ void scene_graph::draw_node(scene_graph::index_type node) {
   if (draw[node]) {
     node_id* id = node_ids.data() + node;
     ASSERT(id->ptr == 0);
-  
+
     auto traverse = child_lists[0][id->peek()];
     id->pop();
 
-    draw_node(node, 
-              traverse, 
-              id, 
+    draw_node(node,
+              traverse,
+              id,
               modaccum_transform(0));
-  
+
     id->reset();
   }
 }
 
 void scene_graph::draw_all(index_type current, const mat4_t& world) const {
-  mat4_t accum{world * modaccum_transform(current)};
+  mat4_t accum {world * modaccum_transform(current)};
 
   if (draw[current]) {
     if (permodel_unif_set_fn) {
       permodel_unif_set_fn(current);
     }
 
-    mat4_t raccum{world * model_transform(current)};
+    mat4_t raccum {world * model_transform(current)};
     g_m.models->render(model_indices[current], raccum);
   }
 
@@ -222,14 +223,14 @@ void scene_graph::draw_all(index_type current, const mat4_t& world) const {
     draw_all(child, accum);
   }
 }
-  
+
 void scene_graph::draw_all() const {
   draw_all(0, m4i());
 }
 
 int scene_graph::depth(scene_graph::index_type node) const {
   ASSERT(!is_root(node));
-  
+
   int d = 0;
   auto n = node;
 

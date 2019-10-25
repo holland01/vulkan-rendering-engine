@@ -2,57 +2,58 @@
 
 template <class uniformType, shader_uniform_storage::uniform_type unif_type>
 void shader_uniform_storage::set_uniform(const std::string& name,
-		 const uniformType& v,
-		 darray<uniformType>& store) {
+     const uniformType& v,
+     darray<uniformType>& store) {
   auto it = datum_store.find(name);
 
   if (it == datum_store.end()) {
     size_t buff_offset = store.size();
-      
+
     ASSERT(buff_offset <= MAX_BUFFER_OFFSET);
 
     store.push_back(v);
-     
-    datum d{};
+
+    datum d {};
 
     d.uniform_buffer = unif_type;
     d.uniform_buffer_offset = static_cast<buffer_offset_t>(buff_offset);
 
     datum_store[name] = d;
-  } else {
+  }
+  else {
     store[it->second.uniform_buffer_offset] = v;
   }
 }
 
 void shader_uniform_storage::set_uniform(const duniform& unif) {
   switch (unif.type) {
-    case shader_uniform_storage::uniform_mat4x4:
-      set_uniform(unif.name, unif.m4);
-      break;
-    case shader_uniform_storage::uniform_pointlight:
-      set_uniform(unif.name, unif.pl);
-      break;
-    case shader_uniform_storage::uniform_material:
-      set_uniform(unif.name, unif.mat);
-      break;
-    case shader_uniform_storage::uniform_vec2:
-      set_uniform(unif.name, unif.v2);
-      break;
-    case shader_uniform_storage::uniform_vec3:
-      set_uniform(unif.name, unif.v3);
-      break;
-    case shader_uniform_storage::uniform_vec4:
-      set_uniform(unif.name, unif.v4);
-      break;
-    case shader_uniform_storage::uniform_int32:
-      set_uniform(unif.name, unif.i32);
-      break;
-    case shader_uniform_storage::uniform_float32:
-      set_uniform(unif.name, unif.f32);
-      break;
-    default:
-      __FATAL__("unif.type hasn't been implemented here (it needs to be).");
-      break;
+  case shader_uniform_storage::uniform_mat4x4:
+    set_uniform(unif.name, unif.m4);
+    break;
+  case shader_uniform_storage::uniform_pointlight:
+    set_uniform(unif.name, unif.pl);
+    break;
+  case shader_uniform_storage::uniform_material:
+    set_uniform(unif.name, unif.mat);
+    break;
+  case shader_uniform_storage::uniform_vec2:
+    set_uniform(unif.name, unif.v2);
+    break;
+  case shader_uniform_storage::uniform_vec3:
+    set_uniform(unif.name, unif.v3);
+    break;
+  case shader_uniform_storage::uniform_vec4:
+    set_uniform(unif.name, unif.v4);
+    break;
+  case shader_uniform_storage::uniform_int32:
+    set_uniform(unif.name, unif.i32);
+    break;
+  case shader_uniform_storage::uniform_float32:
+    set_uniform(unif.name, unif.f32);
+    break;
+  default:
+    __FATAL__("unif.type hasn't been implemented here (it needs to be).");
+    break;
   }
 }
 
@@ -115,17 +116,17 @@ void shader_uniform_storage::upload_uniform(const std::string& name) const {
   case uniform_vec4:
     g_m.programs->up_vec4(name, vec4_store.at(d.uniform_buffer_offset));
     break;
-      
+
   case uniform_int32:
     g_m.programs->up_int(name, int32_store.at(d.uniform_buffer_offset));
     break;
-  
+
   case uniform_float32:
     g_m.programs->up_float(name, float32_store.at(d.uniform_buffer_offset));
     break;
   default:
-      __FATAL__("d.uniform_buffer hasn't been implemented here (it needs to be).");
-      break;
+    __FATAL__("d.uniform_buffer hasn't been implemented here (it needs to be).");
+    break;
   }
-  
+
 }

@@ -48,15 +48,15 @@ enum {
 };
 
 struct fshader_params {
-  const uint32_t light_count{NUM_LIGHTS};
-  const bool invert_normals{false};
+  const uint32_t light_count {NUM_LIGHTS};
+  const bool invert_normals {false};
 
-  const std::string input_normal{"frag_Normal"};
-  const std::string input_position{"frag_Position"};
-  const std::string input_color{"frag_Color"};
+  const std::string input_normal {"frag_Normal"};
+  const std::string input_position {"frag_Position"};
+  const std::string input_color {"frag_Color"};
 };
 
-typedef uint32_t shadergen_flags_t; 
+typedef uint32_t shadergen_flags_t;
 
 static constexpr shadergen_flags_t fshader_pos_color_normal() {
   return fshader_frag_normal | fshader_frag_position | fshader_frag_color;
@@ -77,9 +77,9 @@ static inline darray<std::string> uniform_location_pointlight(uint32_t index) {
 }
 
 static inline darray<std::string> uniform_location_shine() {
-  return { 
-    "unif_Material.smoothness", 
-    "unif_CameraPosition" 
+  return {
+    "unif_Material.smoothness",
+    "unif_CameraPosition"
   };
 }
 
@@ -113,9 +113,9 @@ struct dmaterial {
   float smoothness;
 };
 
-struct module_programs : public type_module {
+struct module_programs: public type_module {
   using ptr_type = std::unique_ptr<module_programs>;
-  
+
   struct attrib_layout {
     GLint index;
     GLint size;
@@ -127,7 +127,7 @@ struct module_programs : public type_module {
 
   using attrib_map_type = std::unordered_map<std::string, attrib_layout>;
   using attrib_entry_type = std::pair<std::string, attrib_layout>;
-  
+
   struct programdef {
     std::string name;
     std::string vertex;
@@ -140,42 +140,42 @@ struct module_programs : public type_module {
   static attrib_entry_type  attrib_layout_position() {
     return {
       "in_Position",
-      {
-        0,
-        3,
-        OPENGL_REAL,
-        GL_FALSE,
-        sizeof(vertex),
-        (void*) offsetof(vertex, position)
-      }
+    {
+      0,
+      3,
+      OPENGL_REAL,
+      GL_FALSE,
+      sizeof(vertex),
+      ( void*) offsetof(vertex, position)
+    }
     };
   }
 
   static attrib_entry_type attrib_layout_color() {
     return {
       "in_Color",
-      {
-        1,
-        4,
-        OPENGL_REAL,
-        GL_FALSE,
-        sizeof(vertex),
-        (void*) offsetof(vertex, color)
-      }
+    {
+      1,
+      4,
+      OPENGL_REAL,
+      GL_FALSE,
+      sizeof(vertex),
+      ( void*) offsetof(vertex, color)
+    }
     };
   }
 
   static attrib_entry_type attrib_layout_normal() {
     return {
       "in_Normal",
-      {
-        2,
-        3,
-        OPENGL_REAL,
-        GL_FALSE,
-        sizeof(vertex),
-        (void*) offsetof(vertex, normal)
-      }
+    {
+      2,
+      3,
+      OPENGL_REAL,
+      GL_FALSE,
+      sizeof(vertex),
+      ( void*) offsetof(vertex, normal)
+    }
     };
   }
 
@@ -183,80 +183,82 @@ struct module_programs : public type_module {
     return b ? "true" : "false";
   }
 
-  static inline uint32_t vshader_count{0};
-  static inline uint32_t fshader_count{0};
+  static inline uint32_t vshader_count {0};
+  static inline uint32_t fshader_count {0};
 
   static std::string gen_vshader(shadergen_flags_t flags, const std::string& name="UNSPECIFIED") {
     std::stringstream ss;
 
     bool in_normal = flags & vshader_in_normal;
     bool in_texcoord = flags & vshader_in_texcoord;
-    bool frag_position = flags & vshader_frag_position; 
+    bool frag_position = flags & vshader_frag_position;
     bool frag_color = flags & vshader_frag_color;
     bool frag_normal = flags & vshader_frag_normal;
     bool frag_texcoord = flags & vshader_frag_texcoord;
     bool unif_model = flags & vshader_unif_model;
 
     ss << GLSL_FILE_HEADER
-       << GLSL_L(layout(location = 0) in vec3 in_Position;)
-       << GLSL_L(layout(location = 1) in vec4 in_Color;);
+      << GLSL_L(layout(location = 0) in vec3 in_Position;)
+      << GLSL_L(layout(location = 1) in vec4 in_Color;);
 
     if (in_normal) ss << GLSL_L(layout(location = 2) in vec3 in_Normal;);
-    
+
     if (in_texcoord) ss << GLSL_L(layout(location = 3) in vec2 in_TexCoord;);
 
     if (frag_position) ss << GLSL_L(smooth out vec3 frag_Position;);
     if (frag_color) ss << GLSL_L(smooth out vec4 frag_Color;);
     if (frag_normal) ss << GLSL_L(smooth out vec3 frag_Normal;);
-    
-    if (frag_texcoord) { 
-      ss << (in_texcoord 
-            ? GLSL_L(smooth out vec2 frag_TexCoord;) 
+
+    if (frag_texcoord) {
+      ss << (in_texcoord
+            ? GLSL_L(smooth out vec2 frag_TexCoord;)
             : GLSL_L(smooth out vec3 frag_TexCoord;));
     }
 
     if (unif_model) ss << GLSL_L(uniform mat4 unif_Model;);
-    
-    ss << GLSL_L(uniform mat4 unif_ModelView;); 
+
+    ss << GLSL_L(uniform mat4 unif_ModelView;);
     ss << GLSL_L(uniform mat4 unif_Projection;);
-    ss << GLSL_L(void main() {);
-  
+    ss << GLSL_L(void main() {
+      );
+
     if (frag_position) {
-      ss << GLSL_T(frag_Position = )
-         << (unif_model 
-                ? GLSL_L(vec3(unif_Model * vec4(in_Position, 1.0));) 
-                : GLSL_L(in_Position;)); 
+      ss << GLSL_T(frag_Position =)
+        << (unif_model
+               ? GLSL_L(vec3(unif_Model * vec4(in_Position, 1.0));)
+               : GLSL_L(in_Position;));
     }
-  
+
     if (frag_normal) {
       ASSERT(in_normal);
-      ss << GLSL_T(frag_Normal = )
-        << (unif_model 
-                ? GLSL_L(vec3(unif_Model * vec4(in_Normal, 0.0));) 
-                : GLSL_L(in_Normal;)); 
+      ss << GLSL_T(frag_Normal =)
+        << (unif_model
+                ? GLSL_L(vec3(unif_Model * vec4(in_Normal, 0.0));)
+                : GLSL_L(in_Normal;));
     }
 
     if (frag_texcoord) {
-      ss << GLSL_T(frag_TexCoord = )
-         << (in_texcoord 
-              ? GLSL_L(normalize(in_TexCoord);) 
-              : GLSL_L(normalize(in_Position);));
+      ss << GLSL_T(frag_TexCoord =)
+        << (in_texcoord
+             ? GLSL_L(normalize(in_TexCoord);)
+             : GLSL_L(normalize(in_Position);));
     }
 
     if (frag_color) {
-      ss << GLSL_TL(frag_Color = in_Color;); 
+      ss << GLSL_TL(frag_Color = in_Color;);
     }
 
-    #undef ASSIGN_FRAG
+#undef ASSIGN_FRAG
 
     ss  << GLSL_TL(vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);)
-        << GLSL_TL(gl_Position = clip;);
+      << GLSL_TL(gl_Position = clip;);
 
-    ss << GLSL_L(});
+    ss << GLSL_L(
+    });
 
     auto s = ss.str();
 
-    write_logf("\n----------vshader %" PRIu32 " (%s)----------\n%s\n\n\n", 
+    write_logf("\n----------vshader %" PRIu32 " (%s)----------\n%s\n\n\n",
                 vshader_count, name.c_str(), s.c_str());
 
     vshader_count++;
@@ -264,9 +266,9 @@ struct module_programs : public type_module {
     return s;
   }
 
-  static std::string gen_fshader( shadergen_flags_t flags, 
-                                  fshader_params p=fshader_params{}, 
-                                  const std::string& name = "UNSPECIFIED" ) {
+  static std::string gen_fshader(shadergen_flags_t flags,
+                                  fshader_params p=fshader_params {},
+                                  const std::string& name = "UNSPECIFIED") {
     std::stringstream ss;
 
     bool frag_position = flags & fshader_frag_position;
@@ -304,35 +306,39 @@ struct module_programs : public type_module {
 
     if (lights) {
       ASSERT(p.light_count != 0);
-      ss << GLSL_L(struct light {)
-         << GLSL_TL(vec3 position;)
-         << GLSL_TL(vec3 color;)
-         << GLSL_L(};)
-         << GLSL_INL(uniform light unif_Lights[) << p.light_count 
-         << GLSL_L(];);
+      ss << GLSL_L(struct light {
+        )
+        << GLSL_TL(vec3 position;)
+          << GLSL_TL(vec3 color;)
+          << GLSL_L(
+      };)
+          << GLSL_INL(uniform light unif_Lights[) << p.light_count
+          << GLSL_L(];);
     }
 
     if (toggle_quad) {
       ss  << GLSL_L(uniform vec4 unif_ToggleQuadColor;)
-          << GLSL_L(uniform vec2 unif_ToggleQuadScreenXY;)
-          << GLSL_L(uniform int unif_ToggleQuadEnabled;);
+        << GLSL_L(uniform vec2 unif_ToggleQuadScreenXY;)
+        << GLSL_L(uniform int unif_ToggleQuadEnabled;);
     }
 
     if (lights_shine) {
       ASSERT(lights);
-      ss << GLSL_L(struct material {)
-         << GLSL_TL(float smoothness;)
-         << GLSL_L(};)
-         << GLSL_L(uniform material unif_Material;)
-         << GLSL_L(uniform vec3 unif_CameraPosition;);
+      ss << GLSL_L(struct material {
+        )
+        << GLSL_TL(float smoothness;)
+          << GLSL_L(
+      };)
+          << GLSL_L(uniform material unif_Material;)
+          << GLSL_L(uniform vec3 unif_CameraPosition;);
     }
 
-    if (unif_model) { 
+    if (unif_model) {
       ASSERT(lights); // only expected use case currently
       ss << GLSL_L(uniform mat4 unif_Model;);
     }
 
-    if (unif_color) { 
+    if (unif_color) {
       ss << GLSL_L(uniform vec4 unif_Color;);
     }
 
@@ -344,145 +350,163 @@ struct module_programs : public type_module {
 
     ss << GLSL_L(out vec4 fb_Color;);
 
-    ss << GLSL_L(vec3 debugVec3(in vec3 v) {)
-       << GLSL_TL(return min(max(normalize(v), vec3(0.0)), vec3(1.0));)
-       << GLSL_L(});
+    ss << GLSL_L(vec3 debugVec3(in vec3 v) {
+      )
+      << GLSL_TL(return min(max(normalize(v), vec3(0.0)), vec3(1.0));)
+        << GLSL_L(
+    });
 
-    if (lights_shine) {
-      ASSERT(lights);
-      ss  << GLSL_L(float applySpecular(in vec3 vposition,
-                                     in vec3 vnormal,
-                                     in vec3 dirToViewer,
-                                     in vec3 lightPos,
-                                     float angleOfIncidence) {)
+      if (lights_shine) {
+        ASSERT(lights);
+        ss  << GLSL_L(float applySpecular(in vec3 vposition,
+                                          in vec3 vnormal,
+                                          in vec3 dirToViewer,
+                                          in vec3 lightPos,
+                                          float angleOfIncidence) {
+          )
           << GLSL_TL(vec3 dirToLight = normalize(lightPos - vposition);)
-          << GLSL_TL(vec3 reflectDir = reflect(-dirToLight, normalize(vnormal));)
-          << GLSL_TL(vec3 halfAngle = normalize(dirToLight + dirToViewer);)
-          << GLSL_TL(float term = dot(halfAngle, vnormal);)
-          << GLSL_TL(term = clamp(term, 0, 1);)
-          //<< GLSL_TL(term = angleOfIncidence != 0.0 ? term : 0.0;)
-          << GLSL_TL(term = pow(term, unif_Material.smoothness);)
-          << GLSL_TL(return term;)
-          << GLSL_L(});
-    }
+            << GLSL_TL(vec3 reflectDir = reflect(-dirToLight, normalize(vnormal));)
+            << GLSL_TL(vec3 halfAngle = normalize(dirToLight + dirToViewer);)
+            << GLSL_TL(float term = dot(halfAngle, vnormal);)
+            << GLSL_TL(term = clamp(term, 0, 1);)
+            //<< GLSL_TL(term = angleOfIncidence != 0.0 ? term : 0.0;)
+            << GLSL_TL(term = pow(term, unif_Material.smoothness);)
+            << GLSL_TL(return term;)
+            << GLSL_L(
+        });
+      }
 
-    if (toggle_quad) {
-      ss  << GLSL_L(bool toggleQuad() {)
+      if (toggle_quad) {
+        ss  << GLSL_L(bool toggleQuad() {
+          )
           << GLSL_TL(bool ret = false;)
-          << GLSL_TL(if (unif_ToggleQuadEnabled == 1) {)
-          << GLSL_TTL(vec2 center = unif_ToggleQuadScreenXY;)
-          << GLSL_TTL(const float RADIUS = 50;)
-          << GLSL_TTL(float xmin = center.x - RADIUS;)
-          << GLSL_TTL(float xmax = center.x + RADIUS;)
-          << GLSL_TTL(float ymin = center.y - RADIUS;)
-          << GLSL_TTL(float ymax = center.y + RADIUS;)
-          << GLSL_TTL(ret = (xmin <= gl_FragCoord.x && gl_FragCoord.x <= xmax);)
-          << GLSL_TTL(ret = ret && (ymin <= gl_FragCoord.y && gl_FragCoord.y <= ymax);)
-          << GLSL_TL(})
-          << GLSL_TL(return ret;)
-          << GLSL_L(});
-    }
+            << GLSL_TL(if (unif_ToggleQuadEnabled == 1) {
+            )
+            << GLSL_TTL(vec2 center = unif_ToggleQuadScreenXY;)
+              << GLSL_TTL(const float RADIUS = 50;)
+              << GLSL_TTL(float xmin = center.x - RADIUS;)
+              << GLSL_TTL(float xmax = center.x + RADIUS;)
+              << GLSL_TTL(float ymin = center.y - RADIUS;)
+              << GLSL_TTL(float ymax = center.y + RADIUS;)
+              << GLSL_TTL(ret = (xmin <= gl_FragCoord.x && gl_FragCoord.x <= xmax);)
+              << GLSL_TTL(ret = ret && (ymin <= gl_FragCoord.y && gl_FragCoord.y <= ymax);)
+              << GLSL_TL(
+          })
+              << GLSL_TL(return ret;)
+              << GLSL_L(
+        });
+      }
 
-    if (lights) {
-      /* TODO: eliminate conditional overhead associated with "invertNormals".
-       * there is a function which allows direct bit manipulation of floats,
-       * and combinatorial logic and should be used in conjunction with this
-       * function to perform the inversion when invertNormals == true, and
-       * not invert when invertNormals == false.
-       */
-      ss  << GLSL_L(vec3 applyPointLights(in vec3 vposition, in vec3 vnormal, int numLights, bool invertNormals) {)
+      if (lights) {
+        /* TODO: eliminate conditional overhead associated with "invertNormals".
+         * there is a function which allows direct bit manipulation of floats,
+         * and combinatorial logic and should be used in conjunction with this
+         * function to perform the inversion when invertNormals == true, and
+         * not invert when invertNormals == false.
+         */
+        ss  << GLSL_L(vec3 applyPointLights(in vec3 vposition, in vec3 vnormal, int numLights, bool invertNormals) {
+          )
           << GLSL_TL(vec3 lightpass = vec3(0.0);)
-          << GLSL_TL(const float c1 = 0.0;)
-          << GLSL_TL(const float c2 = 0.0;)
-          << GLSL_TL(const float c3 = invertNormals ? -1.0 : 1.0;);
+            << GLSL_TL(const float c1 = 0.0;)
+            << GLSL_TL(const float c2 = 0.0;)
+            << GLSL_TL(const float c3 = invertNormals ? -1.0 : 1.0;);
           if (lights_shine) {
             ss << GLSL_TL(vec3 dirToViewer = normalize(unif_CameraPosition - vposition););
           }
           ss
-          << GLSL_TL(for (int i = 0; i < numLights; ++i) {)
-          << GLSL_TTL(vec3 lightDir = normalize(unif_Lights[i].position - vposition);)
-          << GLSL_TTL(float diff = max(dot(lightDir, c3 * normalize(vnormal)), 0.0);)
-          << GLSL_TTL(vec3 diffuse = unif_Lights[i].color * diff * frag_Color.xyz;)
-          << GLSL_TTL(vec3 result = diffuse;);
-          if (lights_shine) {
-            ss << GLSL_TTL(result += applySpecular(vposition, 
-                                                   vnormal, 
-                                                   dirToViewer, 
-                                                   unif_Lights[i].position,
-                                                   diff););
-          }
-          ss
-          #if 0
-          << GLSL_TTL(float distance = length(unif_Lights[i].position - vposition);)
-          << GLSL_TTL(result *= (1.0 / (1.0 + (c1 * distance) + (c2 * distance * distance)));)
-          #endif
-          << GLSL_TTL(lightpass += result;)
-          << GLSL_TL(})
-          << GLSL_TL(return lightpass;)
-          << GLSL_L(});
-    }
+            << GLSL_TL(for (int i = 0; i < numLights; ++i) {
+            )
+            << GLSL_TTL(vec3 lightDir = normalize(unif_Lights[i].position - vposition);)
+              << GLSL_TTL(float diff = max(dot(lightDir, c3 * normalize(vnormal)), 0.0);)
+              << GLSL_TTL(vec3 diffuse = unif_Lights[i].color * diff * frag_Color.xyz;)
+              << GLSL_TTL(vec3 result = diffuse;);
+            if (lights_shine) {
+              ss << GLSL_TTL(result += applySpecular(vposition,
+                                                     vnormal,
+                                                     dirToViewer,
+                                                     unif_Lights[i].position,
+                                                     diff););
+            }
+            ss
+#if 0
+              << GLSL_TTL(float distance = length(unif_Lights[i].position - vposition);)
+              << GLSL_TTL(result *= (1.0 / (1.0 + (c1 * distance) + (c2 * distance * distance)));)
+#endif
+              << GLSL_TTL(lightpass += result;)
+              << GLSL_TL(
+          })
+              << GLSL_TL(return lightpass;)
+              << GLSL_L(
+        });
+      }
 
 
-    ss << GLSL_L(void main() {)
-       << GLSL_TL(vec4 out_color = vec4(1.0););
+      ss << GLSL_L(void main() {
+        )
+        << GLSL_TL(vec4 out_color = vec4(1.0););
 
-    // as implied by the assert above,
-    // unif_color and frag_color cannot both be true.
-    if (unif_color) {
-      ss << GLSL_TL(vec4 frag_Color = unif_Color;);
-    } else if (!frag_color) {
-      ss << GLSL_TL(vec4 frag_Color = vec4(1.0););
-    }
+        // as implied by the assert above,
+        // unif_color and frag_color cannot both be true.
+        if (unif_color) {
+          ss << GLSL_TL(vec4 frag_Color = unif_Color;);
+        }
+        else if (!frag_color) {
+          ss << GLSL_TL(vec4 frag_Color = vec4(1.0););
+        }
 
-    if (reflect) {
-       ss << GLSL_TL(vec3 I = frag_Position - unif_CameraPosition;)
-          << GLSL_TL(vec3 R = reflect(I, normalize(frag_Normal));)
-          << GLSL_TL(out_color = texture(unif_TexCubeMap, R) * frag_Color;);
-    }
-    
-    if (frag_texcoord) {
-      ss << GLSL_TL(out_color = texture(unif_TexCubeMap, frag_TexCoord););
-    }
+        if (reflect) {
+          ss << GLSL_TL(vec3 I = frag_Position - unif_CameraPosition;)
+            << GLSL_TL(vec3 R = reflect(I, normalize(frag_Normal));)
+            << GLSL_TL(out_color = texture(unif_TexCubeMap, R) * frag_Color;);
+        }
 
-    if (lights) {
-      ASSERT(frag_position);
-      ASSERT(frag_color);
-      //ASSERT(frag_normal);
-      
-      ss  << (unif_model 
-              ? GLSL_TL(vec3 vposition = vec3(unif_Model * vec4(frag_Position, 1.0));)
-              : GLSL_TL(vec3 vposition = frag_Position;))
-          << (unif_model
-              ? GLSL_TL(vec3 vnormal = vec3(transpose(inverse(unif_Model)) * vec4(frag_Normal, 0.0));)
-              : GLSL_TL(vec3 vnormal = frag_Normal;))
-          << GLSL_T(int numLights = ) <<  p.light_count << GLSL_L(;)
-          << GLSL_T(bool invertNormals = ) << from_bool(p.invert_normals) << GLSL_L(;)
-          << GLSL_TL(out_color.xyz *= applyPointLights(vposition, vnormal, numLights, invertNormals););
-    }
-    
-    if (reflect || lights || frag_texcoord) {
-      ss << GLSL_TL(vec4 interm1 = out_color * frag_Color;);
-    } else {
-      ss << GLSL_TL(vec4 interm1 = frag_Color;);
-    }
+        if (frag_texcoord) {
+          ss << GLSL_TL(out_color = texture(unif_TexCubeMap, frag_TexCoord););
+        }
 
-    if (toggle_quad) {
-      ss  << GLSL_TL(if (toggleQuad()) {)
-          << GLSL_TTL(interm1 = unif_ToggleQuadColor;)
-          << GLSL_TL(});
-    }
+        if (lights) {
+          ASSERT(frag_position);
+          ASSERT(frag_color);
+          //ASSERT(frag_normal);
 
-    ss << GLSL_TL(fb_Color = interm1;) 
-       << GLSL_L(});
+          ss  << (unif_model
+                  ? GLSL_TL(vec3 vposition = vec3(unif_Model * vec4(frag_Position, 1.0));)
+                  : GLSL_TL(vec3 vposition = frag_Position;))
+            << (unif_model
+                ? GLSL_TL(vec3 vnormal = vec3(transpose(inverse(unif_Model)) * vec4(frag_Normal, 0.0));)
+                : GLSL_TL(vec3 vnormal = frag_Normal;))
+            << GLSL_T(int numLights =) <<  p.light_count << GLSL_L(;)
+            << GLSL_T(bool invertNormals =) << from_bool(p.invert_normals) << GLSL_L(;)
+            << GLSL_TL(out_color.xyz *= applyPointLights(vposition, vnormal, numLights, invertNormals););
+        }
 
-    auto s = ss.str();
+        if (reflect || lights || frag_texcoord) {
+          ss << GLSL_TL(vec4 interm1 = out_color * frag_Color;);
+        }
+        else {
+          ss << GLSL_TL(vec4 interm1 = frag_Color;);
+        }
 
-    write_logf("\n---------fshader %" PRIu32 " (%s)-----------\n%s\n\n\n", 
-                fshader_count, name.c_str(), s.c_str());
+        if (toggle_quad) {
+          ss  << GLSL_TL(if (toggleQuad()) {
+            )
+            << GLSL_TTL(interm1 = unif_ToggleQuadColor;)
+              << GLSL_TL(
+          });
+        }
 
-    fshader_count++;
+        ss << GLSL_TL(fb_Color = interm1;)
+          << GLSL_L(
+      });
 
-    return s;
+        auto s = ss.str();
+
+        write_logf("\n---------fshader %" PRIu32 " (%s)-----------\n%s\n\n\n",
+                    fshader_count, name.c_str(), s.c_str());
+
+        fshader_count++;
+
+        return s;
   }
 
   darray<programdef> defs = {
@@ -491,21 +515,21 @@ struct module_programs : public type_module {
       gen_vshader(vshader_frag_color),
       gen_fshader(fshader_frag_color),
       uniform_location_mv_proj(),
-      {
-        attrib_layout_position(),
-        attrib_layout_color()
-      }
+  {
+    attrib_layout_position(),
+    attrib_layout_color()
+  }
     },
     {
       "single_color",
       gen_vshader(0),
       gen_fshader(fshader_unif_color),
-      uniform_location_mv_proj() + 
-      uniform_location_color() + 
-      uniform_location_toggle_quad(),
-      {
-        attrib_layout_position()
-      }
+      uniform_location_mv_proj() +
+      uniform_location_color() +
+    uniform_location_toggle_quad(),
+  {
+    attrib_layout_position()
+  }
     },
     {
       "main",
@@ -514,159 +538,159 @@ struct module_programs : public type_module {
       gen_fshader(FSHADER_POINTLIGHTS,
                   {NUM_LIGHTS,
                   true}),
-      ([&]() -> darray<std::string> {
-        return darray<std::string> {
-          "unif_ModelView",
-          "unif_Projection",
-          "unif_Model"
-        } + uniform_location_pointlight(0) 
-          + uniform_location_shine();
-      })(),
-      {
-        attrib_layout_position(),
-        attrib_layout_color(),
-        attrib_layout_normal()
-      },
+                  ([&]() -> darray<std::string> {
+    return darray<std::string> {
+      "unif_ModelView",
+        "unif_Projection",
+        "unif_Model"
+    } + uniform_location_pointlight(0)
+        + uniform_location_shine();
+  })(),
+  {
+    attrib_layout_position(),
+    attrib_layout_color(),
+    attrib_layout_normal()
+  },
     },
     {
       "render_to_quad",
 
       GLSL(smooth out vec2 frag_TexCoord;
 
-           // quad
-           // 01    11
-           // 00    10
-           //
-           // xy  |  vertex id
-           // 01  |  00
-           // 00  |  01
-           // 11  |  10
-           // 10  |  11
-            
-           void main() {
-             float x = float((gl_VertexID >> 1) & 1);
-             float y = float(1 - (gl_VertexID & 1));
-             
-             frag_TexCoord = vec2(x, y);
+  // quad
+  // 01    11
+  // 00    10
+  //
+  // xy  |  vertex id
+  // 01  |  00
+  // 00  |  01
+  // 11  |  10
+  // 10  |  11
 
-             x = 2.0 * x - 1.0;
-             y = 2.0 * y - 1.0;
-             
-             gl_Position = vec4(x, y, 0.0, 1.0);
-           }),
-      
-      GLSL(smooth in vec2 frag_TexCoord;
-           out vec4 fb_Color;
+  void main() {
+    float x = float((gl_VertexID >> 1) & 1);
+    float y = float(1 - (gl_VertexID & 1));
 
-           uniform sampler2D unif_TexSampler;
-           
-           void main() {
-             fb_Color = vec4(texture(unif_TexSampler, frag_TexCoord).rgb, 1.0);
-           }),
-      {
-        "unif_TexSampler"
-      }
+    frag_TexCoord = vec2(x, y);
+
+    x = 2.0 * x - 1.0;
+    y = 2.0 * y - 1.0;
+
+    gl_Position = vec4(x, y, 0.0, 1.0);
+  }),
+
+    GLSL(smooth in vec2 frag_TexCoord;
+  out vec4 fb_Color;
+
+  uniform sampler2D unif_TexSampler;
+
+  void main() {
+    fb_Color = vec4(texture(unif_TexSampler, frag_TexCoord).rgb, 1.0);
+  }),
+  {
+    "unif_TexSampler"
+  }
     },
      {
-      "cubemap",
+       "cubemap",
 
-      gen_vshader(VSHADER_POINTLIGHTS |
-                  vshader_frag_texcoord),
+       gen_vshader(VSHADER_POINTLIGHTS |
+       vshader_frag_texcoord),
 
-      gen_fshader(FSHADER_POINTLIGHTS |
-                  fshader_frag_texcoord | 
-                  fshader_unif_texcubemap,
-                  {
-                    NUM_LIGHTS, 
-                    true        // invert normals
-                  }),
-      ([&]() -> darray<std::string>  {
-        return darray<std::string>{
-          "unif_ModelView",
-          "unif_Projection",
-          "unif_TexCubeMap",
-          "unif_Model"
-        }  + uniform_location_pointlight(0)
-           + uniform_location_shine();
-      })(),
-      {
-        attrib_layout_position(),
-        attrib_layout_color(),
-        attrib_layout_normal()
-      }
-    },
+    gen_fshader(FSHADER_POINTLIGHTS |
+                fshader_frag_texcoord |
+                fshader_unif_texcubemap,
+                {
+                NUM_LIGHTS,
+                true        // invert normals
+                }),
+              ([&]() -> darray<std::string>  {
+    return darray<std::string>{
+      "unif_ModelView",
+        "unif_Projection",
+        "unif_TexCubeMap",
+        "unif_Model"
+    }  + uniform_location_pointlight(0)
+        + uniform_location_shine();
+  })(),
+  {
+    attrib_layout_position(),
+    attrib_layout_color(),
+    attrib_layout_normal()
+  }
+     },
     {
       "reflection_sphere_cubemap",
 #if 0
       GLSL(layout(location = 0) in vec3 in_Position;
-           layout(location = 1) in vec4 in_Color;
-            layout(location = 2) in vec3 in_Normal;
-           
-           smooth out vec4 frag_Color;
-           smooth out vec3 frag_Position;
-           out vec3 frag_Normal;
-           
-           uniform mat4 unif_Model;
-           uniform mat4 unif_ModelView;
-           uniform mat4 unif_Projection;
-           
-           void main() {
-             vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
-             gl_Position = clip;             
-             frag_Color = in_Color; //abs(clip / clip.w);
-       
-             frag_Normal = in_Normal/*in_Position*/;
-             
-             frag_Position = vec3(unif_Model * vec4(in_Position, 1.0));
-           }),
+  layout(location = 1) in vec4 in_Color;
+  layout(location = 2) in vec3 in_Normal;
+
+  smooth out vec4 frag_Color;
+  smooth out vec3 frag_Position;
+  out vec3 frag_Normal;
+
+  uniform mat4 unif_Model;
+  uniform mat4 unif_ModelView;
+  uniform mat4 unif_Projection;
+
+  void main() {
+    vec4 clip = unif_Projection * unif_ModelView * vec4(in_Position, 1.0);
+    gl_Position = clip;
+    frag_Color = in_Color; //abs(clip / clip.w);
+
+    frag_Normal = in_Normal/*in_Position*/;
+
+    frag_Position = vec3(unif_Model * vec4(in_Position, 1.0));
+  }),
 #else
       gen_vshader(vshader_in_normal | vshader_frag_pos_color_normal()),
 #endif           
 
 #if 0      
-      GLSL( smooth in vec4 frag_Color;
-            smooth in vec3 frag_Position;
-            in vec3 frag_Normal;
+      GLSL(smooth in vec4 frag_Color;
+  smooth in vec3 frag_Position;
+  in vec3 frag_Normal;
 
-            uniform samplerCube unif_TexCubeMap;
-            uniform vec3 unif_CameraPosition;
+  uniform samplerCube unif_TexCubeMap;
+  uniform vec3 unif_CameraPosition;
 
-            out vec4 fb_Color;
-           
-            void main() {
-              vec3 I = frag_Position - unif_CameraPosition;
-              vec3 R = reflect(I, normalize(frag_Normal));
-              vec4 x = texture(unif_TexCubeMap, R) * frag_Color;
-              fb_Color = x;
-            }),
+  out vec4 fb_Color;
+
+  void main() {
+    vec3 I = frag_Position - unif_CameraPosition;
+    vec3 R = reflect(I, normalize(frag_Normal));
+    vec4 x = texture(unif_TexCubeMap, R) * frag_Color;
+    fb_Color = x;
+  }),
 #else
       gen_fshader(fshader_pos_color_normal() |
-                  fshader_unif_texcubemap |
+      fshader_unif_texcubemap |
                   fshader_reflect),
 #endif
-      ([&]() -> darray<std::string> { 
-        return darray<std::string> {
-          "unif_Model",
-          "unif_ModelView",
-          "unif_Projection",
-          "unif_TexCubeMap",
-          "unif_CameraPosition"
-        };
-      })(),
-      {
-        attrib_layout_position(),
-        attrib_layout_color(),
-        attrib_layout_normal()
-      }
+    ([&]() -> darray<std::string> {
+    return darray<std::string> {
+      "unif_Model",
+        "unif_ModelView",
+        "unif_Projection",
+        "unif_TexCubeMap",
+        "unif_CameraPosition"
+    };
+  })(),
+  {
+    attrib_layout_position(),
+    attrib_layout_color(),
+    attrib_layout_normal()
+  }
     }};
-  
+
   struct program {
     std::unordered_map<std::string, GLint> uniforms;
     attrib_map_type attribs;
-    
+
     GLuint handle;
   };
-  
+
   std::unordered_map<std::string, std::unique_ptr<program>> data;
 
   std::string current;
@@ -680,15 +704,15 @@ struct module_programs : public type_module {
   const std::string skybox = "cubemap";
 
   using id_type = std::string;
-  
+
   ~module_programs() {
     GL_FN(glUseProgram(0));
-    
+
     for (auto& entry: data) {
       GL_FN(glDeleteProgram(entry.second->handle));
     }
   }
-  
+
   auto get(const std::string& name) const {
     return data.at(name).get();
   }
@@ -698,12 +722,12 @@ struct module_programs : public type_module {
       auto p = std::make_unique<program>();
 
       p->handle = make_program(def.vertex.c_str(), def.fragment.c_str());
-      
+
       for (auto unif: def.uniforms) {
         GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle, unif.c_str()));
       }
-      
-      p->attribs = def.attribs; 
+
+      p->attribs = def.attribs;
       data[def.name] = std::move(p);
     }
   }
@@ -726,11 +750,11 @@ struct module_programs : public type_module {
         name.c_str());
       }
     }
-    
+
     return id;
   }
-  
-  void up_mat4x4(const std::string& name, const glm::mat4& m) const {    
+
+  void up_mat4x4(const std::string& name, const glm::mat4& m) const {
     GL_FN(glUniformMatrix4fv(uniform(name), 1, GL_FALSE, &m[0][0]));
   }
 
@@ -756,42 +780,42 @@ struct module_programs : public type_module {
 
   void up_pointlight(const std::string& name, const dpointlight& pl) const {
     GL_FN(glUniform3fv(uniform(name + ".position"), 1, &pl.position[0]));
-    GL_FN(glUniform3fv(uniform(name + ".color"), 1, &pl.color[0]));    
+    GL_FN(glUniform3fv(uniform(name + ".color"), 1, &pl.color[0]));
   }
 
   void up_material(const std::string& name, const dmaterial& dm) const {
     GL_FN(glUniform1f(uniform(name + ".smoothness"), dm.smoothness));
   }
-  
+
   auto fetch_attrib(const std::string& program, const std::string& attrib) const {
     return data.at(program)->attribs.at(attrib).index;
   }
 
   void load_layout() const {
     const auto& p = data.at(current);
-    
+
     for (const auto& attrib: p->attribs) {
       const auto& layout = attrib.second;
-      
+
       GL_FN(glEnableVertexAttribArray(layout.index));
-    
+
       GL_FN(glVertexAttribPointer(layout.index,
                                   layout.size,
                                   layout.type,
                                   layout.normalized,
                                   layout.stride,
                                   layout.pointer));
-    } 
+    }
   }
 
   void unload_layout() const {
     const auto& p = data.at(current);
-    
+
     for (const auto& attrib: p->attribs) {
       GL_FN(glDisableVertexAttribArray(attrib.second.index));
     }
   }
-  
+
 };
 
 // Make sure the VBO is bound BEFORE
@@ -804,7 +828,7 @@ struct use_program {
 
     g_m.programs->make_current(name);
     g_m.programs->load_layout();
-    
+
     GL_FN(glUseProgram(prog));
   }
 

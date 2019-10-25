@@ -9,7 +9,7 @@
 
 struct framebuffer_ops {
   using index_type = int32_t;
-  
+
   uint32_t count;
   uint32_t width;
   uint32_t height;
@@ -47,11 +47,11 @@ struct framebuffer_ops {
   };
 
   using fbodata_type = fbodata;
-  
-  #define PRE_BOUND ASSERT(self.has_bind)
-  #define PRE_UNBOUND ASSERT(!self.has_bind)
-  #define POST_BOUND self.has_bind = true
-  #define POST_UNBOUND self.has_bind = false
+
+#define PRE_BOUND ASSERT(self.has_bind)
+#define PRE_UNBOUND ASSERT(!self.has_bind)
+#define POST_BOUND self.has_bind = true
+#define POST_UNBOUND self.has_bind = false
 
   struct fbo2d {
     darray<GLuint> fbos;
@@ -62,7 +62,7 @@ struct framebuffer_ops {
 
     const framebuffer_ops& self;
 
-    fbo2d(const framebuffer_ops& s) 
+    fbo2d(const framebuffer_ops& s)
       : self(s) {}
 
     ~fbo2d() {
@@ -76,28 +76,28 @@ struct framebuffer_ops {
       GL_FN(glGenFramebuffers(1, &fbo));
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
 
-      auto depth_attachment = 
+      auto depth_attachment =
         g_m.textures->new_texture(g_m.textures->depthtexture_params(width, height));
-      
-      auto color_attachment = 
+
+      auto color_attachment =
         g_m.textures->new_texture(g_m.textures->texture2d_rgba_params(width, height));
 
-      GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER, 
-                                    GL_COLOR_ATTACHMENT0, 
-                                    GL_TEXTURE_2D, 
-                                    g_m.textures->handle(color_attachment), 
-                                    0));
+      GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
+                                   GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D,
+                                   g_m.textures->handle(color_attachment),
+                                   0));
 
-      GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER, 
-                                    GL_DEPTH_ATTACHMENT, 
-                                    GL_TEXTURE_2D, 
-                                    g_m.textures->handle(depth_attachment), 
-                                    0));
+      GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
+                                   GL_DEPTH_ATTACHMENT,
+                                   GL_TEXTURE_2D,
+                                   g_m.textures->handle(depth_attachment),
+                                   0));
 
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
       index_type new_handle = fbos.size();
-      
+
       fbos.push_back(fbo);
       widths.push_back(width);
       heights.push_back(height);
@@ -112,7 +112,7 @@ struct framebuffer_ops {
 
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbos[handle]));
       GL_FN(glViewport(0, 0, widths[handle], heights[handle]));
-      
+
       POST_BOUND;
     }
 
@@ -120,10 +120,10 @@ struct framebuffer_ops {
       PRE_UNBOUND;
 
       auto C = color_attachments.at(handle);
-      
-      darray<uint8_t> buffer(g_m.textures->width(C) * 
-                          g_m.textures->height(C) * 
-                          g_m.textures->bytes_per_pixel(C), 
+
+      darray<uint8_t> buffer(g_m.textures->width(C) *
+                          g_m.textures->height(C) *
+                          g_m.textures->bytes_per_pixel(C),
                           0);
 
       bind(handle);
@@ -132,27 +132,27 @@ struct framebuffer_ops {
         // GL_COLOR_ATTACHMENT0 should be the default read buffer for the FBO.
         // We check this to ensure that's the case - if it isn't, then
         // we need to make sure we know why. 
-        
-        GLint attach; 
-        glGetIntegerv(GL_READ_BUFFER, &attach);
-        ASSERT(attach == GL_COLOR_ATTACHMENT0);
+
+        GLint attach;
+      glGetIntegerv(GL_READ_BUFFER, &attach);
+      ASSERT(attach == GL_COLOR_ATTACHMENT0);
       );
 
       GL_FN(glReadBuffer(GL_COLOR_ATTACHMENT0));
 
-      GL_FN(glReadPixels(0, 
-                         0, 
-                         g_m.textures->width(C), 
+      GL_FN(glReadPixels(0,
+                         0,
+                         g_m.textures->width(C),
                          g_m.textures->height(C),
-                         g_m.textures->format(C), 
+                         g_m.textures->format(C),
                          g_m.textures->texel_type(C),
                          buffer.data()));
       unbind(handle);
-      
-      return {  buffer, 
-                g_m.textures->width(C), 
-                g_m.textures->height(C), 
-                g_m.textures->bytes_per_pixel(C) };
+
+      return {buffer,
+        g_m.textures->width(C),
+        g_m.textures->height(C),
+        g_m.textures->bytes_per_pixel(C)};
     }
 
     void unbind(index_type handle) const {
@@ -161,13 +161,13 @@ struct framebuffer_ops {
       GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
       ASSERT_CODE(
-        GLint viewport[4] = { 0 }; 
-        GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
-        
-        ASSERT(viewport[0] == 0);
-        ASSERT(viewport[1] == 0);
-        ASSERT(viewport[2] == widths[handle]);
-        ASSERT(viewport[3] == heights[handle]);
+        GLint viewport[4] = {0};
+      GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
+
+      ASSERT(viewport[0] == 0);
+      ASSERT(viewport[1] == 0);
+      ASSERT(viewport[2] == widths[handle]);
+      ASSERT(viewport[3] == heights[handle]);
       );
 
       GL_FN(glViewport(0, 0, self.width, self.height));
@@ -193,28 +193,28 @@ struct framebuffer_ops {
     // enums are provided in consecutive order.
     // At the time of this writing, that order is as follows
     enum axis {
-        pos_x = 0,
-        neg_x,
-        pos_y,
-        neg_y,
-        pos_z,
-        neg_z
+      pos_x = 0,
+      neg_x,
+      pos_y,
+      neg_y,
+      pos_z,
+      neg_z
     };
 
-    render_cube(const framebuffer_ops& f) : self(f),
+    render_cube(const framebuffer_ops& f): self(f),
       cwidth(256),
       cheight(256) {
     }
 
     auto calc_look_at_mats(const vec3_t& position, real_t radius) {
-      real_t offset{R(1.0)};
-      
+      real_t offset {R(1.0)};
+
       face_mats_type m;
 
       m[pos_x] = glm::lookAt(position + SPHERE_RIGHT(radius),
                                   position + SPHERE_RIGHT(radius + offset),
                                   V3_UP);
-      
+
       m[neg_x] = glm::lookAt(position + SPHERE_LEFT(radius),
                               position + SPHERE_LEFT(radius + offset),
                               V3_UP);
@@ -237,22 +237,22 @@ struct framebuffer_ops {
 
       return m;
     }
-        
-    auto add(const vec3_t& position, real_t radius) {           
+
+    auto add(const vec3_t& position, real_t radius) {
       auto rcubeid = tex_color_handles.size();
 
       tex_color_handles.push_back(g_m.textures->new_texture(g_m.textures->cubemap_params(cwidth, cheight)));
 
 #if defined(ENVMAP_CUBE_DEPTH)
       tex_depth_handles.push_back(g_m.textures->new_cubemap(cwidth,
-                                                          cheight,
-                                                          GL_DEPTH_COMPONENT));
+                                                            cheight,
+                                                            GL_DEPTH_COMPONENT));
 #else
       tex_depth_handles.push_back(g_m.textures->new_texture(g_m.textures->depthtexture_params(cwidth, cheight)));
 #endif // ENVMAP_CUBE_DEPTH
 
       positions.push_back(position);
-      
+
       faces.push_back(calc_look_at_mats(position, radius));
 
       {
@@ -267,13 +267,13 @@ struct framebuffer_ops {
     void bind(index_type cube_id) const {
       PRE_UNBOUND;
 
-      GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 
+      GL_FN(glBindFramebuffer(GL_FRAMEBUFFER,
                               fbos.at(cube_id)));
 
-      GL_FN(glViewport( 0,
-                        0,
-                        cwidth,
-                        cheight));
+      GL_FN(glViewport(0,
+                       0,
+                       cwidth,
+                       cheight));
 
       POST_BOUND;
     }
@@ -291,24 +291,24 @@ struct framebuffer_ops {
 
       return std::move(all_faces);
     }
-        
+
     glm::mat4 set_face(index_type cube_id, axis face) const {
       GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
-                                    GL_COLOR_ATTACHMENT0,
-                                    GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face),
-                                    g_m.textures->handle(tex_color_handles.at(cube_id)),
-                                    0));
+                                   GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face),
+                                   g_m.textures->handle(tex_color_handles.at(cube_id)),
+                                   0));
 #ifdef ENVMAP_CUBE_DEPTH
       auto target = GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face);
 #else
       auto target = GL_TEXTURE_2D;
 #endif
-  
+
       GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
-                                    GL_DEPTH_ATTACHMENT,
-                                    target,
-                                    g_m.textures->handle(tex_depth_handles.at(cube_id)),
-                                    0));
+                                   GL_DEPTH_ATTACHMENT,
+                                   target,
+                                   g_m.textures->handle(tex_depth_handles.at(cube_id)),
+                                   0));
 
       auto fbcheck = glCheckFramebufferStatus(GL_FRAMEBUFFER);
       if (fbcheck != GL_FRAMEBUFFER_COMPLETE) {
@@ -317,7 +317,7 @@ struct framebuffer_ops {
       ASSERT(fbcheck == GL_FRAMEBUFFER_COMPLETE);
 
       const auto& viewmats = faces.at(cube_id);
-      
+
       return viewmats.at(face);
     }
 
@@ -330,19 +330,19 @@ struct framebuffer_ops {
       POST_UNBOUND;
     }
   };
-    
+
   std::unique_ptr<render_cube> rcube;
   std::unique_ptr<fbo2d> fbos;
-  
+
   framebuffer_ops(uint32_t w, uint32_t h)
     : count(0),
-      width(w),
-      height(h),
-      has_bind{false},
-      rcube{new render_cube(*this)},
-      fbos{new fbo2d(*this)}
+    width(w),
+    height(h),
+    has_bind {false},
+    rcube {new render_cube(*this)},
+    fbos {new fbo2d(*this)}
   {}
-  
+
   void screenshot();
 
   auto add_render_cube(const vec3_t& position, real_t radius) {

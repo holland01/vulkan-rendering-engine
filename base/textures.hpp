@@ -14,161 +14,161 @@
 using texparams_t = darray<GLenum>;
 
 struct module_textures: public type_module {
-    darray<GLuint> tex_handles;
+  darray<GLuint> tex_handles;
 
-    darray<uint32_t> widths;
-    darray<uint32_t> heights;
-    darray<uint32_t> num_channels;
-    darray<GLenum> internal_formats;
-    darray<GLenum> formats;
-    darray<uint8_t> num_levels; // only zero supported for now
-    darray<GLenum> min_filters;
-    darray<GLenum> mag_filters;
-    darray<GLenum> texel_types;
-    mutable darray<GLenum> slots;
-    darray<GLenum> types;
+  darray<uint32_t> widths;
+  darray<uint32_t> heights;
+  darray<uint32_t> num_channels;
+  darray<GLenum> internal_formats;
+  darray<GLenum> formats;
+  darray<uint8_t> num_levels; // only zero supported for now
+  darray<GLenum> min_filters;
+  darray<GLenum> mag_filters;
+  darray<GLenum> texel_types;
+  mutable darray<GLenum> slots;
+  darray<GLenum> types;
 
-    using index_type = int16_t;
-    using cubemap_paths_type = std::array<fs::path, 6>;
-    
-    static const inline index_type k_uninit = -1;
-    static const inline fs::path k_root_path = fs::path("resources") / fs::path("textures");
+  using index_type = int16_t;
+  using cubemap_paths_type = std::array<fs::path, 6>;
 
-    ~module_textures();
+  static const inline index_type k_uninit = -1;
+  static const inline fs::path k_root_path = fs::path("resources") / fs::path("textures");
 
-    void bind(index_type id, int slot = 0) const;
+  ~module_textures();
 
-    void unbind(index_type id) const;
+  void bind(index_type id, int slot = 0) const;
 
-    using texture_data_buffer = darray<uint8_t>;
+  void unbind(index_type id) const;
 
-    struct cubemap_data {
-        texture_data_buffer px, nx;
-        texture_data_buffer py, ny;
-        texture_data_buffer pz, nz;
+  using texture_data_buffer = darray<uint8_t>;
 
-        static cubemap_data all(size_t size, 
-                                uint8_t init_pixel) {
+  struct cubemap_data {
+    texture_data_buffer px, nx;
+    texture_data_buffer py, ny;
+    texture_data_buffer pz, nz;
 
-            texture_data_buffer set(size, init_pixel);
-            
-            cubemap_data R;
-            R.px = darray_clone(set);
-            R.nx = darray_clone(set);
-            
-            R.py = darray_clone(set);
-            R.ny = darray_clone(set);
-            
-            R.pz = darray_clone(set);
-            R.nz = darray_clone(set);
+    static cubemap_data all(size_t size,
+                            uint8_t init_pixel) {
 
-            return R;
-        }
-    };
+      texture_data_buffer set(size, init_pixel);
 
-    struct texture_data {
-        using data_type = std::variant<cubemap_data, texture_data_buffer>;
-        
-        data_type data;
+      cubemap_data R;
+      R.px = darray_clone(set);
+      R.nx = darray_clone(set);
 
-        texture_data(const cubemap_data& cd) : data(cd) {}
-        texture_data(const texture_data_buffer& db) : data(db) {}
-        texture_data() : data(texture_data_buffer()) {}
-    };
+      R.py = darray_clone(set);
+      R.ny = darray_clone(set);
 
-    struct params {
-        texture_data data{};
+      R.pz = darray_clone(set);
+      R.nz = darray_clone(set);
 
-        GLenum type {GL_TEXTURE_2D};
-        
-        GLenum format{GL_RGBA};
-        GLenum internal_format{GL_RGBA};
-        
-        GLenum min_filter {GL_LINEAR};
-        GLenum mag_filter {GL_LINEAR};
+      return R;
+    }
+  };
 
-        GLenum wrap_mode_s {GL_CLAMP_TO_EDGE};
-        GLenum wrap_mode_t {GL_CLAMP_TO_EDGE};
-        GLenum wrap_mode_r {GL_CLAMP_TO_EDGE};
+  struct texture_data {
+    using data_type = std::variant<cubemap_data, texture_data_buffer>;
 
-        GLenum mip_base_level{0};
-        GLenum mip_max_level{0};
+    data_type data;
 
-        GLenum texel_type{GL_UNSIGNED_BYTE};
+    texture_data(const cubemap_data& cd): data(cd) {}
+    texture_data(const texture_data_buffer& db): data(db) {}
+    texture_data(): data(texture_data_buffer()) {}
+  };
 
-        uint32_t width{256}; 
-        uint32_t height{256}; 
-        uint32_t num_channels{4};
+  struct params {
+    texture_data data {};
 
-        uint8_t num_levels{1};
+    GLenum type {GL_TEXTURE_2D};
 
-        auto post() const {
-            ASSERT(num_levels == 1);
-            ASSERT(mip_base_level == 0);
-            ASSERT(mip_max_level == 0);
+    GLenum format {GL_RGBA};
+    GLenum internal_format {GL_RGBA};
 
-            darray<GLenum> v;
+    GLenum min_filter {GL_LINEAR};
+    GLenum mag_filter {GL_LINEAR};
 
-            v.insert(v.end(), {
-                GL_TEXTURE_MIN_FILTER, min_filter,
-                GL_TEXTURE_MAG_FILTER, mag_filter,
-                GL_TEXTURE_WRAP_T, wrap_mode_s,
-                GL_TEXTURE_WRAP_S, wrap_mode_t,
-                GL_TEXTURE_BASE_LEVEL, mip_base_level,
-                GL_TEXTURE_MAX_LEVEL, mip_max_level 
-            });
+    GLenum wrap_mode_s {GL_CLAMP_TO_EDGE};
+    GLenum wrap_mode_t {GL_CLAMP_TO_EDGE};
+    GLenum wrap_mode_r {GL_CLAMP_TO_EDGE};
 
-            if (type == GL_TEXTURE_CUBE_MAP) {
-                v.insert(v.end(), {
-                    GL_TEXTURE_WRAP_R, wrap_mode_r
-                });
-            }
+    GLenum mip_base_level {0};
+    GLenum mip_max_level {0};
 
-            ASSERT((v.size() & 1) == 0);
+    GLenum texel_type {GL_UNSIGNED_BYTE};
 
-            return v;
-        }
-    };
+    uint32_t width {256};
+    uint32_t height {256};
+    uint32_t num_channels {4};
 
-    enum cubemap_preset {
-        cubemap_preset_test_room_0
-    };
-    
-    module_textures::params cubemap_params(uint32_t width, uint32_t height);
-    
-    module_textures::params cubemap_params(uint32_t width, uint32_t height, cubemap_preset preset);
+    uint8_t num_levels {1};
 
-    module_textures::params cubemap_params(uint32_t width, 
-                                           uint32_t height, 
-                                           uint32_t num_channels, 
-                                           cubemap_data data);
+    auto post() const {
+      ASSERT(num_levels == 1);
+      ASSERT(mip_base_level == 0);
+      ASSERT(mip_max_level == 0);
 
-    // designed for operations that don't involve gamma correct colors
-    module_textures::params texture2d_rgba_params( uint32_t width, 
-                                                   uint32_t height);
+      darray<GLenum> v;
 
-    module_textures::params depthtexture_params(uint32_t width, uint32_t height);
+      v.insert(v.end(), {
+        GL_TEXTURE_MIN_FILTER, min_filter,
+        GL_TEXTURE_MAG_FILTER, mag_filter,
+        GL_TEXTURE_WRAP_T, wrap_mode_s,
+        GL_TEXTURE_WRAP_S, wrap_mode_t,
+        GL_TEXTURE_BASE_LEVEL, mip_base_level,
+        GL_TEXTURE_MAX_LEVEL, mip_max_level
+      });
 
-    index_type new_texture(const module_textures::params& p);
+      if (type == GL_TEXTURE_CUBE_MAP) {
+        v.insert(v.end(), {
+          GL_TEXTURE_WRAP_R, wrap_mode_r
+        });
+      }
 
-    void fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data);
+      ASSERT((v.size() & 1) == 0);
 
-    void fill_texture2d(GLenum paramtype, index_type tid, const uint8_t* data);
+      return v;
+    }
+  };
 
-    GLenum format_from_channels(int channels) const;
-        
-    index_type new_cubemap(cubemap_paths_type paths);
+  enum cubemap_preset {
+    cubemap_preset_test_room_0
+  };
 
-    index_type handle(index_type i) const;
+  module_textures::params cubemap_params(uint32_t width, uint32_t height);
 
-    uint32_t width(index_type i) const;
-    uint32_t height(index_type i) const;
-    GLenum format(index_type i) const;
-    GLenum type(index_type i) const;
-    GLenum texel_type(index_type i) const;
+  module_textures::params cubemap_params(uint32_t width, uint32_t height, cubemap_preset preset);
 
-    uint32_t bytes_per_pixel(index_type i) const;
+  module_textures::params cubemap_params(uint32_t width,
+                                         uint32_t height,
+                                         uint32_t num_channels,
+                                         cubemap_data data);
 
-    
+  // designed for operations that don't involve gamma correct colors
+  module_textures::params texture2d_rgba_params(uint32_t width,
+                                                 uint32_t height);
+
+  module_textures::params depthtexture_params(uint32_t width, uint32_t height);
+
+  index_type new_texture(const module_textures::params& p);
+
+  void fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data);
+
+  void fill_texture2d(GLenum paramtype, index_type tid, const uint8_t* data);
+
+  GLenum format_from_channels(int channels) const;
+
+  index_type new_cubemap(cubemap_paths_type paths);
+
+  index_type handle(index_type i) const;
+
+  uint32_t width(index_type i) const;
+  uint32_t height(index_type i) const;
+  GLenum format(index_type i) const;
+  GLenum type(index_type i) const;
+  GLenum texel_type(index_type i) const;
+
+  uint32_t bytes_per_pixel(index_type i) const;
+
+
 };
 

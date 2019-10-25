@@ -33,7 +33,7 @@ struct module_models {
   using transform_fn_type = std::function<mat4_t(index_type model)>;
   using index_list_type = darray<index_type>;
   using predicate_fn_type = std::function<bool(const index_type&)>;
-    
+
   static const inline index_type k_uninit = -1;
 
   darray<model_type> model_types;
@@ -41,10 +41,10 @@ struct module_models {
   darray<index_type> vertex_counts;
   darray<model_material> material_info;
 
-  vec3_t model_select_reset_pos{glm::zero<vec3_t>()};
-    
+  vec3_t model_select_reset_pos {glm::zero<vec3_t>()};
+
   index_type model_count = 0;
-    
+
   index_type modind_tri = k_uninit;
   index_type modind_sphere = k_uninit;
   index_type modind_skybox = k_uninit;
@@ -52,7 +52,7 @@ struct module_models {
   index_type modind_selected = k_uninit;
 
   mutable bool framebuffer_pinned = false;
-    
+
   // It's assumed that vertices
   // have been already added to the vertex
   // buffer when this function is caglled,
@@ -63,7 +63,7 @@ struct module_models {
     model_type mt,
     index_type vbo_offset = 0,
     index_type num_vertices = 0,
-    model_material m = model_material{}) {
+    model_material m = model_material {}) {
 
     index_type id = static_cast<index_type>(model_count);
 
@@ -73,15 +73,15 @@ struct module_models {
     vertex_counts.push_back(num_vertices);
 
     material_info.push_back(m);
-    
+
     model_count++;
 
     g_m.vertex_buffer->reset();
 
     return id;
-  }    
-    
-  auto new_sphere(vec4_t color = vec4_t{R(1.0)}) {
+  }
+
+  auto new_sphere(vec4_t color = vec4_t {R(1.0)}) {
     auto offset = g_m.vertex_buffer->num_vertices();
 
     real_t step = 0.05f;
@@ -95,7 +95,7 @@ struct module_models {
       ret.z = glm::sin(theta) * glm::cos(phi);
       return ret;
     };
-      	
+
     for (real_t phi = -glm::half_pi<real_t>(); phi <= glm::half_pi<real_t>(); phi += step) {
       for (real_t theta = 0.0f; theta <= glm::two_pi<real_t>(); theta += step) {
         auto a = cart(phi, theta);
@@ -110,14 +110,14 @@ struct module_models {
         g_m.vertex_buffer->add_triangle(c, color, c,
                                         a, color, a,
                                         b, color, b);
-        
-	      count += 6;
+
+        count += 6;
       }
     }
 
     return new_model(model_sphere, offset, count);
   }
-    
+
   auto new_wall(
     wall_type type,
     const vec4_t& color = R4(1.0)) {
@@ -192,7 +192,7 @@ struct module_models {
     };
 
     auto vbo_offset = g_m.vertex_buffer->num_vertices();
-        
+
     real_t* offset = &vertices[type * 18];
 
     vec3_t normal = normals[type];
@@ -201,8 +201,8 @@ struct module_models {
     vec3_t b(offset[3], offset[4], offset[5]);
     vec3_t c(offset[6], offset[7], offset[8]);
 
-    g_m.vertex_buffer->add_triangle(a, color, normal, 
-				                         b, color, normal,
+    g_m.vertex_buffer->add_triangle(a, color, normal,
+                                 b, color, normal,
                                  c, color, normal);
 
     vec3_t d(offset[9], offset[10], offset[11]);
@@ -212,11 +212,11 @@ struct module_models {
     g_m.vertex_buffer->add_triangle(d, color, normal,
                             e, color, normal,
                             f, color, normal);
- 
+
     return new_model(model_quad,
                      vbo_offset,
                      6 // vertex count 
-                     );
+    );
   }
 
   auto new_cube(const vec4_t& color = vec4_t(1.0f)) {
@@ -272,7 +272,7 @@ struct module_models {
       vec3_t b(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
       vec3_t c(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
 
-      g_m.vertex_buffer->add_triangle( a, color,
+      g_m.vertex_buffer->add_triangle(a, color,
                                        b, color,
                                        c, color);
     }
@@ -286,15 +286,15 @@ struct module_models {
     if (g_m.programs->uniform("unif_Model") != -1) {
       g_m.programs->up_mat4x4("unif_Model", world);
     }
-	    
+
     g_m.programs->up_mat4x4("unif_ModelView", mv);
     g_m.programs->up_mat4x4("unif_Projection",
-        (model == modind_skybox
-          ? g_m.view->skyproj
-          : (framebuffer_pinned
-            ? g_m.view->cubeproj
-            : g_m.view->proj)));
-      
+      (model == modind_skybox
+       ? g_m.view->skyproj
+       : (framebuffer_pinned
+          ? g_m.view->cubeproj
+          : g_m.view->proj)));
+
     auto ofs = vertex_offsets[model];
     auto count = vertex_counts[model];
 

@@ -38,7 +38,7 @@ void assert_impl(bool cond,
 void logf_impl(int line,
                const char* func,
                const char* file,
-               const char* fmt, ... );
+               const char* fmt, ...);
 
 
 void report_gl_error(GLenum err,
@@ -50,5 +50,5 @@ void report_gl_error(GLenum err,
 GLuint make_shader(const char* source, GLenum type);
 
 GLuint make_program(std::vector<GLuint> shaders);
-                                          
+
 GLuint make_program(const char* vertex_src, const char* fragment_src);

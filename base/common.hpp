@@ -114,7 +114,7 @@ extern const real_t PI_OVER_6;
 
 #define OPENGL_VERSION_MAJOR_STR "4"
 #define OPENGL_VERSION_MINOR_STR "3"
- 
+
 struct vertex {
   vec3_t position;
   vec4_t color;
@@ -134,15 +134,15 @@ struct shader_uniform_storage;
 struct view_data;
 
 struct modules {
-  framebuffer_ops* framebuffer{nullptr};
-  module_programs* programs{nullptr};
-  module_textures* textures{nullptr};
-  module_geom* geom{nullptr};
-  module_models* models{nullptr};
-  module_vertex_buffer* vertex_buffer{nullptr};
-  scene_graph* graph{nullptr};
-  shader_uniform_storage* uniform_store{nullptr};
-  view_data* view{nullptr};
+  framebuffer_ops* framebuffer {nullptr};
+  module_programs* programs {nullptr};
+  module_textures* textures {nullptr};
+  module_geom* geom {nullptr};
+  module_models* models {nullptr};
+  module_vertex_buffer* vertex_buffer {nullptr};
+  scene_graph* graph {nullptr};
+  shader_uniform_storage* uniform_store {nullptr};
+  view_data* view {nullptr};
 
   void init();
   void free();
@@ -155,14 +155,14 @@ struct runtime_config {
   };
 
 #if CONFIG_QUAD_CLICK_CURSOR == 1
-  bool quad_click_cursor{true};
+  bool quad_click_cursor {true};
 #else
-  bool quad_click_cursor{false};
+  bool quad_click_cursor {false};
 #endif
 
-  bool fullscreen{false};
+  bool fullscreen {false};
 
-  drawmode dmode{drawmode_normal};
+  drawmode dmode {drawmode_normal};
 } extern g_conf;
 
 //extern std::vector<type_module*> g_modules;
@@ -176,7 +176,7 @@ static inline numType unset() {
 }
 
 static inline mat4_t m4i() {
-  return mat4_t{R(1)};
+  return mat4_t {R(1)};
 }
 
 
@@ -203,7 +203,7 @@ static inline std::vector<T> operator+(const std::vector<T>& a, const std::vecto
 
 template <class Type>
 static inline darray<Type> darray_clone(const darray<Type>& in) {
-  darray<Type> x{in.begin(), in.end()};
+  darray<Type> x {in.begin(), in.end()};
   return x;
 }
 
