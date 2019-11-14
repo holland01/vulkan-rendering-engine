@@ -9,6 +9,8 @@
 #include "scene_graph.hpp"
 #include "view_data.hpp"
 
+#include "gapi.hpp"
+
 #include <sstream>
 
 struct duniform;
@@ -141,7 +143,6 @@ static inline darray<duniform> duniform_toggle_quad() {
 // TODO:
 // make these more type safe
 struct gl_state {
-
   struct {
     bool framebuffer_srgb {true};
   } gamma {};
@@ -176,68 +177,6 @@ struct gl_state {
   struct {
     bool fbo {false};
   } draw_buffers;
-
-  void apply() const {
-    if (draw_buffers.fbo) {
-      GLenum b[] = {
-        GL_COLOR_ATTACHMENT0
-      };
-      GL_FN(glDrawBuffers(1, b));
-    }
-    else {
-      GLenum b[] = {
-        GL_BACK_LEFT
-      };
-      GL_FN(glDrawBuffers(1, b));
-    }
-
-    if (depth.test_enabled) {
-      GL_FN(glEnable(GL_DEPTH_TEST));
-      GL_FN(glDepthFunc(depth.func));
-    }
-    else {
-      GL_FN(glDisable(GL_DEPTH_TEST));
-    }
-
-    GL_FN(glDepthMask(depth.mask));
-    GL_FN(glDepthRange(depth.range_near, depth.range_far));
-
-    if (face_cull.enabled) {
-      GL_FN(glEnable(GL_CULL_FACE));
-      GL_FN(glCullFace(face_cull.face));
-      GL_FN(glFrontFace(face_cull.wnd_order));
-    }
-    else {
-      GL_FN(glDisable(GL_CULL_FACE));
-    }
-
-    if (clear_buffers.depth) {
-      GL_FN(glClearDepth(clear_buffers.depth_value));
-    }
-
-    if (clear_buffers.color) {
-      GL_FN(glClearColor(clear_buffers.color_value.r,
-                         clear_buffers.color_value.g,
-                         clear_buffers.color_value.b,
-                         clear_buffers.color_value.a));
-    }
-
-    if (gamma.framebuffer_srgb) {
-      GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
-    }
-    else {
-      GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
-    }
-
-    {
-      GLenum bits = 0;
-      bits = clear_buffers.color ? (bits | GL_COLOR_BUFFER_BIT) : bits;
-      bits = clear_buffers.depth ? (bits | GL_DEPTH_BUFFER_BIT) : bits;
-      if (bits != 0) {
-        GL_FN(glClear(bits));
-      }
-    }
-  }
 };
 
 struct bind_texture {
@@ -353,12 +292,12 @@ struct pass_info {
       switch (frametype) {
       case frame_user:
       {
-        state.apply();
+        g_m.gpu->apply_state(state);
         draw();
       } break;
 
       case frame_render_to_quad:
-        state.apply();
+        g_m.gpu->apply_state(state);
         GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
         break;
 
@@ -366,7 +305,7 @@ struct pass_info {
       {
         ASSERT(fbo_id != framebuffer_ops::k_uninit);
         g_m.framebuffer->fbos->bind(fbo_id);
-        state.apply();
+        g_m.gpu->apply_state(state);
         draw();
         g_m.framebuffer->fbos->unbind(fbo_id);
       } break;
@@ -379,7 +318,7 @@ struct pass_info {
 
         for (auto i = 0; i < 6; ++i) {
           g_m.view->bind_view(g_m.framebuffer->rcube->set_face(fbo_id, static_cast<framebuffer_ops::render_cube::axis>(i)));
-          state.apply();
+          g_m.gpu->apply_state(state);
           draw();
         }
 

@@ -25,6 +25,7 @@
 
 #include "render_pipeline.hpp"
 #include "device_context.hpp"
+#include "gapi.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -45,6 +46,8 @@ bool modules::init() {
   device_ctx = new device_context();
   
   if (device_ctx->init(SCREEN_WIDTH, SCREEN_HEIGHT)) {
+    gpu = new gapi::device();
+
     framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
     programs = new module_programs();
     textures = new module_textures();
@@ -72,6 +75,7 @@ void modules::free() {
     delete models;
     delete graph;
     delete vertex_buffer;
+    delete gpu;
   }
 
   delete device_ctx;

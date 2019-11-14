@@ -140,6 +140,10 @@ struct scene_graph;
 struct shader_uniform_storage;
 struct view_data;
 
+namespace gapi {
+class device;
+}
+
 class device_context;
 
 struct modules {
@@ -153,6 +157,7 @@ struct modules {
   shader_uniform_storage* uniform_store {nullptr};
   view_data* view {nullptr};
   device_context* device_ctx {nullptr};
+  gapi::device* gpu {nullptr};
 
   bool init();
   void free();
