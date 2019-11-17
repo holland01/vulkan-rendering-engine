@@ -254,7 +254,7 @@ struct pass_info {
 
   void apply() const {
     if (active) {
-      write_logf("pass: %s", name.c_str());
+      CLOG(logflag_render_pipeline_pass_info_apply, "pass: %s", name.c_str());
 
       if (frametype != frame_render_to_quad) {
         g_m.vertex_buffer->bind();
@@ -263,6 +263,7 @@ struct pass_info {
       use_program u(shader);
 
       for (const auto& bind: tex_bindings) {
+        CLOG(logflag_render_pipeline_pass_info_apply, "binding texture: %s", bind.to_string().c_str());
         g_m.textures->bind(bind.id, bind.slot);
       }
 

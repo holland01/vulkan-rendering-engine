@@ -34,12 +34,14 @@ module_textures::~module_textures() {
 }
 
 void module_textures::bind(module_textures::index_type id, int slot) const {
+  CLOG(logflag_textures_bind, "BINDING texture index %i with API handle %i @ slot %i\n", id, tex_handles[id], slot);
   slots[id] = static_cast<GLenum>(slot);
   GL_FN(glActiveTexture(GL_TEXTURE0 + slots[id]));
   GL_FN(glBindTexture(types[id], tex_handles[id]));
 }
 
 void module_textures::unbind(module_textures::index_type id) const {
+  CLOG(logflag_textures_bind, "UNBINDING texture index %i with API handle %i @ slot %i\n", id, tex_handles[id], slots[id]);
   GL_FN(glActiveTexture(GL_TEXTURE0 + slots.at(id)));
   GL_FN(glBindTexture(types[id], 0));
 }
