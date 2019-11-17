@@ -666,11 +666,10 @@ struct module_programs: public type_module {
 #endif
     ([&]() -> darray<std::string> {
     return darray<std::string> {
-      "unif_Model",
-        "unif_ModelView",
-        "unif_Projection",
-        "unif_TexCubeMap",
-        "unif_CameraPosition"
+      "unif_ModelView",
+      "unif_Projection",
+      "unif_TexCubeMap",
+      "unif_CameraPosition"
     };
   })(),
   {
