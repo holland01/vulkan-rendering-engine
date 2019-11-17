@@ -522,8 +522,8 @@ struct module_programs: public type_module {
       gen_vshader(0, "single_color"),
       gen_fshader(fshader_unif_color, {}, "single_color"),
       uniform_location_mv_proj() +
-      uniform_location_color() +
-    uniform_location_toggle_quad(),
+      uniform_location_color() /*+
+      uniform_location_toggle_quad()*/,
   {
     attrib_layout_position()
   }
