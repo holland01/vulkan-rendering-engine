@@ -10,11 +10,13 @@ static std::vector<std::string> g_gl_err_msg_cache;
 
 static std::vector<std::string> g_msg_cache;
 
+static constexpr bool g_cache_disabled = true;
+
 static void maybe_print(std::vector<std::string>& cache, const std::string& msg, int line, const char* func, const char* file) {
 
-  if (std::find(cache.begin(),
-                cache.end(),
-                msg)  == cache.end()) {
+  if (g_cache_disabled || std::find(cache.begin(),
+                          cache.end(),
+                          msg)  == cache.end()) {
 
     fprintf(stdout, "\n[ %s@%s:%i ]: ", func, file, line);
     printf("%s", msg.c_str());
