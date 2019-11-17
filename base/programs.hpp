@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.hpp"
+#include "gapi.hpp"
 #include <inttypes.h>
 #include <unordered_map>
 
@@ -683,7 +684,7 @@ struct module_programs: public type_module {
     std::unordered_map<std::string, GLint> uniforms;
     attrib_map_type attribs;
 
-    GLuint handle;
+    gapi::linked_program_handle handle;
   };
 
   std::unordered_map<std::string, std::unique_ptr<program>> data;
@@ -716,14 +717,28 @@ struct module_programs: public type_module {
     for (const auto& def: defs) {
       auto p = std::make_unique<program>();
 
-      p->handle = make_program(def.vertex.c_str(), def.fragment.c_str());
+      p->handle = g_m.gpu->make_program(def.vertex, def.fragment);
 
-      for (auto unif: def.uniforms) {
-        GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle, unif.c_str()));
+      CLOG(logflag_programs_load, "loading program %s\n", def.name.c_str());
+
+      if (p->handle) {
+        for (auto unif: def.uniforms) {
+          GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle.value_as<GLuint>(), unif.c_str()));
+
+          CLOG(logflag_programs_load, "\tuniform %s -> %i\n", unif.c_str(), p->uniforms[unif]);
+
+          if (p->uniforms[unif] == -1) {
+            __FATAL__("Uniform location fetch failure for %s@%s\n", 
+                      unif.c_str(), 
+                      def.name.c_str());
+          }
+        }
+
+        p->attribs = def.attribs;
+        data[def.name] = std::move(p);
+      } else {
+        __FATAL__("Could not successfully link program %s\n", def.name.c_str());
       }
-
-      p->attribs = def.attribs;
-      data[def.name] = std::move(p);
     }
   }
 
@@ -816,20 +831,26 @@ struct module_programs: public type_module {
 // Make sure the VBO is bound BEFORE
 // this is initialized
 struct use_program {
-  GLuint prog;
+  CLOG_CODE(std::string clog_name;)
+  gapi::linked_program_ref prog;
 
   use_program(const std::string& name)
-    : prog(g_m.programs->get(name)->handle){
+    : CLOG_CODE(clog_name(name)),
+      prog(g_m.programs->get(name)->handle) {
 
     g_m.programs->make_current(name);
     g_m.programs->load_layout();
+    CLOG(logflag_programs_use_program, "setting current program: %s\n", clog_name.c_str());
+    g_m.gpu->use_program(prog);
 
-    GL_FN(glUseProgram(prog));
+   // GL_FN(glUseProgram(prog));
   }
 
   ~use_program() {
+    CLOG(logflag_programs_use_program, "releasing current program: %s\n", clog_name.c_str());
     g_m.programs->unload_layout();
-    GL_FN(glUseProgram(0));
+    g_m.gpu->use_program(gapi::k_null_program);
+   // GL_FN(glUseProgram(0));
   }
 };
 
