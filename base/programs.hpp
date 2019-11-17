@@ -509,8 +509,8 @@ struct module_programs: public type_module {
   darray<programdef> defs = {
     {
       "basic",
-      gen_vshader(vshader_frag_color),
-      gen_fshader(fshader_frag_color),
+      gen_vshader(vshader_frag_color, "basic"),
+      gen_fshader(fshader_frag_color, {}, "basic"),
       uniform_location_mv_proj(),
   {
     attrib_layout_position(),
@@ -519,8 +519,8 @@ struct module_programs: public type_module {
     },
     {
       "single_color",
-      gen_vshader(0),
-      gen_fshader(fshader_unif_color),
+      gen_vshader(0, "single_color"),
+      gen_fshader(fshader_unif_color, {}, "single_color"),
       uniform_location_mv_proj() +
       uniform_location_color() +
     uniform_location_toggle_quad(),
@@ -530,11 +530,11 @@ struct module_programs: public type_module {
     },
     {
       "main",
-      gen_vshader(VSHADER_POINTLIGHTS),
+      gen_vshader(VSHADER_POINTLIGHTS, "main"),
 
       gen_fshader(FSHADER_POINTLIGHTS,
                   {NUM_LIGHTS,
-                  true}),
+                  true}, "main"),
                   ([&]() -> darray<std::string> {
     return darray<std::string> {
       "unif_ModelView",
@@ -592,7 +592,7 @@ struct module_programs: public type_module {
        "cubemap",
 
        gen_vshader(VSHADER_POINTLIGHTS |
-       vshader_frag_texcoord),
+       vshader_frag_texcoord, "cubemap"),
 
     gen_fshader(FSHADER_POINTLIGHTS |
                 fshader_frag_texcoord |
@@ -600,7 +600,7 @@ struct module_programs: public type_module {
                 {
                 NUM_LIGHTS,
                 true        // invert normals
-                }),
+                }, "cubemap"),
               ([&]() -> darray<std::string>  {
     return darray<std::string>{
       "unif_ModelView",
@@ -641,7 +641,7 @@ struct module_programs: public type_module {
     frag_Position = vec3(unif_Model * vec4(in_Position, 1.0));
   }),
 #else
-      gen_vshader(vshader_in_normal | vshader_frag_pos_color_normal()),
+      gen_vshader(vshader_in_normal | vshader_frag_pos_color_normal(), "reflection_sphere_cubemap"),
 #endif           
 
 #if 0      
@@ -661,9 +661,8 @@ struct module_programs: public type_module {
     fb_Color = x;
   }),
 #else
-      gen_fshader(fshader_pos_color_normal() |
-      fshader_unif_texcubemap |
-                  fshader_reflect),
+      gen_fshader(fshader_pos_color_normal() | fshader_unif_texcubemap | fshader_reflect, {},
+                  "reflection_sphere_cubemap"),
 #endif
     ([&]() -> darray<std::string> {
     return darray<std::string> {
