@@ -1,5 +1,11 @@
 #include "util.hpp"
 
+unsigned long long g_log_mask = 
+  logflag_programs_load | 
+  logflag_programs_use_program | 
+  logflag_textures_bind | 
+  logflag_render_pipeline_pass_info_apply;
+
 static std::vector<std::string> g_gl_err_msg_cache;
 
 static std::vector<std::string> g_msg_cache;

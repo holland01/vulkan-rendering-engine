@@ -12,7 +12,25 @@
 
 #include <inttypes.h>
 
+
+// We use the set of flags shown here to group/categorize
+// arbitrary log function calls. For any flag defined, simply add it 
+// as a bitwise OR to the variable g_log_mask (initialized in base/util.cpp).
+// Then invoke the CLOG() macro defined below, with the flag set as its first parameter.
+ 
+extern unsigned long long g_log_mask;
+
+enum {
+  logflag_programs_load = 1 << 0,
+  logflag_programs_use_program = 1 << 1,
+  logflag_textures_bind = 1 << 2,
+  logflag_render_pipeline_pass_info_apply = 1 << 3
+};
+
 #define write_logf(...) logf_impl(__LINE__, __func__, __FILE__, __VA_ARGS__) 
+
+#define CLOG(flag, ...) do { if ((g_log_mask & (flag)) != 0) { write_logf("CLOG|" __VA_ARGS__); } } while (0)
+#define CLOG_CODE(code) code
 
 // Macro'd out incase non-c++17 compilers are used.
 #define STATIC_IF(cond) if constexpr ((cond))
