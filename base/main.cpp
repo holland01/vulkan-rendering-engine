@@ -325,10 +325,16 @@ static void init_render_passes() {
     auto shader = g_m.programs->skybox;
 
     auto init = []() {
-      g_m.framebuffer->rcube->faces[0] =
-        g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS,
-                                                  TEST_SPHERE_RADIUS);
-      g_frame_model_map[g_m.models->modind_sphere].needs_render = true;
+      // zero index works for now, but only because
+      // we have only one environment map setup in the scene currently.
+      ASSERT(g_m.framebuffer->rcube->faces.size() == 1);
+      g_m.framebuffer->rcube->faces[0] = 
+        g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
+      
+      g_frame_model_map[
+        g_m.models->modind_sphere
+      ].needs_render = true;
+
       shader_pointlight_update();
     };
 
