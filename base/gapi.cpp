@@ -328,7 +328,20 @@ namespace gapi {
       compile_shader(fshader);
 
       if (compile_shader_success(fshader)) {
-        
+        attach_shader(program_ret, vshader);
+        attach_shader(program_ret, fshader);
+
+        link_program(program_ret);
+
+        detach_shader(program_ret, vshader);
+        detach_shader(program_ret, fshader);
+
+        if (!link_program_success(program_ret)) {
+          delete_program(program_ret);
+        }
+
+        delete_shader(vshader);
+        delete_shader(fshader);
       }
       else {
         delete_shader(vshader);
