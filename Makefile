@@ -5,6 +5,10 @@ SRC = $(wildcard base/*.cpp)
 OFILES = $(SRC:.cpp=.o)
 OBJ = $(subst base,obj,$(OFILES))
 
+SRC_BACKEND = $(wildcard base/backend/*.cpp)
+OFILES_BACKEND = $(SRC_BACKEND:.cpp=.o)
+OBJ := $(OBJ) $(subst base/backend,obj,$(OFILES_BACKEND))
+
 SRC_C = $(wildcard base/*.c)
 OFILES_C = $(SRC_C:.c=.o)
 OBJ_C = $(subst base,obj,$(OFILES_C))
@@ -16,7 +20,7 @@ LIBS += $(shell pkg-config --libs glew)
 LIBS += -lstdc++fs
 
 CPPFLAGS=-I./base -DGLM_ENABLE_EXPERIMENTAL
-CXXFLAGS=-std=c++17
+CXXFLAGS=-std=c++17 -Wall -Wpedantic -Werror -Wno-unused-function
 CFLAGS=
 
 ifdef DEBUG
@@ -48,7 +52,11 @@ $(OUT): $(OBJ) $(OBJ_C)
 	@printf "\e[33mLinking\e[90m %s\e[0m\n" $@
 	@printf "\e[34mDone!\e[0m\n"
 
-obj/%.o: base/%.cpp
+obj/%.o: base/%.cpp 
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	@printf "\e[36mCompile\e[90m %s\e[0m\n" $@
+
+obj/%.o: base/backend/%.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 	@printf "\e[36mCompile\e[90m %s\e[0m\n" $@
 
