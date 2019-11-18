@@ -134,8 +134,8 @@ struct framebuffer_ops {
         // we need to make sure we know why. 
 
         GLint attach;
-      glGetIntegerv(GL_READ_BUFFER, &attach);
-      ASSERT(attach == GL_COLOR_ATTACHMENT0);
+        glGetIntegerv(GL_READ_BUFFER, &attach);
+        ASSERT(attach == GL_COLOR_ATTACHMENT0);
       );
 
       GL_FN(glReadBuffer(GL_COLOR_ATTACHMENT0));
@@ -150,9 +150,9 @@ struct framebuffer_ops {
       unbind(handle);
 
       return {buffer,
-        g_m.textures->width(C),
-        g_m.textures->height(C),
-        g_m.textures->bytes_per_pixel(C)};
+              g_m.textures->width(C),
+              g_m.textures->height(C),
+              g_m.textures->bytes_per_pixel(C)};
     }
 
     void unbind(index_type handle) const {

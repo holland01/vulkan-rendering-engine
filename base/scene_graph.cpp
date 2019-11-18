@@ -67,14 +67,14 @@ scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
     // but more importantly we're calling trypick()
     // with unexpected input.
     ASSERT(!pickbufferdata.empty());
-  u8vec4_t clear_pixel(0, 0, 0, 255);
+    u8vec4_t clear_pixel(0, 0, 0, 255);
 
-  // If is_clear_color() returns true, then we know that
-  // the framebuffer only contains whatever the color buffer 
-  // attachment was cleared with. This means that whatever the user is
-  // seeing isn't being copied into the buffer properly.
-  ASSERT(!pickbufferdata.is_clear_color(clear_pixel))
-    );
+    // If is_clear_color() returns true, then we know that
+    // the framebuffer only contains whatever the color buffer 
+    // attachment was cleared with. This means that whatever the user is
+    // seeing isn't being copied into the buffer properly.
+    ASSERT(!pickbufferdata.is_clear_color(clear_pixel))
+  );
 
   u8vec4_t pixel = pickbufferdata.get(x, y);
 
