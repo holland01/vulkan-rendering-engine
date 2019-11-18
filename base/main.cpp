@@ -684,8 +684,6 @@ static void init_api_data() {
                                                            256,
                                                            module_textures::cubemap_preset_test_room_0));
 
-  real_t wall_size = R(15.0);
-
   g_m.vertex_buffer->reset();
 
   {
@@ -757,7 +755,6 @@ static void init_api_data() {
 }
 
 static darray<uint8_t> g_debug_cubemap_buf;
-static module_textures::index_type g_debug_cm_index {module_textures::k_uninit};
 
 #define screen_cube_depth(k) (g_m.framebuffer->width * g_m.framebuffer->height * 4 * (k))
 
@@ -1002,12 +999,6 @@ public:
 
     real_t ndc_depth = opos_clip.z / opos_clip.w;
 
-    module_geom::plane P {
-      opos_view.z, // d 
-      V3_BACKWARD, // normal
-      opos_view
-    };
-
     vec4_t t {screen_out(opos_clip.z, ndc_depth)};
 
     g_obj_manip->move(g_obj_manip->selected(), t, object_manip::mop_set);
@@ -1217,7 +1208,7 @@ struct eventpath {
 
   void trace(cont_type in) const {
     std::stringstream ss;
-    auto i = 0;
+    size_t i = 0;
     for (const auto& p: in) {
       ss << p;
       if (i < in.size() - 1) {

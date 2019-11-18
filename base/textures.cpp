@@ -167,7 +167,7 @@ module_textures::index_type module_textures::new_texture(const module_textures::
 
   auto iterable = p.post();
 
-  for (auto i = 0; i < iterable.size(); i += 2ULL) {
+  for (size_t i = 0; i < iterable.size(); i += 2ULL) {
     GL_FN(glTexParameteri(p.type, iterable[i], iterable[i + 1ULL]));
   }
 
@@ -251,7 +251,7 @@ void module_textures::fill_texture2d(GLenum paramtype, index_type tid, const uin
 }
 
 GLenum module_textures::format_from_channels(int channels) const {
-  GLenum format = -1;
+  GLenum format = static_cast<GLenum>(-1);
 
   switch (channels) {
   case 4:
@@ -262,7 +262,7 @@ GLenum module_textures::format_from_channels(int channels) const {
     break;
   }
 
-  ASSERT(format != -1);
+  ASSERT(format != static_cast<GLenum>(-1));
 
   return format;
 }
@@ -364,15 +364,12 @@ GLenum module_textures::texel_type(index_type i) const {
 
 uint32_t module_textures::bytes_per_pixel(index_type i) const {
 
-  uint32_t r = 1;
   switch (internal_formats[i]) {
   case GL_RGBA:
   case GL_RGBA8:
   case GL_SRGB8_ALPHA8:
-    r = 4;
     break;
   case GL_DEPTH_COMPONENT:
-    r = 4;
     break;
   default:
     __FATAL__("unexpected format found: 0x% " PRIx64,

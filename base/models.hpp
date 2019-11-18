@@ -267,7 +267,7 @@ struct module_models {
 
     auto offset = g_m.vertex_buffer->num_vertices();
 
-    for (auto i = 0; i < vertices.size(); i += 9) {
+    for (size_t i = 0; i < vertices.size(); i += 9) {
       vec3_t a(vertices[i + 0], vertices[i + 1], vertices[i + 2]);
       vec3_t b(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
       vec3_t c(vertices[i + 6], vertices[i + 7], vertices[i + 8]);

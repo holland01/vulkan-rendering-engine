@@ -3,8 +3,8 @@
 #include <iostream>
 
 scene_graph::scene_graph()
-  : test_indices(),
-  pickfbo(g_m.framebuffer->add_fbo(g_m.framebuffer->width, g_m.framebuffer->height))
+  : pickfbo(g_m.framebuffer->add_fbo(g_m.framebuffer->width, g_m.framebuffer->height)),
+    test_indices()
 {
   // root initialization
   bound_volumes.push_back(module_geom::bvol {});
@@ -42,7 +42,7 @@ scene_graph::index_type scene_graph::new_node(const scene_graph::init_info& info
   pickable.push_back(info.pickable);
 
   ASSERT(info.parent != unset<index_type>());
-  ASSERT(info.parent < child_lists.size());
+  ASSERT(static_cast<size_t>(info.parent) < child_lists.size());
 
   child_lists[info.parent].push_back(index);
 
@@ -67,14 +67,14 @@ scene_graph::index_type scene_graph::trypick(int32_t x, int32_t y) {
     // but more importantly we're calling trypick()
     // with unexpected input.
     ASSERT(!pickbufferdata.empty());
-  u8vec4_t clear_pixel(0, 0, 0, 255);
+    u8vec4_t clear_pixel(0, 0, 0, 255);
 
-  // If is_clear_color() returns true, then we know that
-  // the framebuffer only contains whatever the color buffer 
-  // attachment was cleared with. This means that whatever the user is
-  // seeing isn't being copied into the buffer properly.
-  ASSERT(!pickbufferdata.is_clear_color(clear_pixel))
-    );
+    // If is_clear_color() returns true, then we know that
+    // the framebuffer only contains whatever the color buffer 
+    // attachment was cleared with. This means that whatever the user is
+    // seeing isn't being copied into the buffer properly.
+    ASSERT(!pickbufferdata.is_clear_color(clear_pixel))
+  );
 
   u8vec4_t pixel = pickbufferdata.get(x, y);
 
@@ -121,10 +121,16 @@ void scene_graph::make_node_id(scene_graph::index_type node, int depth) {
 
     auto parent = parent_nodes[inode];
 
-    auto offset = 0;
+    index_type offset = 0;
     {
       const auto& children = child_lists[parent];
-      while (offset < children.size() && children[offset] != inode) offset++;
+      index_type child_sz = static_cast<index_type>(children.size());
+
+      // Make sure we aren't chopping off any bits.
+      ASSERT(static_cast<size_t>(child_sz) == children.size());
+
+      while (offset < child_sz && children[offset] != inode) offset++;
+
       ASSERT(children[offset] == inode);
     }
     nid.levels[counter] = offset;
@@ -244,15 +250,15 @@ int scene_graph::depth(scene_graph::index_type node) const {
 }
 
 void scene_graph::select_draw(predicate_fn_type func) {
-  for (auto i = 1; i < child_lists.size(); ++i) {
-    draw[i] = func(i);
+  for (size_t i = 1; i < child_lists.size(); ++i) {
+    draw[i] = func(static_cast<index_type>(i));
   }
   ASSERT(draw[k_root] == false);
 }
 
 darray<scene_graph::index_type> scene_graph::select(predicate_fn_type func) const {
   darray<index_type> ret;
-  for (auto i = 0; i < child_lists.size(); ++i) {
+  for (size_t i = 0; i < child_lists.size(); ++i) {
     auto e = static_cast<index_type>(i);
     if (func(e)) {
       ret.push_back(e);

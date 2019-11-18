@@ -134,8 +134,8 @@ struct framebuffer_ops {
         // we need to make sure we know why. 
 
         GLint attach;
-      glGetIntegerv(GL_READ_BUFFER, &attach);
-      ASSERT(attach == GL_COLOR_ATTACHMENT0);
+        glGetIntegerv(GL_READ_BUFFER, &attach);
+        ASSERT(attach == GL_COLOR_ATTACHMENT0);
       );
 
       GL_FN(glReadBuffer(GL_COLOR_ATTACHMENT0));
@@ -150,9 +150,9 @@ struct framebuffer_ops {
       unbind(handle);
 
       return {buffer,
-        g_m.textures->width(C),
-        g_m.textures->height(C),
-        g_m.textures->bytes_per_pixel(C)};
+              g_m.textures->width(C),
+              g_m.textures->height(C),
+              g_m.textures->bytes_per_pixel(C)};
     }
 
     void unbind(index_type handle) const {
@@ -162,12 +162,12 @@ struct framebuffer_ops {
 
       ASSERT_CODE(
         GLint viewport[4] = {0};
-      GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
+        GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
 
-      ASSERT(viewport[0] == 0);
-      ASSERT(viewport[1] == 0);
-      ASSERT(viewport[2] == widths[handle]);
-      ASSERT(viewport[3] == heights[handle]);
+        ASSERT(viewport[0] == 0);
+        ASSERT(viewport[1] == 0);
+        ASSERT(static_cast<uint32_t>(viewport[2]) == widths[handle]);
+        ASSERT(static_cast<uint32_t>(viewport[3]) == heights[handle]);
       );
 
       GL_FN(glViewport(0, 0, self.width, self.height));
