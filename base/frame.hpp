@@ -162,12 +162,12 @@ struct framebuffer_ops {
 
       ASSERT_CODE(
         GLint viewport[4] = {0};
-      GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
+        GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
 
-      ASSERT(viewport[0] == 0);
-      ASSERT(viewport[1] == 0);
-      ASSERT(viewport[2] == widths[handle]);
-      ASSERT(viewport[3] == heights[handle]);
+        ASSERT(viewport[0] == 0);
+        ASSERT(viewport[1] == 0);
+        ASSERT(static_cast<uint32_t>(viewport[2]) == widths[handle]);
+        ASSERT(static_cast<uint32_t>(viewport[3]) == heights[handle]);
       );
 
       GL_FN(glViewport(0, 0, self.width, self.height));

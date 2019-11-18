@@ -87,15 +87,15 @@ public:
       explicit __type__##_handle (handle_int_t v = 0) : handle(handle_type::__type__, v) {} \
   };                                                                                        \
   typedef const __type__##_handle& __type__##_ref;                                          \
-  typedef __type__##_handle& __type__##_mut_ref;
+  typedef __type__##_handle& __type__##_mut_ref
 
 #define DEF_HANDLE_TYPE_MIXIN(__type__, __mixin__) \
-  class __type__##_handle : public __mixin__, public handle {                                                 \
+  class __type__##_handle : public __mixin__, public handle {                               \
     public:                                                                                 \
       explicit __type__##_handle (handle_int_t v = 0) : handle(handle_type::__type__, v) {} \
   };                                                                                        \
   typedef const __type__##_handle& __type__##_ref;                                          \
-  typedef __type__##_handle& __type__##_mut_ref;
+  typedef __type__##_handle& __type__##_mut_ref
 
 struct compiled_shader_traits {
   std::string source;
