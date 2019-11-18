@@ -364,18 +364,20 @@ GLenum module_textures::texel_type(index_type i) const {
 
 uint32_t module_textures::bytes_per_pixel(index_type i) const {
 
-  switch (internal_formats[i]) {
-  case GL_RGBA:
-  case GL_RGBA8:
-  case GL_SRGB8_ALPHA8:
-    break;
-  case GL_DEPTH_COMPONENT:
-    break;
-  default:
-    __FATAL__("unexpected format found: 0x% " PRIx64,
-              internal_formats[i]);
-    break;
-  }
+  ASSERT_CODE(
+    switch (internal_formats[i]) {
+    case GL_RGBA:
+    case GL_RGBA8:
+    case GL_SRGB8_ALPHA8:
+    case GL_DEPTH_COMPONENT:
+      break;
+      
+    default:
+      __FATAL__("unexpected format found: 0x% " PRIx64,
+                internal_formats[i]);
+      break;
+    }
+  );
 
   return num_channels.at(i);
 }
