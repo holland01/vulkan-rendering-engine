@@ -684,7 +684,7 @@ struct module_programs: public type_module {
     std::unordered_map<std::string, GLint> uniforms;
     attrib_map_type attribs;
 
-    gapi::linked_program_handle handle;
+    gapi::program_handle handle;
   };
 
   std::unordered_map<std::string, std::unique_ptr<program>> data;
@@ -832,7 +832,7 @@ struct module_programs: public type_module {
 // this is initialized
 struct use_program {
   CLOG_CODE(std::string clog_name;)
-  gapi::linked_program_ref prog;
+  gapi::program_ref prog;
 
   use_program(const std::string& name)
     : CLOG_CODE(clog_name(name)),

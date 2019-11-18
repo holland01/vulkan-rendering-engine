@@ -18,7 +18,7 @@ enum class backend : uint8_t {
 enum class handle_type {
   undefined = 0,
   compiled_shader,
-  linked_program,
+  program,
   vertex_binding_desc,
   buffer_object,
   framebuffer_object,
@@ -102,7 +102,7 @@ struct compiled_shader_traits {
 };
 
 DEF_HANDLE_TYPE_MIXIN(compiled_shader, compiled_shader_traits);
-DEF_HANDLE_TYPE(linked_program);
+DEF_HANDLE_TYPE(program);
 DEF_HANDLE_TYPE(vertex_binding_desc);
 DEF_HANDLE_TYPE(buffer_object);
 DEF_HANDLE_TYPE(framebuffer_object);
@@ -117,16 +117,15 @@ public:
 
   // shaders
 
-
   compiled_shader_handle create_shader(shader_type type);
 
   void delete_shader(compiled_shader_mut_ref program);
 
-  void attach_shader(linked_program_ref program, 
+  void attach_shader(program_ref program, 
                      compiled_shader_ref shader);
 
 
-  void detach_shader(linked_program_ref program,
+  void detach_shader(program_ref program,
                      compiled_shader_ref shader);
 
 
@@ -139,21 +138,21 @@ public:
 
   // programs
 
-  linked_program_handle create_program();
+  program_handle create_program();
 
-  void delete_program(linked_program_mut_ref program);
+  void delete_program(program_mut_ref program);
 
-  void link_program(linked_program_ref program);
+  void link_program(program_ref program);
 
-  bool link_program_success(linked_program_mut_ref program);
+  bool link_program_success(program_mut_ref program);
 
-  void use_program(linked_program_ref program);
+  void use_program(program_ref program);
 
-  linked_program_handle make_program(const std::string& vertex, 
+  program_handle make_program(const std::string& vertex, 
                                      const std::string& fragment);
 };
 
-extern const linked_program_handle k_null_program;
+extern const program_handle k_null_program;
 
 struct state {
 

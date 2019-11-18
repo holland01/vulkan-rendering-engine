@@ -9,7 +9,7 @@
 
 namespace gapi {
   static constexpr handle_int_t k_null_value{std::numeric_limits<handle_int_t>::max()};
-  const linked_program_handle k_null_program{k_null_value};
+  const program_handle k_null_program{k_null_value};
 
   void device::apply_state(const gl_state& s) {
     if (s.draw_buffers.fbo) {
@@ -131,7 +131,7 @@ namespace gapi {
     );
   }
 
-  void device::attach_shader( linked_program_ref program, 
+  void device::attach_shader( program_ref program, 
                               compiled_shader_ref shader) {
     program.assert_ok();
     shader.assert_ok();
@@ -144,7 +144,7 @@ namespace gapi {
     );
   }
 
-  void device::detach_shader( linked_program_ref program,
+  void device::detach_shader( program_ref program,
                               compiled_shader_ref shader) {
     program.assert_ok();
     shader.assert_ok();
@@ -222,11 +222,11 @@ namespace gapi {
   }
 
   //-------------------------------
-  // linked_program_handle
+  // program_handle
   //-------------------------------
 
-  linked_program_handle device::create_program() {
-    linked_program_handle h{0};
+  program_handle device::create_program() {
+    program_handle h{0};
 
     APISEL(
       GLuint program = 0;
@@ -239,7 +239,7 @@ namespace gapi {
     return h;
   }
 
-  void device::delete_program(linked_program_mut_ref program) {
+  void device::delete_program(program_mut_ref program) {
     program.assert_ok();
 
     APISEL(
@@ -250,7 +250,7 @@ namespace gapi {
     );
   }
 
-  void device::link_program(linked_program_ref program) {
+  void device::link_program(program_ref program) {
     program.assert_ok();
 
     APISEL(
@@ -260,7 +260,7 @@ namespace gapi {
     );
   }
 
-  bool device::link_program_success(linked_program_mut_ref program) {
+  bool device::link_program_success(program_mut_ref program) {
     program.assert_ok();
 
     bool ret = true;
@@ -298,7 +298,7 @@ namespace gapi {
     return ret;
   }
 
-  void device::use_program(linked_program_ref program) {
+  void device::use_program(program_ref program) {
     program.assert_ok();
 
     APISEL(
@@ -310,9 +310,9 @@ namespace gapi {
     );
   }
 
-  linked_program_handle device::make_program(const std::string& vertex, 
+  program_handle device::make_program(const std::string& vertex, 
                                              const std::string& fragment) {
-    linked_program_handle program_ret = create_program();
+    program_handle program_ret = create_program();
 
     compiled_shader_handle vshader = 
       create_shader(shader_type::vertex);
