@@ -17,7 +17,7 @@ enum class backend : uint8_t {
 
 enum class handle_type {
   undefined = 0,
-  compiled_shader,
+  program_unit,
   program,
   vertex_binding_desc,
   buffer_object,
@@ -97,11 +97,11 @@ public:
   typedef const __type__##_handle& __type__##_ref;                                          \
   typedef __type__##_handle& __type__##_mut_ref
 
-struct compiled_shader_traits {
+struct program_unit_traits {
   std::string source;
 };
 
-DEF_HANDLE_TYPE_MIXIN(compiled_shader, compiled_shader_traits);
+DEF_HANDLE_TYPE_MIXIN(program_unit, program_unit_traits);
 DEF_HANDLE_TYPE(program);
 DEF_HANDLE_TYPE(vertex_binding_desc);
 DEF_HANDLE_TYPE(buffer_object);
@@ -117,23 +117,23 @@ public:
 
   // shaders
 
-  compiled_shader_handle create_shader(shader_type type);
+  program_unit_handle create_shader(shader_type type);
 
-  void delete_shader(compiled_shader_mut_ref program);
+  void delete_shader(program_unit_mut_ref program);
 
   void attach_shader(program_ref program, 
-                     compiled_shader_ref shader);
+                     program_unit_ref shader);
 
 
   void detach_shader(program_ref program,
-                     compiled_shader_ref shader);
+                     program_unit_ref shader);
 
 
-  void compile_shader(compiled_shader_ref shader);
+  void compile_shader(program_unit_ref shader);
 
-  bool compile_shader_success(compiled_shader_mut_ref shader);
+  bool compile_shader_success(program_unit_mut_ref shader);
 
-  void set_shader_source( compiled_shader_mut_ref shader, 
+  void set_shader_source( program_unit_mut_ref shader, 
                           const std::string& source);
 
   // programs

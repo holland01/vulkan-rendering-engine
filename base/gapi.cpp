@@ -88,11 +88,11 @@ namespace gapi {
   }
 
   //-------------------------------
-  // compiled_shader_handle
+  // program_unit_handle
   //-------------------------------
 
-  compiled_shader_handle device::create_shader(shader_type type) {
-    compiled_shader_handle h{0};
+  program_unit_handle device::create_shader(shader_type type) {
+    program_unit_handle h{0};
 
     APISEL(
       GLenum gltype = 0;
@@ -120,7 +120,7 @@ namespace gapi {
     return h;
   }
 
-  void device::delete_shader(compiled_shader_mut_ref shader) {
+  void device::delete_shader(program_unit_mut_ref shader) {
     shader.assert_ok();
 
     APISEL(
@@ -132,7 +132,7 @@ namespace gapi {
   }
 
   void device::attach_shader( program_ref program, 
-                              compiled_shader_ref shader) {
+                              program_unit_ref shader) {
     program.assert_ok();
     shader.assert_ok();
 
@@ -145,7 +145,7 @@ namespace gapi {
   }
 
   void device::detach_shader( program_ref program,
-                              compiled_shader_ref shader) {
+                              program_unit_ref shader) {
     program.assert_ok();
     shader.assert_ok();
 
@@ -157,7 +157,7 @@ namespace gapi {
     );
   }
 
-  void device::compile_shader(compiled_shader_ref shader) {
+  void device::compile_shader(program_unit_ref shader) {
     shader.assert_ok();
 
     APISEL(
@@ -167,7 +167,7 @@ namespace gapi {
     );
   }
 
-  bool device::compile_shader_success(compiled_shader_mut_ref shader) {
+  bool device::compile_shader_success(program_unit_mut_ref shader) {
     shader.assert_ok();
 
     bool ret = true;
@@ -203,7 +203,7 @@ namespace gapi {
     return ret;
   }
 
-  void device::set_shader_source( compiled_shader_mut_ref shader, 
+  void device::set_shader_source( program_unit_mut_ref shader, 
                                   const std::string& source) {
     shader.assert_ok();
 
@@ -314,14 +314,14 @@ namespace gapi {
                                              const std::string& fragment) {
     program_handle program_ret = create_program();
 
-    compiled_shader_handle vshader = 
+    program_unit_handle vshader = 
       create_shader(shader_type::vertex);
     
     set_shader_source(vshader, vertex);
     compile_shader(vshader);
 
     if (compile_shader_success(vshader)) {
-      compiled_shader_handle fshader = 
+      program_unit_handle fshader = 
         create_shader(shader_type::fragment);
       
       set_shader_source(fshader, fragment);
