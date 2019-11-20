@@ -302,7 +302,7 @@ namespace gapi {
     program.assert_ok();
 
     APISEL(
-      GL_FN(glUseProgram(program.value() != k_null_value 
+      GL_FN(glUseProgram(program != k_null_program 
                           ? program.value_as<GLuint>()
                           : 0));
       ,

@@ -4,10 +4,9 @@
 
 struct gl_state;
 
-
 namespace gapi {
 
-using handle_int_t = uint32_t;
+using handle_int_t = int64_t;
 using int_t = int64_t;
 
 enum class backend : uint8_t {
@@ -17,6 +16,7 @@ enum class backend : uint8_t {
 
 enum class handle_type {
   undefined = 0,
+  program_uniform,
   program_unit,
   program,
   vertex_binding_desc,
@@ -51,18 +51,21 @@ enum class winding_order {
   ccw
 };
 
+template <handle_int_t nullValue>
 class handle {
 private:
+  static constexpr handle_int_t k_null_value = nullValue;
+
   handle_type m_type;
   handle_int_t m_value;
 
 public:
   handle(handle_type t, handle_int_t v) : m_type(t), m_value(v) {}
 
-  handle() : handle(handle_type::undefined, 0) {}
+  handle() : handle(handle_type::undefined, k_null_value) {}
 
   operator bool() const { 
-    return m_value != 0 && m_type != handle_type::undefined; 
+    return m_value != k_null_value && m_type != handle_type::undefined; 
   }
 
   handle_int_t value() const { return m_value; }
@@ -74,39 +77,67 @@ public:
 
   void set_value(GLuint x) { m_value = static_cast<handle_int_t>(x); }
 
+  void set_value(GLint x) { m_value = static_cast<handle_int_t>(x); }
+
   void assert_ok() const {
     ASSERT(static_cast<bool>(*this));
   }
 };
 
-// Provides a handle subclass that can be used for type safety.
-// Also a reference type for convenience...
-#define DEF_HANDLE_TYPE(__type__)                                                           \
-  class __type__##_handle : public handle {                                                 \
-    public:                                                                                 \
-      explicit __type__##_handle (handle_int_t v = 0) : handle(handle_type::__type__, v) {} \
-  };                                                                                        \
-  typedef const __type__##_handle& __type__##_ref;                                          \
-  typedef __type__##_handle& __type__##_mut_ref
-
-#define DEF_HANDLE_TYPE_MIXIN(__type__, __mixin__) \
-  class __type__##_handle : public __mixin__, public handle {                               \
-    public:                                                                                 \
-      explicit __type__##_handle (handle_int_t v = 0) : handle(handle_type::__type__, v) {} \
-  };                                                                                        \
-  typedef const __type__##_handle& __type__##_ref;                                          \
-  typedef __type__##_handle& __type__##_mut_ref
-
 struct program_unit_traits {
   std::string source;
 };
 
-DEF_HANDLE_TYPE_MIXIN(program_unit, program_unit_traits);
-DEF_HANDLE_TYPE(program);
-DEF_HANDLE_TYPE(vertex_binding_desc);
-DEF_HANDLE_TYPE(buffer_object);
-DEF_HANDLE_TYPE(framebuffer_object);
-DEF_HANDLE_TYPE(texture_object);
+struct __dummy_mixin__ {};
+
+template <handle_type HandleType, handle_int_t NullValue, class Traits = __dummy_mixin__>
+struct handle_gen {
+  static constexpr handle_int_t k_null_value = NullValue;
+  static constexpr handle_type k_handle_type = HandleType;
+  
+  class gen_type :  public Traits,
+                    public handle<k_null_value> {
+  public:
+    explicit gen_type(handle_int_t v = k_null_value) 
+      : handle<k_null_value>(k_handle_type, v)
+    {}
+  };
+
+  typedef const gen_type& reference_type;
+  typedef gen_type& mut_reference_type;
+};
+
+#define DEF_TRAITED_HANDLE_TYPES(__name__, __null_value__, __traits_type__)                 \
+  using __name__##_gen = handle_gen<handle_type::__name__, __null_value__, __traits_type__>;\
+  using __name__##_handle = typename __name__##_gen::gen_type;                               \
+  using __name__##_ref = typename __name__##_gen::reference_type;                            \
+  using __name__##_mut_ref = typename __name__##_gen::mut_reference_type
+
+#define DEF_HANDLE_TYPES(__name__, __null_value__)                         \
+  using __name__##_gen = handle_gen<handle_type::__name__, __null_value__>;\
+  using __name__##_handle = typename __name__##_gen::gen_type;              \
+  using __name__##_ref = typename __name__##_gen::reference_type;           \
+  using __name__##_mut_ref = typename __name__##_gen::mut_reference_type
+
+DEF_HANDLE_TYPES(program_uniform, -1);
+DEF_HANDLE_TYPES(program, 0);
+DEF_HANDLE_TYPES(vertex_binding_desc, 0);
+DEF_HANDLE_TYPES(buffer_object, 0);
+DEF_HANDLE_TYPES(framebuffer_object, 0);
+DEF_HANDLE_TYPES(texture_object, 0);
+
+DEF_TRAITED_HANDLE_TYPES(program_unit, 0, program_unit_traits);
+
+#define DEF_HANDLE_OPS(__type__) \
+  static inline bool operator == (__type__##_ref a, __type__##_ref b) {\
+    return a.value() == b.value();                                     \
+  }                                                                    \
+  static inline bool operator != (__type__##_ref a, __type__##_ref b) {\
+    return !(a == b);                                                  \
+  }
+
+DEF_HANDLE_OPS(program)
+DEF_HANDLE_OPS(program_uniform)
 
 class device {
 public:
