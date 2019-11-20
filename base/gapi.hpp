@@ -180,7 +180,7 @@ public:
   void use_program(program_ref program);
 
   program_handle make_program(const std::string& vertex, 
-                                     const std::string& fragment);
+                              const std::string& fragment);
 };
 
 extern const program_handle k_null_program;

@@ -183,7 +183,7 @@ namespace gapi {
         ret = false;
         GLint info_log_len;
         GL_FN(glGetShaderiv(shader.value_as<GLuint>(), 
-                            GL_INFO_LOG_LENGTH, 
+                            GL_INFO_LOG_LENGTH,
                             &info_log_len));
 
         std::vector<char> log_msg(info_log_len + 1, 0);
@@ -311,7 +311,7 @@ namespace gapi {
   }
 
   program_handle device::make_program(const std::string& vertex, 
-                                             const std::string& fragment) {
+                                      const std::string& fragment) {
     program_handle program_ret = create_program();
 
     program_unit_handle vshader = 
