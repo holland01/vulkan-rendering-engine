@@ -702,10 +702,10 @@ struct module_programs: public type_module {
   using id_type = std::string;
 
   ~module_programs() {
-    GL_FN(glUseProgram(0));
+    g_m.gpu->use_program(gapi::k_null_program);
 
     for (auto& entry: data) {
-      GL_FN(glDeleteProgram(entry.second->handle));
+      g_m.gpu->delete_program(entry.second->handle);
     }
   }
 
