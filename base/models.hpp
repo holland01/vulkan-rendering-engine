@@ -283,7 +283,7 @@ struct module_models {
   void render(index_type model, const mat4_t& world) const {
     mat4_t mv = g_m.view->view() * world;
 
-    if (g_m.programs->uniform("unif_Model") != -1) {
+    if (g_m.programs->uniform("unif_Model") != gapi::k_null_program_uniform) {
       g_m.programs->up_mat4x4("unif_Model", world);
     }
 

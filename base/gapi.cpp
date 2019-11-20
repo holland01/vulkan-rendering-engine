@@ -10,6 +10,7 @@
 namespace gapi {
   static constexpr handle_int_t k_null_value{std::numeric_limits<handle_int_t>::max()};
   const program_handle k_null_program{k_null_value};
+  const program_uniform_handle k_null_program_uniform{k_null_value};
 
   void device::apply_state(const gl_state& s) {
     if (s.draw_buffers.fbo) {
@@ -353,5 +354,81 @@ namespace gapi {
     }
 
     return program_ret;
+  }
+
+  program_uniform_handle device::program_query_uniform(program_ref program, const std::string& name) {
+    program_uniform_handle location{};
+    
+    if (program) {
+      APISEL(
+        GLint location_v{-1};
+        GL_FN(location_v = glGetUniformLocation(program.value_as<GLuint>(), name.c_str()));
+        location.set_value(location_v);
+        ,
+        APISTUB 
+      );
+    }
+
+    return location;
+  }
+
+  void device::program_set_uniform_int(program_uniform_ref uniform, int value) {
+    if (uniform) {
+      APISEL(
+        GL_FN(glUniform1i(uniform.value_as<GLint>(), value));
+        ,
+        APISTUB 
+      );
+    }
+  }
+
+  void device::program_set_uniform_float(program_uniform_ref uniform, float value) {
+    if (uniform) {
+      APISEL(
+        GL_FN(glUniform1f(uniform.value_as<GLint>(), value));
+        ,
+        APISTUB 
+      );
+    }
+  }
+
+  void device::program_set_uniform_vec2(program_uniform_ref uniform, const vec2_t& v) {
+    if (uniform) {
+      APISEL(
+        GL_FN(glUniform2fv(uniform.value_as<GLint>(), 1, &v[0]));
+        ,
+        APISTUB 
+      );
+    }
+  }
+
+  void device::program_set_uniform_vec3(program_uniform_ref uniform, const vec3_t& v) {
+    if (uniform) {
+      APISEL(
+        GL_FN(glUniform3fv(uniform.value_as<GLint>(), 1, &v[0]));
+        ,
+        APISTUB 
+      );
+    }
+  }
+
+  void device::program_set_uniform_vec4(program_uniform_ref uniform, const vec4_t& v) {
+    if (uniform) {
+      APISEL(
+        GL_FN(glUniform4fv(uniform.value_as<GLint>(), 1, &v[0]));
+        ,
+        APISTUB 
+      );
+    }
+  }
+
+  void device::program_set_uniform_matrix4(program_uniform_ref uniform, const mat4_t& m) {
+    if (uniform) {
+      APISEL(
+        GL_FN(glUniformMatrix4fv(uniform.value_as<GLint>(), 1, GL_FALSE, &m[0][0]));
+        ,
+        APISTUB
+      );
+    }
   }
 }

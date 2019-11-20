@@ -181,9 +181,26 @@ public:
 
   program_handle make_program(const std::string& vertex, 
                               const std::string& fragment);
+
+  // global program variables
+
+  program_uniform_handle program_query_uniform(program_ref program, const std::string& name);
+
+  void program_set_uniform_int(program_uniform_ref uniform, int value);
+
+  void program_set_uniform_float(program_uniform_ref uniform, float value);
+
+  void program_set_uniform_vec2(program_uniform_ref uniform, const vec2_t& v);
+
+  void program_set_uniform_vec3(program_uniform_ref uniform, const vec3_t& v);
+
+  void program_set_uniform_vec4(program_uniform_ref uniform, const vec4_t& v);
+
+  void program_set_uniform_matrix4(program_uniform_ref uniform, const mat4_t& m);
 };
 
 extern const program_handle k_null_program;
+extern const program_uniform_handle k_null_program_uniform;
 
 struct state {
 

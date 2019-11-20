@@ -681,7 +681,7 @@ struct module_programs: public type_module {
     }};
 
   struct program {
-    std::unordered_map<std::string, GLint> uniforms;
+    std::unordered_map<std::string, gapi::program_uniform_handle> uniforms;
     attrib_map_type attribs;
 
     gapi::program_handle handle;
@@ -723,11 +723,11 @@ struct module_programs: public type_module {
 
       if (p->handle) {
         for (auto unif: def.uniforms) {
-          GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle.value_as<GLuint>(), unif.c_str()));
+          p->uniforms[unif] = g_m.gpu->program_query_uniform(p->handle, unif);
 
-          CLOG(logflag_programs_load, "\tuniform %s -> %i\n", unif.c_str(), p->uniforms[unif]);
+          CLOG(logflag_programs_load, "\tuniform %s -> %i\n", unif.c_str(), p->uniforms[unif].value());
 
-          if (p->uniforms[unif] == -1) {
+          if (p->uniforms[unif].value() == -1) {
             __FATAL__("Uniform location fetch failure for %s@%s\n", 
                       unif.c_str(), 
                       def.name.c_str());
@@ -746,55 +746,45 @@ struct module_programs: public type_module {
     current = name;
   }
 
-  auto uniform(const std::string& name) const {
-    GLint id = -1;
+  gapi::program_uniform_ref uniform(const std::string& name) const {
     auto it = data.at(current)->uniforms.find(name);
 
-    if (it != data.at(current)->uniforms.end()) {
-      id = it->second;
-      //    ASSERT(id != -1);
-
-      if (id == -1) {
-        write_logf("%s -> unif %s. Not found\n",
-        current.c_str(),
-        name.c_str());
-      }
-    }
-
-    return id;
+    return (it != data.at(current)->uniforms.end()) 
+            ? it->second 
+            : gapi::k_null_program_uniform;
   }
 
   void up_mat4x4(const std::string& name, const glm::mat4& m) const {
-    GL_FN(glUniformMatrix4fv(uniform(name), 1, GL_FALSE, &m[0][0]));
+    g_m.gpu->program_set_uniform_matrix4(uniform(name), m);
   }
 
   void up_int(const std::string& name, int i) const {
-    GL_FN(glUniform1i(uniform(name), i));
+    g_m.gpu->program_set_uniform_int(uniform(name), i);
   }
 
   void up_float(const std::string& name, float f) const {
-    GL_FN(glUniform1f(uniform(name), f));
+    g_m.gpu->program_set_uniform_float(uniform(name), f);
   }
 
   void up_vec2(const std::string& name, const vec2_t& v) const {
-    GL_FN(glUniform2fv(uniform(name), 1, &v[0]));
+    g_m.gpu->program_set_uniform_vec2(uniform(name), v);
   }
 
   void up_vec3(const std::string& name, const vec3_t& v) const {
-    GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
+    g_m.gpu->program_set_uniform_vec3(uniform(name), v);
   }
 
   void up_vec4(const std::string& name, const vec4_t& v) const {
-    GL_FN(glUniform4fv(uniform(name), 1, &v[0]));
+    g_m.gpu->program_set_uniform_vec4(uniform(name), v);
   }
 
   void up_pointlight(const std::string& name, const dpointlight& pl) const {
-    GL_FN(glUniform3fv(uniform(name + ".position"), 1, &pl.position[0]));
-    GL_FN(glUniform3fv(uniform(name + ".color"), 1, &pl.color[0]));
+    g_m.gpu->program_set_uniform_vec3(uniform(name + ".position"), pl.position);
+    g_m.gpu->program_set_uniform_vec3(uniform(name + ".color"), pl.color);
   }
 
   void up_material(const std::string& name, const dmaterial& dm) const {
-    GL_FN(glUniform1f(uniform(name + ".smoothness"), dm.smoothness));
+    g_m.gpu->program_set_uniform_float(uniform(name + ".smoothness"), dm.smoothness);
   }
 
   auto fetch_attrib(const std::string& program, const std::string& attrib) const {
