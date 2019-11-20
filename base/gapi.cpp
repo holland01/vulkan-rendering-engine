@@ -122,104 +122,110 @@ namespace gapi {
   }
 
   void device::delete_shader(program_unit_mut_ref shader) {
-    shader.assert_ok();
-
-    APISEL(
-      GL_FN(glDeleteShader(shader.value_as<GLuint>()));
-      shader.set_value(0);
-      ,
-      APISTUB
-    );
+    
+    if (shader) {
+      APISEL(
+        GL_FN(glDeleteShader(shader.value_as<GLuint>()));
+        shader.set_value(0);
+        ,
+        APISTUB
+      );
+    }
   }
 
   void device::attach_shader( program_ref program, 
                               program_unit_ref shader) {
-    program.assert_ok();
-    shader.assert_ok();
-
-    APISEL(
-      GL_FN(glAttachShader(program.value_as<GLuint>(), 
-                            shader.value_as<GLuint>()));
-      ,
-      APISTUB
-    );
+    if (program) {
+      if (shader) {
+        APISEL(
+          GL_FN(glAttachShader(program.value_as<GLuint>(), 
+                                shader.value_as<GLuint>()));
+          ,
+          APISTUB
+        );
+      }
+    }
   }
 
   void device::detach_shader( program_ref program,
                               program_unit_ref shader) {
-    program.assert_ok();
-    shader.assert_ok();
-
-    APISEL(
-      GL_FN(glDetachShader(program.value_as<GLuint>(), 
-                           shader.value_as<GLuint>()));
-      ,
-      APISTUB
-    );
+    if (program) {
+      if (shader) {
+        APISEL(
+          GL_FN(glDetachShader(program.value_as<GLuint>(), 
+                              shader.value_as<GLuint>()));
+          ,
+          APISTUB
+        );
+      }
+    }
   }
 
   void device::compile_shader(program_unit_ref shader) {
-    shader.assert_ok();
-
-    APISEL(
-      GL_FN(glCompileShader(shader.value_as<GLuint>()));
-      ,
-      APISTUB
-    );
+    if (shader) {
+      APISEL(
+        GL_FN(glCompileShader(shader.value_as<GLuint>()));
+        ,
+        APISTUB
+      );
+    }
   }
 
   bool device::compile_shader_success(program_unit_mut_ref shader) {
-    shader.assert_ok();
+    bool ret = false;
 
-    bool ret = true;
+    if (shader) {
+      ret = true;
 
-    APISEL(
-      GLint compile_success;
+      APISEL(
+        GLint compile_success;
 
-      glGetShaderiv(shader.value_as<GLuint>(), 
-                    GL_COMPILE_STATUS, 
-                    &compile_success);
+        glGetShaderiv(shader.value_as<GLuint>(), 
+                      GL_COMPILE_STATUS, 
+                      &compile_success);
 
-      if (compile_success == GL_FALSE) {
-        ret = false;
-        GLint info_log_len;
-        GL_FN(glGetShaderiv(shader.value_as<GLuint>(), 
-                            GL_INFO_LOG_LENGTH,
-                            &info_log_len));
+        if (compile_success == GL_FALSE) {
+          ret = false;
+          GLint info_log_len;
+          GL_FN(glGetShaderiv(shader.value_as<GLuint>(), 
+                              GL_INFO_LOG_LENGTH,
+                              &info_log_len));
 
-        std::vector<char> log_msg(info_log_len + 1, 0);
-        GL_FN(glGetShaderInfoLog(shader.value_as<GLuint>(), 
-                                ( GLsizei) (log_msg.size() - 1),
-                                NULL, &log_msg[0]));
+          std::vector<char> log_msg(info_log_len + 1, 0);
+          GL_FN(glGetShaderInfoLog(shader.value_as<GLuint>(), 
+                                  ( GLsizei) (log_msg.size() - 1),
+                                  NULL, &log_msg[0]));
 
-        write_logf("COMPILE ERROR: %s\n\nSOURCE\n\n---------------\n%s\n--------------",
-                  &log_msg[0], 
-                  shader.source.c_str());
+          write_logf("COMPILE ERROR: %s\n\nSOURCE\n\n---------------\n%s\n--------------",
+                    &log_msg[0], 
+                    shader.source.c_str());
 
-        delete_shader(shader);
-      }
-      ,
-      APISTUB
-    );
+          delete_shader(shader);
+        }
+        ,
+        APISTUB
+      );
+    }
+
     return ret;
   }
 
   void device::set_shader_source( program_unit_mut_ref shader, 
                                   const std::string& source) {
-    shader.assert_ok();
+    if (shader) {
+      APISEL(
+        const char* s = source.c_str();
+        GLint length = static_cast<GLint>(source.length());
+        GL_FN(glShaderSource(shader.value_as<GLuint>(), 
+                              1, 
+                              &s, 
+                              &length));
 
-    APISEL(
-      const char* s = source.c_str();
-      GLint length = static_cast<GLint>(source.length());
-      GL_FN(glShaderSource(shader.value_as<GLuint>(), 
-                            1, 
-                            &s, 
-                            &length));
-
-      shader.source = source;
-      ,
-      APISTUB
-    );
+        shader.source = source;
+        ,
+        APISTUB
+      );
+    }
   }
 
   //-------------------------------
@@ -241,74 +247,77 @@ namespace gapi {
   }
 
   void device::delete_program(program_mut_ref program) {
-    program.assert_ok();
-
-    APISEL(
-      GL_FN(glDeleteProgram(program.value_as<GLuint>()));
-      program.set_value(0);
-      ,
-      APISTUB
-    );
+    if (program) {
+      APISEL(
+        GL_FN(glDeleteProgram(program.value_as<GLuint>()));
+        program.set_value(0);
+        ,
+        APISTUB
+      );
+    }
   }
 
   void device::link_program(program_ref program) {
-    program.assert_ok();
-
-    APISEL(
-      GL_FN(glLinkProgram(program.value_as<GLuint>()));
-      ,
-      APISTUB
-    );
+    if (program) {
+      APISEL(
+        GL_FN(glLinkProgram(program.value_as<GLuint>()));
+        ,
+        APISTUB
+      );
+    }
   }
 
   bool device::link_program_success(program_mut_ref program) {
-    program.assert_ok();
 
-    bool ret = true;
+    bool ret = false;
 
-    APISEL(
-      GLint link_success = GL_FALSE;
+    if (program) {
+      ret = true;
 
-      glGetProgramiv(program.value_as<GLuint>(),
-                     GL_LINK_STATUS, 
-                     &link_success);
+      APISEL(
+        GLint link_success = GL_FALSE;
 
-      if (link_success == GL_FALSE) {
-        GLint info_log_len;
-        GL_FN(glGetProgramiv(program.value_as<GLuint>(), 
-                             GL_INFO_LOG_LENGTH, 
-                             &info_log_len));
+        glGetProgramiv(program.value_as<GLuint>(),
+                      GL_LINK_STATUS, 
+                      &link_success);
 
-        std::vector<char> log_msg(info_log_len + 1, 0);
+        if (link_success == GL_FALSE) {
+          GLint info_log_len;
+          GL_FN(glGetProgramiv(program.value_as<GLuint>(), 
+                              GL_INFO_LOG_LENGTH, 
+                              &info_log_len));
 
-        GL_FN(glGetProgramInfoLog(program.value_as<GLuint>(), 
-                                  ( GLsizei) (log_msg.size() - 1),
-                                  NULL, &log_msg[0]));
+          std::vector<char> log_msg(info_log_len + 1, 0);
 
-        write_logf("LINKER ERROR: \n---------------\n%s\n--------------\n",
-                  &log_msg[0]);
+          GL_FN(glGetProgramInfoLog(program.value_as<GLuint>(), 
+                                    ( GLsizei) (log_msg.size() - 1),
+                                    NULL, &log_msg[0]));
 
-        delete_program(program);
+          write_logf("LINKER ERROR: \n---------------\n%s\n--------------\n",
+                    &log_msg[0]);
 
-        ret = false;
-      }
-      ,
-      APISTUB
-    );
+          delete_program(program);
+
+          ret = false;
+        }
+        ,
+        APISTUB
+      );
+    }
 
     return ret;
   }
 
   void device::use_program(program_ref program) {
-    program.assert_ok();
-
-    APISEL(
-      GL_FN(glUseProgram(program != k_null_program 
-                          ? program.value_as<GLuint>()
-                          : 0));
-      ,
-      APISTUB
-    );
+    if (program) {
+      APISEL(
+        GL_FN(glUseProgram(program != k_null_program 
+                            ? program.value_as<GLuint>()
+                            : 0));
+        ,
+        APISTUB
+      );
+    }
   }
 
   program_handle device::make_program(const std::string& vertex, 

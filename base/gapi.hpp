@@ -64,8 +64,10 @@ public:
 
   handle() : handle(handle_type::undefined, k_null_value) {}
 
-  operator bool() const { 
-    return m_value != k_null_value && m_type != handle_type::undefined; 
+  operator bool() const {
+    bool ret = m_value != k_null_value && m_type != handle_type::undefined;
+    ASSERT(ret);
+    return ret;
   }
 
   handle_int_t value() const { return m_value; }
