@@ -199,8 +199,6 @@ namespace gapi {
           write_logf("COMPILE ERROR: %s\n\nSOURCE\n\n---------------\n%s\n--------------",
                     &log_msg[0], 
                     shader.source.c_str());
-
-          delete_shader(shader);
         }
         ,
         APISTUB
@@ -296,8 +294,6 @@ namespace gapi {
           write_logf("LINKER ERROR: \n---------------\n%s\n--------------\n",
                     &log_msg[0]);
 
-          delete_program(program);
-
           ret = false;
         }
         ,
@@ -355,10 +351,12 @@ namespace gapi {
       }
       else {
         delete_shader(vshader);
+        delete_shader(fshader);
         delete_program(program_ret);
       }
     } 
     else {
+      delete_shader(vshader);
       delete_program(program_ret);
     }
 
