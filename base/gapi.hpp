@@ -65,7 +65,7 @@ struct gl_state;
 //
 // handle::set_null() should only be called in cases where b) applies.
 //------
-// "none" constant values for each handle types are used in situations where:
+// "none" constant values (e.g., gapi::k_program_none) for each handle types are used in situations where:
 //
 // a) a handle is mapped to an external key, it's queried with that key, and an entry using said key isn't found; or
 // b) a previously bound handle is mapped to a set of specific API functions, and we want to use a "none" variant of the handle's _type_

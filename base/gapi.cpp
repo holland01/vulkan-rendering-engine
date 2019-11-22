@@ -565,7 +565,7 @@ namespace gapi {
     APISEL(
       GLuint handle = 0;
       GL_FN(glGenTextures(1, &handle));
-      
+
       if (handle != 0) {
         ret.set_value(handle);
       } 
