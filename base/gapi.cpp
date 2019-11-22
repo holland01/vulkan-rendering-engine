@@ -1,13 +1,11 @@
 #include "gapi.hpp"
 #include "render_pipeline.hpp"
-
+#include "backend/opengl.hpp"
 
 
 #define APISEL(opengl, vulkan) do { opengl } while (0)
 
 #define APISTUB (void);
-
-
 
 namespace gapi {
   static constexpr handle_int_t k_none_value{std::numeric_limits<handle_int_t>::max()};
@@ -15,133 +13,6 @@ namespace gapi {
   const program_handle k_program_none{k_none_value};
   const program_uniform_handle k_program_uniform_none{k_none_value};
   const texture_object_handle k_texture_none{k_none_value};
-
-  static GLenum gl_primitive_type_to_enum(primitive_type ptype) {
-    GLenum ret = GL_NONE;
-    switch (ptype) {
-      case primitive_type::unsigned_byte:
-        ret = GL_UNSIGNED_BYTE;
-        break;
-      case primitive_type::floating_point:
-        ret = GL_FLOAT;
-        break;
-      default:
-        __FATAL__("Unknown enum value passed");
-        break;
-    }
-    return ret;
-  }
-
-  static GLenum gl_fmt_to_enum(texture_fmt fmt) {
-    GLenum ret = GL_NONE;
-    switch (fmt) {
-      case texture_fmt::rgba: 
-        ret = GL_RGBA;
-        break;
-      case texture_fmt::srgb_a:
-        ret = GL_SRGB_ALPHA;
-        break;
-      case texture_fmt::depth_component:
-        ret = GL_DEPTH_COMPONENT;
-        break;
-      default:
-        __FATAL__("Unknown enum value passed");
-        break;
-    }
-    return ret;
-  }
-
-  static GLint gl_int_fmt_to_int(texture_int_fmt fmt) {
-    GLint ret = GL_NONE;
-    switch (fmt) {
-      case texture_int_fmt::rgba8:
-        ret = GL_RGBA8;
-        break;
-      case texture_int_fmt::srgb8_alpha8:
-        ret = GL_SRGB8_ALPHA8;
-        break;
-      case texture_int_fmt::depth_component:
-        ret = GL_DEPTH_COMPONENT;
-        break;
-      case texture_int_fmt::depth_component16:
-        ret = GL_DEPTH_COMPONENT16;
-        break;
-      case texture_int_fmt::depth_component24:
-        ret = GL_DEPTH_COMPONENT24;
-        break;
-      default:
-        __FATAL__("Unknown enum value passed");
-        break;
-    }
-    return ret;
-  }
-
-  template <class enumType>
-  static GLint gl_filter_to_int(enumType filter) {
-    GLint ret = GL_NONE;
-    switch (filter) {
-      case enumType::linear:
-        ret = GL_LINEAR;
-        break;
-      case enumType::nearest:
-        ret = GL_NEAREST;
-        break;
-      default:
-        __FATAL__("Unknown enum value passed");
-        break;
-    }
-    return ret;
-  }
-
-  static GLint gl_wrap_mode_to_int(texture_wrap_mode mode) {
-    GLint ret = GL_NONE;
-    switch (mode) {
-      case texture_wrap_mode::clamp_to_edge:
-        ret = GL_CLAMP_TO_EDGE;
-        break;
-      case texture_wrap_mode::repeat:
-        ret = GL_REPEAT;
-        break;
-      default:
-        __FATAL__("Unknown enum value passed");
-        break;
-    }
-    return ret;
-  }
-
-  static GLenum gl_target_to_enum(texture_target target) {
-    GLenum ret = GL_NONE;
-    switch (target) {
-      case texture_target::texture_2d:
-        ret = GL_TEXTURE_2D;
-        break;
-      case texture_target::texture_cube_map:
-        ret = GL_TEXTURE_CUBE_MAP;
-        break;
-      case texture_target::texture_cube_map_px:
-        ret = GL_TEXTURE_CUBE_MAP_POSITIVE_X;
-        break;
-      case texture_target::texture_cube_map_nx:
-        ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_X;
-        break;
-      case texture_target::texture_cube_map_py:
-        ret = GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
-        break;
-      case texture_target::texture_cube_map_ny:
-        ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;
-        break;
-      case texture_target::texture_cube_map_pz:
-        ret = GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
-        break;
-      case texture_target::texture_cube_map_nz:
-        ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;
-        break;
-      default:
-        __FATAL__("Unknown target received");
-        break;
-    }
-    return ret;
-  }
 
   void device::apply_state(const gl_state& s) {
     if (s.draw_buffers.fbo) {
