@@ -727,7 +727,7 @@ struct module_programs: public type_module {
 
           CLOG(logflag_programs_load, "\tuniform %s -> %i\n", unif.c_str(), p->uniforms[unif].value());
 
-          if (p->uniforms[unif].value() == -1) {
+          if (p->uniforms[unif] == gapi::k_program_uniform_none) {
             __FATAL__("Uniform location fetch failure for %s@%s\n", 
                       unif.c_str(), 
                       def.name.c_str());
