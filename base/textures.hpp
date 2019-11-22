@@ -151,13 +151,9 @@ struct module_textures: public type_module {
 
   index_type new_texture(const module_textures::params& p);
 
-  void fill_cubemap_face(uint32_t offset, int w, int h, GLenum fmt, const uint8_t* data);
-
   void fill_texture2d(GLenum paramtype, index_type tid, const uint8_t* data);
 
   GLenum format_from_channels(int channels) const;
-
-  index_type new_cubemap(cubemap_paths_type paths);
 
   index_type handle(index_type i) const;
 
