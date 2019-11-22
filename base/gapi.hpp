@@ -215,7 +215,6 @@ class device {
 public:
   void apply_state(const gl_state& s);
 
-  void set_active_texture_unit(int_t unit);
 
 
   // shaders

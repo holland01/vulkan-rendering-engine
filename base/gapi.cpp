@@ -80,14 +80,6 @@ namespace gapi {
     }
   }
 
-  void device::set_active_texture_unit(int_t unit) {
-    APISEL(
-      GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(unit)));
-      ,
-      APISTUB
-    );
-  }
-
   //-------------------------------
   // program_unit_handle
   //-------------------------------
