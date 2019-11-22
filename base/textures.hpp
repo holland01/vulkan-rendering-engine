@@ -29,10 +29,10 @@ struct module_textures: public type_module {
   darray<GLenum> types;
 
   using index_type = int16_t;
-  using cubemap_paths_type = std::array<fs::path, 6>;
+  using cubemap_paths_type = std::array<fs::path, 6>; // UNUSED
 
   static const inline index_type k_uninit = -1;
-  static const inline fs::path k_root_path = fs::path("resources") / fs::path("textures");
+  static const inline fs::path k_root_path = fs::path("resources") / fs::path("textures"); // UNUSED
 
   ~module_textures();
 
@@ -164,7 +164,5 @@ struct module_textures: public type_module {
   GLenum texel_type(index_type i) const;
 
   uint32_t bytes_per_pixel(index_type i) const;
-
-
 };
 
