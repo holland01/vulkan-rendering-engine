@@ -1,5 +1,6 @@
 #include "textures.hpp"
 #include "stb_image.h"
+#include "backend/opengl.hpp"
 
 using rgba4_t = std::array<uint8_t, 4>;
 
@@ -28,22 +29,25 @@ void fill_texture_data_buffer_rgb4(module_textures::texture_data_buffer& buffer,
 }
 
 module_textures::~module_textures() {
-  if (!tex_handles.empty()) {
-    GL_FN(glDeleteTextures(static_cast<GLsizei>(tex_handles.size()), tex_handles.data()));
+  for (size_t i = 0; i < tex_handles.size(); ++i) {
+    // unbind to ensure that the resources aren't contested
+    // when we free them.
+    g_m.gpu->texture_bind(types[i], gapi::k_texture_none);
+    g_m.gpu->texture_delete(tex_handles[i]);
   }
 }
 
 void module_textures::bind(module_textures::index_type id, int slot) const {
   CLOG(logflag_textures_bind, "BINDING texture index %i with API handle %i @ slot %i\n", id, tex_handles[id], slot);
-  slots[id] = static_cast<GLenum>(slot);
-  GL_FN(glActiveTexture(GL_TEXTURE0 + slots[id]));
-  GL_FN(glBindTexture(types[id], tex_handles[id]));
+  slots[id] = static_cast<gapi::int_t>(slot);
+  g_m.gpu->texture_set_active_unit(slots[id]);
+  g_m.gpu->texture_bind(types[id], tex_handles[id]);
 }
 
 void module_textures::unbind(module_textures::index_type id) const {
   CLOG(logflag_textures_bind, "UNBINDING texture index %i with API handle %i @ slot %i\n", id, tex_handles[id], slots[id]);
-  GL_FN(glActiveTexture(GL_TEXTURE0 + slots.at(id)));
-  GL_FN(glBindTexture(types[id], 0));
+  g_m.gpu->texture_set_active_unit(slots[id]);
+  g_m.gpu->texture_bind(types[id], gapi::k_texture_none);
 }
 
 module_textures::params module_textures::cubemap_params(uint32_t width, uint32_t height) {
@@ -159,24 +163,16 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
 }
 
 module_textures::index_type module_textures::new_texture(const module_textures::params& p) {
- // GLuint handle = 0;
-
- // GL_FN(glGenTextures(1, &handle));
- // GL_FN(glBindTexture(p.type, handle));
-
   gapi::texture_object_handle handle = g_m.gpu->texture_new();
   g_m.gpu->texture_bind(p.type, handle);
 
   auto iterable = p.post();
 
   for (gapi::texture_param_ref param: iterable) {
-    //GL_FN(glTexParameteri(p.type, iterable[i], iterable[i + 1ULL]));
     g_m.gpu->texture_set_param(p.type, param);
   }
 
-  g_m.gpu->texture_bind(gapi::k_texture_none);
-
-  //GL_FN(glBindTexture(p.type, 0));
+  g_m.gpu->texture_bind(p.type, gapi::k_texture_none);
 
   auto index = static_cast<module_textures::index_type>(tex_handles.size());
 
@@ -198,21 +194,25 @@ module_textures::index_type module_textures::new_texture(const module_textures::
   case gapi::texture_target::texture_cube_map: {
     const auto& cubemap_d = std::get<cubemap_data>(p.data.data);
 
-    fill_texture2d(GL_TEXTURE_CUBE_MAP_POSITIVE_X, index, cubemap_d.px.data());
-    fill_texture2d(GL_TEXTURE_CUBE_MAP_NEGATIVE_X, index, cubemap_d.nx.data());
+    fill_texture2d(gapi::texture_target::texture_cube_map_px, index, cubemap_d.px.data());
+    fill_texture2d(gapi::texture_target::texture_cube_map_nx, index, cubemap_d.nx.data());
 
-    fill_texture2d(GL_TEXTURE_CUBE_MAP_POSITIVE_Y, index, cubemap_d.py.data());
-    fill_texture2d(GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, index, cubemap_d.ny.data());
+    fill_texture2d(gapi::texture_target::texture_cube_map_py, index, cubemap_d.py.data());
+    fill_texture2d(gapi::texture_target::texture_cube_map_ny, index, cubemap_d.ny.data());
 
-    fill_texture2d(GL_TEXTURE_CUBE_MAP_POSITIVE_Z, index, cubemap_d.pz.data());
-    fill_texture2d(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, index, cubemap_d.nz.data());
+    fill_texture2d(gapi::texture_target::texture_cube_map_pz, index, cubemap_d.pz.data());
+    fill_texture2d(gapi::texture_target::texture_cube_map_nz, index, cubemap_d.nz.data());
   } break;
 
   case gapi::texture_target::texture_2d: {
     const auto& d = std::get<texture_data_buffer>(p.data.data);
 
-    fill_texture2d(GL_TEXTURE_2D, index, d.data());
+    fill_texture2d(gapi::texture_target::texture_2d, index, d.data());
   } break;
+
+  default:
+    __FATAL__("Invalid texture target type.");
+    break;
   }
   unbind(index);
 
@@ -260,7 +260,7 @@ void fill_checkerboard(darray<uint8_t>& blank, int w, int h, glm::u8vec3 mask, i
 }
 
 module_textures::index_type module_textures::handle(module_textures::index_type i) const {
-  return tex_handles.at(i);
+  return tex_handles.at(i).value_as<GLuint>();
 }
 
 uint32_t module_textures::width(index_type i) const {
@@ -272,21 +272,21 @@ uint32_t module_textures::height(index_type i) const {
 }
 
 GLenum module_textures::format(index_type i) const {
-  return formats.at(i);
+  return gl_fmt_to_enum(formats.at(i));
 }
 
 GLenum module_textures::type(index_type i) const {
-  return types.at(i);
+  return gl_target_to_enum(types.at(i));
 }
 
 GLenum module_textures::texel_type(index_type i) const {
-  return texel_types.at(i);
+  return gl_primitive_type_to_enum(texel_types.at(i));
 }
 
 uint32_t module_textures::bytes_per_pixel(index_type i) const {
 
   ASSERT_CODE(
-    switch (internal_formats[i]) {
+    switch (gl_int_fmt_to_int(internal_formats[i])) {
     case GL_RGBA:
     case GL_RGBA8:
     case GL_SRGB8_ALPHA8:
