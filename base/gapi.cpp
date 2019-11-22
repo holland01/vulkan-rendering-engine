@@ -93,7 +93,7 @@ namespace gapi {
   //-------------------------------
 
   program_unit_handle device::create_shader(shader_type type) {
-    program_unit_handle h{0};
+    program_unit_handle h{};
 
     APISEL(
       GLenum gltype = 0;
@@ -113,7 +113,11 @@ namespace gapi {
       GLuint shader = 0;
       GL_FN(shader = glCreateShader(gltype));
 
-      h.set_value(shader);
+      if (shader != 0) {
+        h.set_value(shader);
+      } else {
+        h.set_null();
+      }
       ,
       APISTUB
     );
@@ -126,7 +130,7 @@ namespace gapi {
     if (shader) {
       APISEL(
         GL_FN(glDeleteShader(shader.value_as<GLuint>()));
-        shader.set_value(0);
+        shader.set_null();
         ,
         APISTUB
       );
@@ -231,12 +235,17 @@ namespace gapi {
   //-------------------------------
 
   program_handle device::create_program() {
-    program_handle h{0};
+    program_handle h{};
 
     APISEL(
       GLuint program = 0;
       GL_FN(program = glCreateProgram());
-      h.set_value(program);
+
+      if (program != 0) {
+        h.set_value(program);
+      } else {
+        h.set_null();
+      }
       ,
       APISTUB
     );
@@ -248,7 +257,7 @@ namespace gapi {
     if (program) {
       APISEL(
         GL_FN(glDeleteProgram(program.value_as<GLuint>()));
-        program.set_value(0);
+        program.set_null();
         ,
         APISTUB
       );
@@ -370,7 +379,12 @@ namespace gapi {
       APISEL(
         GLint location_v{-1};
         GL_FN(location_v = glGetUniformLocation(program.value_as<GLuint>(), name.c_str()));
-        location.set_value(location_v);
+
+        if (location_v != -1) { 
+          location.set_value(location_v);
+        } else {
+          location.set_null();
+        }
         ,
         APISTUB 
       );
