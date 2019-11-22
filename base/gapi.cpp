@@ -680,7 +680,7 @@ namespace gapi {
                           static_cast<GLsizei>(height),
                           0, // border - always 0
                           gl_fmt_to_enum(format),
-                          gl_primitive_type_to_enum(ptype),
+                          gl_primitive_type_to_enum(type),
                           pixels));
       ,
       APISTUB
