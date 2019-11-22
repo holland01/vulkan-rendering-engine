@@ -51,16 +51,17 @@ enum class winding_order {
   ccw
 };
 
-template <handle_int_t nullValue>
 class handle {
 private:
-  static constexpr handle_int_t k_null_value = nullValue;
-
   handle_type m_type;
   handle_int_t m_value;
 
 public:
-  handle(handle_type t, handle_int_t v) : m_type(t), m_value(v) {}
+  static constexpr handle_int_t k_null_value = -1;
+
+  handle(handle_type t, handle_int_t v) 
+    : m_type(t), 
+      m_value(v) {}
 
   handle() : handle(handle_type::undefined, k_null_value) {}
 
@@ -81,6 +82,8 @@ public:
 
   void set_value(GLint x) { m_value = static_cast<handle_int_t>(x); }
 
+  void set_null() { m_value = k_null_value; }
+
   void assert_ok() const {
     ASSERT(static_cast<bool>(*this));
   }
@@ -92,16 +95,15 @@ struct program_unit_traits {
 
 struct __dummy_mixin__ {};
 
-template <handle_type HandleType, handle_int_t NullValue, class Traits = __dummy_mixin__>
+template <handle_type HandleType, class Traits = __dummy_mixin__>
 struct handle_gen {
-  static constexpr handle_int_t k_null_value = NullValue;
   static constexpr handle_type k_handle_type = HandleType;
   
   class gen_type :  public Traits,
-                    public handle<k_null_value> {
+                    public handle {
   public:
-    explicit gen_type(handle_int_t v = k_null_value) 
-      : handle<k_null_value>(k_handle_type, v)
+    explicit gen_type(handle_int_t v = handle::k_null_value) 
+      : handle(k_handle_type, v)
     {}
   };
 
@@ -109,26 +111,27 @@ struct handle_gen {
   typedef gen_type& mut_reference_type;
 };
 
-#define DEF_TRAITED_HANDLE_TYPES(__name__, __null_value__, __traits_type__)                 \
-  using __name__##_gen = handle_gen<handle_type::__name__, __null_value__, __traits_type__>;\
+#define DEF_TRAITED_HANDLE_TYPES(__name__, __traits_type__)                 \
+  using __name__##_gen = handle_gen<handle_type::__name__, __traits_type__>;\
   using __name__##_handle = typename __name__##_gen::gen_type;                               \
   using __name__##_ref = typename __name__##_gen::reference_type;                            \
   using __name__##_mut_ref = typename __name__##_gen::mut_reference_type
 
-#define DEF_HANDLE_TYPES(__name__, __null_value__)                         \
-  using __name__##_gen = handle_gen<handle_type::__name__, __null_value__>;\
+#define DEF_HANDLE_TYPES(__name__)                         \
+  using __name__##_gen = handle_gen<handle_type::__name__>;\
   using __name__##_handle = typename __name__##_gen::gen_type;              \
   using __name__##_ref = typename __name__##_gen::reference_type;           \
   using __name__##_mut_ref = typename __name__##_gen::mut_reference_type
 
-DEF_HANDLE_TYPES(program_uniform, -1);
-DEF_HANDLE_TYPES(program, 0);
-DEF_HANDLE_TYPES(vertex_binding_desc, 0);
-DEF_HANDLE_TYPES(buffer_object, 0);
-DEF_HANDLE_TYPES(framebuffer_object, 0);
-DEF_HANDLE_TYPES(texture_object, 0);
+DEF_HANDLE_TYPES(program_uniform);
 
-DEF_TRAITED_HANDLE_TYPES(program_unit, 0, program_unit_traits);
+DEF_HANDLE_TYPES(program);
+DEF_HANDLE_TYPES(vertex_binding_desc);
+DEF_HANDLE_TYPES(buffer_object);
+DEF_HANDLE_TYPES(framebuffer_object);
+DEF_HANDLE_TYPES(texture_object);
+
+DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits);
 
 #define DEF_HANDLE_OPS(__type__) \
   static inline bool operator == (__type__##_ref a, __type__##_ref b) {\
