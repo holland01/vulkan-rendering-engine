@@ -4,6 +4,73 @@
 
 struct gl_state;
 
+// An overview of the type system for gapi follows.
+//
+// Because we want to be able to support both OpenGL and Vulkan (at least until the Vulkan implementation is complete),
+// we have to have a graphics API independent layer that more or less acts as the middleware between the client 
+// renderer logic (applying render passes, choosing which shader programs to use, selecting appropriate state variables
+// controlled through the underlying graphics API such as face culling or depth buffer clear values, etc.).
+//
+// OpenGL has very little notion of type safety; for the most part, its object handles are represented by the GLuint type,
+// which typically is just unsigned 32 bit integer. This GLuint can represent a texture, a vertex buffer, a program, or
+// a framebuffer object - among other things.
+//
+// Normally, with OpenGL specifically, this is fairly easy to deal with. However, we also are integrating Vulkan into the picture.
+//
+// Safety is a big concern for this new implementation: Vulkan is a large API, but it's also designed to give the programmer
+// as much control as is humanly possible without revealing hardware specific details that distract from the overall
+// API semantics. 
+//
+// Part of this means that various features that we take for granted in OpenGL, such as synchronization or validation, are left (mostly) up to us.
+// It's true that Vulkan allows for "layers", which are similar to extensions. Of these layers, a validation layer is often available. However,
+// it's support is by no means guaranteed: it's perfectly possible to have a minimally working Vulkan implementation available on the target system,
+// albeit without support for safety checks.
+//
+// To combat this possibility, and to also carve out another segment which allows for us to catch bugs more easily on the client side, 
+// this API uses distinct handles which store graphics API independent values. Each handle has its own corresponding type. A texture object handle
+// will be referred to as gapi::texture_object_handle, for example. 
+//
+// Each handle has its own operator bool implementation which performs a quick check against its value.
+//
+// Assuming that the value is what would be given to a handle that is uninitialized, we return false. Otherwise, we return true.
+// It's important that we separate the idea of a handle which is used to unbind a particular API object and an invalid/uninitialized handle.
+// 
+// This way, we can define our own global variables that are used specifically for unbinding API state mappings to a given handle type. 
+// For example, when we are finished using a shader program, we can call:
+//
+// device->use_program(k_program_none); // void gapi::device::use_program(program_handle h)
+//
+// This has its own distinct value that _isn't_ a none value that's used by OpenGL. It keeps the intent separate, and removes the burden
+// of the user from having to rely on constant integer values to denote this kind of action. It also makes maintenance
+// easier, since any underlying implementations in the gapi namespace can be changed without having to modify client code.
+//
+// So, it's important to recognize that "none" is _not_ the same thing as "invalid".
+//
+// The operator bool check on these "none" objects will pass, given that their values are totally different.
+//
+// The benefit of the operator bool check is that we reduce the risk of changing state in the actual graphics API that 
+// may be either
+//
+// a) result in undefined behavior (since if the check failed we'd be using the handle's internal value to dictate some kind of potential dominoe effect), or
+// b) just create erronous changes that will make diagnostics take longer.
+// -----
+// RULES
+// -----
+// At the end of the day, handle::operator bool() should return false ONLY in situations where:
+//
+// a) the handle hasn't been initialized yet, or 
+// b) the handle has been invalidated (due to freed resources or error or whatever)
+//
+// handle::set_null() should only be called in cases where b) applies.
+//------
+// "none" constant values for each handle types are used in situations where:
+//
+// a) a handle is mapped to an external key, it's queried with that key, and an entry using said key isn't found; or
+// b) a previously bound handle is mapped to a set of specific API functions, and we want to use a "none" variant of the handle's _type_
+//    to _unmap_ the currently mapped API functionality. 
+//
+//      An example of case b) would be in binding/unbinding a program handle, or a vertex buffer handle.
+
 namespace gapi {
 
 using handle_int_t = int64_t;
