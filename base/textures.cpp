@@ -60,31 +60,30 @@ module_textures::params module_textures::cubemap_params(uint32_t width, uint32_t
   auto channels = 4;
 
   switch (preset) {
-  case cubemap_preset_test_room_0:
-  {
-    fill_texture_data_buffer_rgb4(d.px, width, height, k_room_white);
-    fill_texture_data_buffer_rgb4(d.nx, width, height, k_room_white);
+    case cubemap_preset_test_room_0: {
+      fill_texture_data_buffer_rgb4(d.px, width, height, k_room_white);
+      fill_texture_data_buffer_rgb4(d.nx, width, height, k_room_white);
 
-    fill_texture_data_buffer_rgb4(d.py, width, height, k_room_blue);
-    fill_texture_data_buffer_rgb4(d.ny, width, height, k_room_blue);
+      fill_texture_data_buffer_rgb4(d.py, width, height, k_room_blue);
+      fill_texture_data_buffer_rgb4(d.ny, width, height, k_room_blue);
 
-    fill_texture_data_buffer_rgb4(d.pz, width, height, k_room_red);
-    fill_texture_data_buffer_rgb4(d.nz, width, height, k_room_red);
+      fill_texture_data_buffer_rgb4(d.pz, width, height, k_room_red);
+      fill_texture_data_buffer_rgb4(d.nz, width, height, k_room_red);
 
-    // the colors used here are currently specified in linear space,
-    // so it's best we _don't_ perform linearization when sampling automatically.
-    p.internal_format = GL_RGBA8;
-  } break;
+      // the colors used here are currently specified in linear space,
+      // so it's best we _don't_ perform linearization when sampling automatically.
+      p.internal_format = gapi::texture_int_fmt::rgba8;
+    } break;
 
-  default:
-    ASSERT(false);
-    break;
+    default:
+      ASSERT(false);
+      break;
   }
 
   p.width = width;
   p.height = height;
   p.num_channels = channels;
-  p.type = GL_TEXTURE_CUBE_MAP;
+  p.type = gapi::texture_target::texture_cube_map;
   p.data.data = d;
 
   return p;
@@ -102,9 +101,9 @@ module_textures::params module_textures::cubemap_params(uint32_t width,
   // important assumption: a cubemap framebuffer should have these auto gamma correction properties,
   // since writes to the primary framebuffer will perform auto de-linearization/gamma correction
   // after the fragment shader has written its fragment. 
-  p.internal_format = GL_SRGB8_ALPHA8;
+  p.internal_format = gapi::texture_int_fmt::srgb8_alpha8;
   p.num_channels = num_channels;
-  p.type = GL_TEXTURE_CUBE_MAP;
+  p.type = gapi::texture_target::texture_cube_map;
   p.data.data = data;
 
   return p;
@@ -117,12 +116,12 @@ module_textures::params module_textures::texture2d_rgba_params(uint32_t width,
   p.width = width;
   p.height = height;
   p.num_channels = 4;
-  p.type = GL_TEXTURE_2D;
-  p.min_filter = GL_LINEAR;
-  p.mag_filter = GL_LINEAR;
-  p.format = GL_RGBA;
-  p.internal_format = GL_RGBA8;
-  p.texel_type = GL_UNSIGNED_BYTE;
+  p.type = gapi::texture_target::texture_2d;
+  p.min_filter = gapi::texture_min_filter::linear;
+  p.mag_filter = gapi::texture_mag_filter::linear;
+  p.format = gapi::texture_fmt::rgba;
+  p.internal_format = gapi::texture_int_fmt::rgba8;
+  p.texel_type = gapi::primitive_type::unsigned_byte;
 
   texture_data_buffer buffer(p.width * p.height * p.num_channels, 0);
   p.data.data = buffer;
@@ -136,12 +135,12 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
   p.width = width;
   p.height = height;
   p.num_channels = 4;
-  p.type = GL_TEXTURE_2D;
-  p.min_filter = GL_NEAREST;
-  p.mag_filter = GL_NEAREST;
-  p.format = GL_DEPTH_COMPONENT;
-  p.internal_format = GL_DEPTH_COMPONENT;
-  p.texel_type = GL_FLOAT;
+  p.type = gapi::texture_target::texture_2d;
+  p.min_filter = gapi::texture_min_filter::nearest;
+  p.mag_filter = gapi::texture_mag_filter::nearest;
+  p.format = gapi::texture_fmt::depth_component;
+  p.internal_format = gapi::texture_int_fmt::depth_component;
+  p.texel_type = gapi::primitive_type::floating_point;
 
   texture_data_buffer buffer;
   buffer.resize(p.width * p.height * sizeof(float), 0);
@@ -160,18 +159,24 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
 }
 
 module_textures::index_type module_textures::new_texture(const module_textures::params& p) {
-  GLuint handle = 0;
+ // GLuint handle = 0;
 
-  GL_FN(glGenTextures(1, &handle));
-  GL_FN(glBindTexture(p.type, handle));
+ // GL_FN(glGenTextures(1, &handle));
+ // GL_FN(glBindTexture(p.type, handle));
+
+  gapi::texture_object_handle handle = g_m.gpu->texture_new();
+  g_m.gpu->texture_bind(p.type, handle);
 
   auto iterable = p.post();
 
-  for (size_t i = 0; i < iterable.size(); i += 2ULL) {
-    GL_FN(glTexParameteri(p.type, iterable[i], iterable[i + 1ULL]));
+  for (gapi::texture_param_ref param: iterable) {
+    //GL_FN(glTexParameteri(p.type, iterable[i], iterable[i + 1ULL]));
+    g_m.gpu->texture_set_param(p.type, param);
   }
 
-  GL_FN(glBindTexture(p.type, 0));
+  g_m.gpu->texture_bind(gapi::k_texture_none);
+
+  //GL_FN(glBindTexture(p.type, 0));
 
   auto index = static_cast<module_textures::index_type>(tex_handles.size());
 
@@ -190,8 +195,7 @@ module_textures::index_type module_textures::new_texture(const module_textures::
 
   bind(index);
   switch (p.type) {
-  case GL_TEXTURE_CUBE_MAP:
-  {
+  case gapi::texture_target::texture_cube_map: {
     const auto& cubemap_d = std::get<cubemap_data>(p.data.data);
 
     fill_texture2d(GL_TEXTURE_CUBE_MAP_POSITIVE_X, index, cubemap_d.px.data());
@@ -204,8 +208,7 @@ module_textures::index_type module_textures::new_texture(const module_textures::
     fill_texture2d(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, index, cubemap_d.nz.data());
   } break;
 
-  case GL_TEXTURE_2D:
-  {
+  case gapi::texture_target::texture_2d: {
     const auto& d = std::get<texture_data_buffer>(p.data.data);
 
     fill_texture2d(GL_TEXTURE_2D, index, d.data());
@@ -216,7 +219,16 @@ module_textures::index_type module_textures::new_texture(const module_textures::
   return index;
 }
 
-void module_textures::fill_texture2d(GLenum paramtype, index_type tid, const uint8_t* data) {
+void module_textures::fill_texture2d(gapi::texture_target paramtype, index_type tid, const uint8_t* data) {
+  g_m.gpu->texture_image_2d(paramtype,
+                            0, // mip level
+                            internal_formats[tid],
+                            widths[tid],
+                            heights[tid],
+                            formats[tid],
+                            texel_types[tid],
+                            reinterpret_cast<const void*>(data));
+#if 0
   GL_FN(glTexImage2D(paramtype,
                      0,
                      internal_formats[tid],
@@ -226,6 +238,7 @@ void module_textures::fill_texture2d(GLenum paramtype, index_type tid, const uin
                      formats[tid],
                      texel_types[tid],
                      data));
+#endif                    
 }
 
 GLenum module_textures::format_from_channels(int channels) const {

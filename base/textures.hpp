@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "util.hpp"
+#include "gapi.hpp"
 
 #include <stdint.h>
 #include <vector>
@@ -14,19 +15,23 @@
 using texparams_t = darray<GLenum>;
 
 struct module_textures: public type_module {
-  darray<GLuint> tex_handles;
+  darray<gapi::texture_object_handle> tex_handles;
 
   darray<uint32_t> widths;
   darray<uint32_t> heights;
   darray<uint32_t> num_channels;
-  darray<GLenum> internal_formats;
-  darray<GLenum> formats;
+  
+  darray<gapi::texture_int_fmt> internal_formats;
+  darray<gapi::texture_fmt> formats;
+
   darray<uint8_t> num_levels; // only zero supported for now
-  darray<GLenum> min_filters;
-  darray<GLenum> mag_filters;
-  darray<GLenum> texel_types;
-  mutable darray<GLenum> slots;
-  darray<GLenum> types;
+  
+  darray<gapi::texture_min_filter> min_filters;
+  darray<gapi::texture_mag_filter> mag_filters;
+  darray<gapi::primitive_type> texel_types;
+
+  mutable darray<gapi::int_t> slots;
+  darray<gapi::texture_target> types;
 
   using index_type = int16_t;
   using cubemap_paths_type = std::array<fs::path, 6>; // UNUSED
@@ -79,22 +84,22 @@ struct module_textures: public type_module {
   struct params {
     texture_data data {};
 
-    GLenum type {GL_TEXTURE_2D};
+    gapi::texture_target type {gapi::texture_target::texture_2d};
 
-    GLenum format {GL_RGBA};
-    GLenum internal_format {GL_RGBA};
+    gapi::texture_fmt format {gapi::texture_fmt::rgba};
+    gapi::texture_int_fmt internal_format {gapi::texture_int_fmt::rgba8};
 
-    GLenum min_filter {GL_LINEAR};
-    GLenum mag_filter {GL_LINEAR};
+    gapi::texture_min_filter min_filter {gapi::texture_min_filter::linear};
+    gapi::texture_mag_filter mag_filter {gapi::texture_mag_filter::linear};
 
-    GLenum wrap_mode_s {GL_CLAMP_TO_EDGE};
-    GLenum wrap_mode_t {GL_CLAMP_TO_EDGE};
-    GLenum wrap_mode_r {GL_CLAMP_TO_EDGE};
+    gapi::texture_wrap_mode wrap_mode_s {gapi::texture_wrap_mode::clamp_to_edge};
+    gapi::texture_wrap_mode wrap_mode_t {gapi::texture_wrap_mode::clamp_to_edge};
+    gapi::texture_wrap_mode wrap_mode_r {gapi::texture_wrap_mode::clamp_to_edge};
 
-    GLenum mip_base_level {0};
-    GLenum mip_max_level {0};
+    uint8_t mip_base_level {0};
+    uint8_t mip_max_level {0};
 
-    GLenum texel_type {GL_UNSIGNED_BYTE};
+    gapi::primitive_type texel_type {gapi::primitive_type::unsigned_byte};
 
     uint32_t width {256};
     uint32_t height {256};
@@ -107,24 +112,22 @@ struct module_textures: public type_module {
       ASSERT(mip_base_level == 0);
       ASSERT(mip_max_level == 0);
 
-      darray<GLenum> v;
+      darray<gapi::texture_param> v;
 
       v.insert(v.end(), {
-        GL_TEXTURE_MIN_FILTER, min_filter,
-        GL_TEXTURE_MAG_FILTER, mag_filter,
-        GL_TEXTURE_WRAP_T, wrap_mode_s,
-        GL_TEXTURE_WRAP_S, wrap_mode_t,
-        GL_TEXTURE_BASE_LEVEL, mip_base_level,
-        GL_TEXTURE_MAX_LEVEL, mip_max_level
+        gapi::texture_param{}.min_filter(min_filter),
+        gapi::texture_param{}.mag_filter(mag_filter),
+        gapi::texture_param{}.wrap_mode_s(wrap_mode_s),
+        gapi::texture_param{}.wrap_mode_t(wrap_mode_t),
+        gapi::texture_param{}.mip_base_level(mip_base_level),
+        gapi::texture_param{}.mip_max_level(mip_max_level)
       });
 
-      if (type == GL_TEXTURE_CUBE_MAP) {
+      if (type == gapi::texture_target::texture_cube_map) {
         v.insert(v.end(), {
-          GL_TEXTURE_WRAP_R, wrap_mode_r
+          gapi::texture_param{}.wrap_mode_r(wrap_mode_r)
         });
       }
-
-      ASSERT((v.size() & 1) == 0);
 
       return v;
     }
@@ -151,7 +154,7 @@ struct module_textures: public type_module {
 
   index_type new_texture(const module_textures::params& p);
 
-  void fill_texture2d(GLenum paramtype, index_type tid, const uint8_t* data);
+  void fill_texture2d(gapi::texture_target paramtype, index_type tid, const uint8_t* data);
 
   GLenum format_from_channels(int channels) const;
 
