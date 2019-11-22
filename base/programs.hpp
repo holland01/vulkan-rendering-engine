@@ -555,27 +555,27 @@ struct module_programs: public type_module {
 
       GLSL(smooth out vec2 frag_TexCoord;
 
-  // quad
-  // 01    11
-  // 00    10
-  //
-  // xy  |  vertex id
-  // 01  |  00
-  // 00  |  01
-  // 11  |  10
-  // 10  |  11
+      // quad
+      // 01    11
+      // 00    10
+      //
+      // xy  |  vertex id
+      // 01  |  00
+      // 00  |  01
+      // 11  |  10
+      // 10  |  11
 
-  void main() {
-    float x = float((gl_VertexID >> 1) & 1);
-    float y = float(1 - (gl_VertexID & 1));
+      void main() {
+        float x = float((gl_VertexID >> 1) & 1);
+        float y = float(1 - (gl_VertexID & 1));
 
-    frag_TexCoord = vec2(x, y);
+        frag_TexCoord = vec2(x, y);
 
-    x = 2.0 * x - 1.0;
-    y = 2.0 * y - 1.0;
+        x = 2.0 * x - 1.0;
+        y = 2.0 * y - 1.0;
 
-    gl_Position = vec4(x, y, 0.0, 1.0);
-  }),
+        gl_Position = vec4(x, y, 0.0, 1.0);
+      }),
 
     GLSL(smooth in vec2 frag_TexCoord;
   out vec4 fb_Color;
