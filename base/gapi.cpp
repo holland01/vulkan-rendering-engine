@@ -60,6 +60,9 @@ namespace gapi {
       case texture_int_fmt::srgb8_alpha8:
         ret = GL_SRGB8_ALPHA8;
         break;
+      case texture_int_fmt::depth_component:
+        ret = GL_DEPTH_COMPONENT;
+        break;
       case texture_int_fmt::depth_component16:
         ret = GL_DEPTH_COMPONENT16;
         break;
@@ -114,6 +117,24 @@ namespace gapi {
         break;
       case texture_target::texture_cube_map:
         ret = GL_TEXTURE_CUBE_MAP;
+        break;
+      case texture_target::texture_cube_map_px:
+        ret = GL_TEXTURE_CUBE_MAP_POSITIVE_X;
+        break;
+      case texture_target::texture_cube_map_nx:
+        ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_X;
+        break;
+      case texture_target::texture_cube_map_py:
+        ret = GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
+        break;
+      case texture_target::texture_cube_map_ny:
+        ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;
+        break;
+      case texture_target::texture_cube_map_pz:
+        ret = GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
+        break;
+      case texture_target::texture_cube_map_nz:
+        ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;
         break;
       default:
         __FATAL__("Unknown target received");

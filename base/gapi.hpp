@@ -131,6 +131,7 @@ enum class texture_fmt {
 enum class texture_int_fmt {
   rgba8,
   srgb8_alpha8,
+  depth_component,
   depth_component16,
   depth_component24
 };
