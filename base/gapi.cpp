@@ -7,10 +7,120 @@
 
 #define APISTUB (void);
 
+
+
 namespace gapi {
   static constexpr handle_int_t k_none_value{std::numeric_limits<handle_int_t>::max()};
+
   const program_handle k_program_none{k_none_value};
   const program_uniform_handle k_program_uniform_none{k_none_value};
+  const texture_object_handle k_texture_none{k_none_value};
+
+  static GLenum gl_primitive_type_to_enum(primitive_type ptype) {
+    GLenum ret = GL_NONE;
+    switch (ptype) {
+      case primitive_type::unsigned_byte:
+        ret = GL_UNSIGNED_BYTE;
+        break;
+      case primitive_type::floating_point:
+        ret = GL_FLOAT;
+        break;
+      default:
+        __FATAL__("Unknown enum value passed");
+        break;
+    }
+    return ret;
+  }
+
+  static GLenum gl_fmt_to_enum(texture_fmt fmt) {
+    GLenum ret = GL_NONE;
+    switch (fmt) {
+      case texture_fmt::rgba: 
+        ret = GL_RGBA;
+        break;
+      case texture_fmt::srgb_a:
+        ret = GL_SRGB_ALPHA;
+        break;
+      case texture_fmt::depth_component:
+        ret = GL_DEPTH_COMPONENT;
+        break;
+      default:
+        __FATAL__("Unknown enum value passed");
+        break;
+    }
+    return ret;
+  }
+
+  static GLint gl_int_fmt_to_int(texture_int_fmt fmt) {
+    GLint ret = GL_NONE;
+    switch (fmt) {
+      case texture_int_fmt::rgba8:
+        ret = GL_RGBA8;
+        break;
+      case texture_int_fmt::srgb8_alpha8:
+        ret = GL_SRGB8_ALPHA8;
+        break;
+      case texture_int_fmt::depth_component16:
+        ret = GL_DEPTH_COMPONENT16;
+        break;
+      case texture_int_fmt::depth_component24:
+        ret = GL_DEPTH_COMPONENT24;
+        break;
+      default:
+        __FATAL__("Unknown enum value passed");
+        break;
+    }
+    return ret;
+  }
+
+  template <class enumType>
+  static GLint gl_filter_to_int(enumType filter) {
+    GLint ret = GL_NONE;
+    switch (filter) {
+      case enumType::linear:
+        ret = GL_LINEAR;
+        break;
+      case enumType::nearest:
+        ret = GL_NEAREST;
+        break;
+      default:
+        __FATAL__("Unknown enum value passed");
+        break;
+    }
+    return ret;
+  }
+
+  static GLint gl_wrap_mode_to_int(texture_wrap_mode mode) {
+    GLint ret = GL_NONE;
+    switch (mode) {
+      case texture_wrap_mode::clamp_to_edge:
+        ret = GL_CLAMP_TO_EDGE;
+        break;
+      case texture_wrap_mode::repeat:
+        ret = GL_REPEAT;
+        break;
+      default:
+        __FATAL__("Unknown enum value passed");
+        break;
+    }
+    return ret;
+  }
+
+  static GLenum gl_target_to_enum(texture_target target) {
+    GLenum ret = GL_NONE;
+    switch (target) {
+      case texture_target::texture_2d:
+        ret = GL_TEXTURE_2D;
+        break;
+      case texture_target::texture_cube_map:
+        ret = GL_TEXTURE_CUBE_MAP;
+        break;
+      default:
+        __FATAL__("Unknown target received");
+        break;
+    }
+    return ret;
+  }
 
   void device::apply_state(const gl_state& s) {
     if (s.draw_buffers.fbo) {
@@ -444,4 +554,136 @@ namespace gapi {
       );
     }
   }
+
+  //-------------------------------
+  // textures
+  //-------------------------------
+
+  texture_object_handle device::texture_new() {
+    texture_object_handle ret{};
+
+    APISEL(
+      GLuint handle = 0;
+      GL_FN(glGenTextures(1, &handle));
+      
+      if (handle != 0) {
+        ret.set_value(handle);
+      } 
+      else {
+        ret.set_null();
+      }
+      ,
+      APISTUB
+    );
+
+    return ret;
+  }
+
+  void device::texture_set_param(texture_target target, texture_param_ref param) {
+    GLenum gltarget = gl_target_to_enum(target);
+
+    switch (param.param_type()) {
+      case texture_param::type::mag_filter:
+        GL_FN(glTexParameteri(gltarget,
+                              GL_TEXTURE_MAG_FILTER, 
+                              gl_filter_to_int<texture_mag_filter>(param.value<texture_mag_filter>())));
+        break;
+      
+      case texture_param::type::min_filter:
+        GL_FN(glTexParameteri(gltarget,
+                              GL_TEXTURE_MIN_FILTER,
+                              gl_filter_to_int<texture_min_filter>(param.value<texture_min_filter>())));
+        break;
+
+      case texture_param::type::wrap_mode_s:
+        GL_FN(glTexParameteri(gltarget,
+                              GL_TEXTURE_WRAP_S,
+                              gl_wrap_mode_to_int(param.value<texture_wrap_mode>())));
+        break;
+
+      case texture_param::type::wrap_mode_t:
+        GL_FN(glTexParameteri(gltarget,
+                              GL_TEXTURE_WRAP_T,
+                              gl_wrap_mode_to_int(param.value<texture_wrap_mode>())));
+        break;
+
+      case texture_param::type::wrap_mode_r:
+        GL_FN(glTexParameteri(gltarget,
+                              GL_TEXTURE_WRAP_R,
+                              gl_wrap_mode_to_int(param.value<texture_wrap_mode>())));
+        break;
+
+      case texture_param::type::mipmap_base_level:
+        GL_FN(glTexParameteri(gltarget,
+                              GL_TEXTURE_BASE_LEVEL,
+                              static_cast<GLint>(param.value<uint8_t>())));
+        break;
+
+      case texture_param::type::mipmap_max_level:
+        GL_FN(glTexParameteri(gltarget,
+                              GL_TEXTURE_MAX_LEVEL,
+                              static_cast<GLint>(param.value<uint8_t>())));
+        break;
+      
+      default:
+        __FATAL__("Unsupported texture parameter type received");
+        break;
+    }
+  }
+
+  void device::texture_set_active_unit(int_t unit) {
+    APISEL(
+      GL_FN(glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(unit)));
+      ,
+      APISTUB
+    );
+  }
+
+  void device::texture_bind(texture_target target, texture_object_ref texture) {
+    if (texture) {
+      APISEL(
+        GL_FN(glBindTexture(gl_target_to_enum(target), 
+                            (texture != k_texture_none)
+                             ? texture.value_as<GLuint>()
+                             : 0));
+        ,
+        APISTUB
+      );
+    }
+  }
+
+  void device::texture_delete(texture_object_mut_ref texture) {
+    if (texture) {
+      APISEL(
+        GLuint handle = texture.value_as<GLuint>();
+        GL_FN(glDeleteTextures(1, &handle));
+        texture.set_null();
+        ,
+        APISTUB
+      );
+    }
+  }
+
+  void device::texture_image_2d(texture_target target, 
+                                miplevel_t mip, 
+                                texture_int_fmt internal, 
+                                dimension_t width, 
+                                dimension_t height, 
+                                texture_fmt format, 
+                                primitive_type type, 
+                                const void *pixels) {
+    APISEL(
+      GL_FN(glTexImage2D( gl_target_to_enum(target),
+                          static_cast<GLint>(mip),
+                          gl_int_fmt_to_int(internal),
+                          static_cast<GLsizei>(width),
+                          static_cast<GLsizei>(height),
+                          0, // border - always 0
+                          gl_fmt_to_enum(format),
+                          gl_primitive_type_to_enum(ptype),
+                          pixels));
+      ,
+      APISTUB
+    );
+  }  
 }

@@ -2,6 +2,8 @@
 
 #include "common.hpp"
 
+#include<variant>
+
 struct gl_state;
 
 // An overview of the type system for gapi follows.
@@ -75,6 +77,8 @@ namespace gapi {
 
 using handle_int_t = int64_t;
 using int_t = int64_t;
+using dimension_t = int64_t;
+using miplevel_t = uint8_t;
 
 enum class backend : uint8_t {
   vulkan = 0,
@@ -117,6 +121,125 @@ enum class winding_order {
   cw,
   ccw
 };
+
+enum class texture_fmt {
+  rgba,
+  srgb_a,
+  depth_component,
+};
+
+enum class texture_int_fmt {
+  rgba8,
+  srgb8_alpha8,
+  depth_component16,
+  depth_component24
+};
+
+enum class texture_mag_filter {
+  linear,
+  nearest
+};
+
+enum class texture_min_filter {
+  linear, 
+  nearest
+};
+
+enum class texture_wrap_mode {
+  repeat,
+  clamp_to_edge
+};
+
+enum class texture_target {
+  texture_2d,
+
+  texture_cube_map,
+  
+  texture_cube_map_px,
+  texture_cube_map_nx,
+
+  texture_cube_map_py,
+  texture_cube_map_ny,
+
+  texture_cube_map_pz,
+  texture_cube_map_nz
+};
+
+enum class primitive_type {
+  unsigned_byte,
+  floating_point
+};
+
+class texture_param {
+public:
+  enum class type {
+    mag_filter,
+    min_filter,
+    wrap_mode_s,
+    wrap_mode_t,
+    wrap_mode_r,
+    mipmap_base_level,
+    mipmap_max_level
+  };
+  
+  using value_type = std::variant<uint8_t, 
+                                  texture_mag_filter, 
+                                  texture_min_filter,
+                                  texture_wrap_mode>;
+private:
+  type m_type{type::mipmap_base_level};
+  value_type m_value{0};
+
+public:
+  texture_param& mag_filter(texture_mag_filter f) {
+    m_type = type::mag_filter;
+    m_value = f;
+    return *this;
+  }
+
+  texture_param& min_filter(texture_min_filter f) {
+    m_type = type::min_filter;
+    m_value = f;
+    return *this;
+  }
+
+  texture_param& wrap_mode_s(texture_wrap_mode m) {
+    m_type = type::wrap_mode_s;
+    m_value = m;
+    return *this;
+  }
+
+  texture_param& wrap_mode_t(texture_wrap_mode m) {
+    m_type = type::wrap_mode_t;
+    m_value = m;
+    return *this;
+  }
+
+  texture_param& wrap_mode_r(texture_wrap_mode m) {
+    m_type = type::wrap_mode_r;
+    m_value = m;
+    return *this;
+  }
+
+  texture_param& mip_base_level(uint8_t l) {
+    m_type = type::mipmap_base_level;
+    m_value = l;
+    return *this;
+  }
+
+  texture_param& mip_max_level(uint8_t l) {
+    m_type = type::mipmap_max_level;
+    m_value = l;
+    return *this;
+  }
+
+  template <class valueType>
+  valueType value() const { return std::get<valueType>(m_value); }
+
+  type param_type() const { return m_type; }
+};
+
+typedef const texture_param& texture_param_ref;
 
 class handle {
 private:
@@ -268,10 +391,32 @@ public:
   void program_set_uniform_vec4(program_uniform_ref uniform, const vec4_t& v);
 
   void program_set_uniform_matrix4(program_uniform_ref uniform, const mat4_t& m);
+
+  // textures
+
+  texture_object_handle texture_new();
+
+  void texture_set_param(texture_target target, texture_param_ref param);
+
+  void texture_set_active_unit(int_t unit);
+
+  void texture_bind(texture_target target, texture_object_ref texture);
+
+  void texture_delete(texture_object_mut_ref texture);
+
+  void texture_image_2d(texture_target target, 
+                        miplevel_t mip, 
+                        texture_int_fmt internal, 
+                        dimension_t width, 
+                        dimension_t height, 
+                        texture_fmt format, 
+                        primitive_type type, 
+                        const void *pixels);
 };
 
 extern const program_handle k_program_none;
 extern const program_uniform_handle k_program_uniform_none;
+extern const texture_object_handle k_texture_none;
 
 struct state {
 
