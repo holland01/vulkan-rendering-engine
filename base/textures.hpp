@@ -156,8 +156,6 @@ struct module_textures: public type_module {
 
   void fill_texture2d(gapi::texture_target paramtype, index_type tid, const uint8_t* data);
 
-  GLenum format_from_channels(int channels) const;
-
   index_type handle(index_type i) const;
 
   uint32_t width(index_type i) const;

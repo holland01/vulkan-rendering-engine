@@ -241,23 +241,6 @@ void module_textures::fill_texture2d(gapi::texture_target paramtype, index_type 
 #endif                    
 }
 
-GLenum module_textures::format_from_channels(int channels) const {
-  GLenum format = static_cast<GLenum>(-1);
-
-  switch (channels) {
-  case 4:
-    format = GL_RGBA;
-    break;
-  case 3:
-    format = GL_RGB;
-    break;
-  }
-
-  ASSERT(format != static_cast<GLenum>(-1));
-
-  return format;
-}
-
 void fill_checkerboard(darray<uint8_t>& blank, int w, int h, glm::u8vec3 mask, int channels) {
   for (auto y = 0; y < h; ++y) {
     for (auto x = 0; x < w; ++x) {
