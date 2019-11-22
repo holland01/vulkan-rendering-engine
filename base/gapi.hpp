@@ -204,8 +204,8 @@ public:
   void program_set_uniform_matrix4(program_uniform_ref uniform, const mat4_t& m);
 };
 
-extern const program_handle k_null_program;
-extern const program_uniform_handle k_null_program_uniform;
+extern const program_handle k_program_none;
+extern const program_uniform_handle k_program_uniform_none;
 
 struct state {
 

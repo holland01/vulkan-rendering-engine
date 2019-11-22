@@ -702,7 +702,7 @@ struct module_programs: public type_module {
   using id_type = std::string;
 
   ~module_programs() {
-    g_m.gpu->use_program(gapi::k_null_program);
+    g_m.gpu->use_program(gapi::k_program_none);
 
     for (auto& entry: data) {
       g_m.gpu->delete_program(entry.second->handle);
@@ -751,7 +751,7 @@ struct module_programs: public type_module {
 
     return (it != data.at(current)->uniforms.end()) 
             ? it->second 
-            : gapi::k_null_program_uniform;
+            : gapi::k_program_uniform_none;
   }
 
   void up_mat4x4(const std::string& name, const glm::mat4& m) const {
@@ -839,7 +839,7 @@ struct use_program {
   ~use_program() {
     CLOG(logflag_programs_use_program, "releasing current program: %s\n", clog_name.c_str());
     g_m.programs->unload_layout();
-    g_m.gpu->use_program(gapi::k_null_program);
+    g_m.gpu->use_program(gapi::k_program_none);
    // GL_FN(glUseProgram(0));
   }
 };

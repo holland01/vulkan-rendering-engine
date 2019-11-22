@@ -8,9 +8,9 @@
 #define APISTUB (void);
 
 namespace gapi {
-  static constexpr handle_int_t k_null_value{std::numeric_limits<handle_int_t>::max()};
-  const program_handle k_null_program{k_null_value};
-  const program_uniform_handle k_null_program_uniform{k_null_value};
+  static constexpr handle_int_t k_none_value{std::numeric_limits<handle_int_t>::max()};
+  const program_handle k_program_none{k_none_value};
+  const program_uniform_handle k_program_uniform_none{k_none_value};
 
   void device::apply_state(const gl_state& s) {
     if (s.draw_buffers.fbo) {
@@ -311,7 +311,7 @@ namespace gapi {
   void device::use_program(program_ref program) {
     if (program) {
       APISEL(
-        GL_FN(glUseProgram(program != k_null_program 
+        GL_FN(glUseProgram(program != k_program_none 
                             ? program.value_as<GLuint>()
                             : 0));
         ,
