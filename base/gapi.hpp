@@ -334,6 +334,7 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits);
 
 DEF_HANDLE_OPS(program)
 DEF_HANDLE_OPS(program_uniform)
+DEF_HANDLE_OPS(texture_object)
 
 class device {
 public:
