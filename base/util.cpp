@@ -16,6 +16,15 @@ static std::vector<std::string> g_msg_cache;
 
 static constexpr bool g_cache_disabled = true;
 
+static void die() {
+#if defined(BASE_ON_DIE_TRIGGER_SEGFAULT)
+  volatile unsigned* tmp = 0x0;
+  *tmp = 1;
+#else 
+  exit(EXIT_FAILURE);
+#endif
+}
+
 static void maybe_print(std::vector<std::string>& cache, const std::string& msg, int line, const char* func, const char* file) {
 
   if (g_cache_disabled || std::find(cache.begin(),
@@ -36,7 +45,7 @@ void logf_impl(int line, const char* func, const char* file,
 void assert_impl(bool cond, int line, const char* func, const char* file, const char* expr) {
   if (!cond) {
     logf_impl(line, func, file, "ASSERT FAILURE: %s", expr);
-    exit(EXIT_FAILURE);
+    die();
   }
 }
 
@@ -74,6 +83,6 @@ void report_gl_error(GLenum err, int line, const char* func, const char* file,
 
     maybe_print(g_gl_err_msg_cache, smsg, line, func, file);
 
-    exit(EXIT_FAILURE);
+    die();
   }
 }
