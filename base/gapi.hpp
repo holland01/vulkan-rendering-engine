@@ -284,6 +284,84 @@ struct program_unit_traits {
   std::string source;
 };
 
+//
+// Here we resort to some metaprogramming and a few
+// macros to aid us in the generation of a slew of boilerplate.
+// This obviously warrants an explanation.
+//
+// The handle_gen struct creates an inner class, gen_type, whose actual type
+// _definition_ (as far as the compiler is concerned) is dependent
+// on the template parameters passed to it. As shown below,
+// these are HandleType and Traits.
+//
+// The HandleType can be any one of the handle_type enums defined above 
+// (toward the beginning of this header file).
+//
+// Let's assume we didn't have the macros defined below,
+// and we wanted to generate a handle for the handle_type::vertex_binding_desc entry.
+// We'd (first) do the following:
+//
+// using vertex_binding_desc_gen = handle_gen<handle_type::vertex_binding_desc>;
+//
+// This "caches" the type definition into a type variable; handle_gen's template 
+// parameters can be thought of as instantiating a type through a "type" constructor.
+//
+// the Meta type members that reside in vertex_binding_desc_gen are:
+//
+// 1) k_handle_type
+// 2) gen_type
+// 3) reference_type
+// 4) mut_reference_type
+//
+// The "gen_type" parameter is actually vertex_binding_desc's true handle type. We can see in the
+// actual struct that it inherits from two classes: the base handle class, and a Traits class
+// that's defined as a template parameter with a _default value_. This default value is
+// the __dummy_mixin__ struct that's shown below.
+//
+// C++17 in its standard is designed to optimize out __dummy_mixin__, given that it
+// technically doesn't actually take up any space: it's an empty struct. It is possible
+// that this optimization fails, but the reasons for it are outside the scope of this comment,
+// and, at the time of this writing, there's no reason for it to not succeed (for structs that inherit
+// from __dummy_mixin__)
+//
+// (further information here: https://en.cppreference.com/w/cpp/language/ebo)
+//
+// It's purpose is to provide the _option_ for additional class members
+// to be added to trait handles through this metaprogramming system.
+//
+// Moving on, 
+//
+// 3 other type variables (aka aliases) must be declared as follows:
+//
+//  using vertex_binding_desc_handle = typename vertex_binding_desc_gen::gen_type;
+//  using vertex_binding_desc_ref = typename vertex_binding_desc_gen::reference_type;
+//  using vertex_binding_desc_mut_ref = typename vertex_binding_descgen::mut_reference_type;
+//
+// The typename parameter implies that the vertex_binding_desc_gen::gen_type definition is dependent on vertex_binding_desc_gen.
+// This aspect is what keeps handle types _separate_ from each other, despite being all generated using the same handle_gen class.
+//
+// We then just move along and define vertex_binding_desc_ref and vertex_binding_desc_mut_ref types;
+// These are the constant reference and non constant reference types, respectively. (immutability by default is favored here; hence the extra "mut" classification)
+// 
+// The macros then essentially remove the need to do all of the above and simply just specify
+// the enum value you want to define a handle type for. They also define operator == and operator != overloads
+// for the handle type, which is absolutely necessary: otherwise, the operator bool() overload that's used
+// in the base handle class will be evaulated for any two handle types a and b in the following expressions:
+//
+// 1) a == b (and b == a)
+// 2) a != b (and b != a)
+// 
+// For instance, if a and b are both of type vertex_binding_desc_handle, 
+// and we compute "a == b", a's operator bool() function will be called, and a itself
+// be replaced with the boolean result obtained the from the function (using a's data). The same exact
+// thing will happen to b, using b's data on operator bool().
+//
+// So, we'll effectively have two boolean comparisons occurring, instead of actual
+// handle values occurring (the values stored in the handles are integers)
+//
+// Hopefully this clears things up. Seriously, the amount of boilerplate removed is quite
+// a bit here.
+
 struct __dummy_mixin__ {};
 
 template <handle_type HandleType, class Traits = __dummy_mixin__>
@@ -304,43 +382,41 @@ struct handle_gen {
 
 #define DEF_TRAITED_HANDLE_TYPES(__name__, __traits_type__)                 \
   using __name__##_gen = handle_gen<handle_type::__name__, __traits_type__>;\
-  using __name__##_handle = typename __name__##_gen::gen_type;                               \
-  using __name__##_ref = typename __name__##_gen::reference_type;                            \
-  using __name__##_mut_ref = typename __name__##_gen::mut_reference_type
-
-#define DEF_HANDLE_TYPES(__name__)                         \
-  using __name__##_gen = handle_gen<handle_type::__name__>;\
   using __name__##_handle = typename __name__##_gen::gen_type;              \
   using __name__##_ref = typename __name__##_gen::reference_type;           \
-  using __name__##_mut_ref = typename __name__##_gen::mut_reference_type
-
-DEF_HANDLE_TYPES(program_uniform);
-
-DEF_HANDLE_TYPES(program);
-DEF_HANDLE_TYPES(vertex_binding_desc);
-DEF_HANDLE_TYPES(buffer_object);
-DEF_HANDLE_TYPES(framebuffer_object);
-DEF_HANDLE_TYPES(texture_object);
-
-DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits);
-
-#define DEF_HANDLE_OPS(__type__) \
-  static inline bool operator == (__type__##_ref a, __type__##_ref b) {\
-    return a.value() == b.value();                                     \
-  }                                                                    \
-  static inline bool operator != (__type__##_ref a, __type__##_ref b) {\
-    return !(a == b);                                                  \
+  using __name__##_mut_ref = typename __name__##_gen::mut_reference_type;   \
+  static inline bool operator == (__name__##_ref a, __name__##_ref b) {     \
+    return a.value() == b.value();                                          \
+  }                                                                         \
+  static inline bool operator != (__name__##_ref a, __name__##_ref b) {     \
+    return !(a == b);                                                       \
   }
 
-DEF_HANDLE_OPS(program)
-DEF_HANDLE_OPS(program_uniform)
-DEF_HANDLE_OPS(texture_object)
+#define DEF_HANDLE_TYPES(__name__)                                        \
+  using __name__##_gen = handle_gen<handle_type::__name__>;               \
+  using __name__##_handle = typename __name__##_gen::gen_type;            \
+  using __name__##_ref = typename __name__##_gen::reference_type;         \
+  using __name__##_mut_ref = typename __name__##_gen::mut_reference_type; \
+  static inline bool operator == (__name__##_ref a, __name__##_ref b) {   \
+    return a.value() == b.value();                                        \
+  }                                                                       \
+  static inline bool operator != (__name__##_ref a, __name__##_ref b) {   \
+    return !(a == b);                                                     \
+  }
+
+DEF_HANDLE_TYPES(program_uniform)
+
+DEF_HANDLE_TYPES(program)
+DEF_HANDLE_TYPES(vertex_binding_desc)
+DEF_HANDLE_TYPES(buffer_object)
+DEF_HANDLE_TYPES(framebuffer_object)
+DEF_HANDLE_TYPES(texture_object)
+
+DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
 
 class device {
 public:
   void apply_state(const gl_state& s);
-
-
 
   // shaders
 
