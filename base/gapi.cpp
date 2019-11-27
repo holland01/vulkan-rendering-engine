@@ -455,19 +455,7 @@ namespace gapi {
   texture_object_handle device::texture_new() {
     texture_object_handle ret{};
 
-    APISEL(
-      GLuint handle = 0;
-      GL_FN(glGenTextures(1, &handle));
-
-      if (handle != 0) {
-        ret.set_value(handle);
-      } 
-      else {
-        ret.set_null();
-      }
-      ,
-      APISTUB
-    );
+    gl_gen_handle<texture_object_handle, &glGenTextures>(ret);
 
     return ret;
   }

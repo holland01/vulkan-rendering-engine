@@ -16,6 +16,10 @@ GLint gl_wrap_mode_to_int(gapi::texture_wrap_mode mode);
 
 GLenum gl_texture_target_to_enum(gapi::texture_target target);
 
+
+template <class handleType, void glGenFn(GLsizei n, GLuint* pids)>
+void gl_gen_handle(handleType& h);
+
 //------------------------------------------------------
 
 template <class enumType>
@@ -33,4 +37,18 @@ GLint gl_filter_to_int(enumType filter) {
       break;
   }
   return ret;
+}
+
+template <class handleType, void glGenFn(GLsizei n, GLuint* pids)>
+void gl_gen_handle(handleType& h) {
+  GLuint value = 0;
+  GL_FN(glGenFn(1, &value));
+
+  if (value != 0) {
+    h.set_value(value);
+  } else {
+    h.set_null();
+  }
+}
+
 }
