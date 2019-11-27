@@ -5,6 +5,7 @@ using gapi::texture_fmt;
 using gapi::texture_int_fmt;
 using gapi::texture_wrap_mode;
 using gapi::texture_target;
+#define BAD_ENUM __FATAL__("Unknown enum value passed")
 
 GLenum gl_primitive_type_to_enum(primitive_type ptype) {
   GLenum ret = GL_NONE;
@@ -16,7 +17,7 @@ GLenum gl_primitive_type_to_enum(primitive_type ptype) {
       ret = GL_FLOAT;
       break;
     default:
-      __FATAL__("Unknown enum value passed");
+      BAD_ENUM;
       break;
   }
   return ret;
@@ -35,7 +36,7 @@ GLenum gl_fmt_to_enum(texture_fmt fmt) {
       ret = GL_DEPTH_COMPONENT;
       break;
     default:
-      __FATAL__("Unknown enum value passed");
+      BAD_ENUM;
       break;
   }
   return ret;
@@ -60,7 +61,7 @@ GLint gl_int_fmt_to_int(texture_int_fmt fmt) {
       ret = GL_DEPTH_COMPONENT24;
       break;
     default:
-      __FATAL__("Unknown enum value passed");
+      BAD_ENUM;
       break;
   }
   return ret;
@@ -76,7 +77,7 @@ GLint gl_wrap_mode_to_int(texture_wrap_mode mode) {
       ret = GL_REPEAT;
       break;
     default:
-      __FATAL__("Unknown enum value passed");
+      BAD_ENUM;
       break;
   }
   return ret;
@@ -110,7 +111,7 @@ GLenum gl_texture_target_to_enum(texture_target target) {
       ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;
       break;
     default:
-      __FATAL__("Unknown target received");
+      BAD_ENUM;
       break;
   }
   return ret;
