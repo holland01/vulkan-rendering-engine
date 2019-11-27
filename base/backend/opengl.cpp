@@ -5,6 +5,9 @@ using gapi::texture_fmt;
 using gapi::texture_int_fmt;
 using gapi::texture_wrap_mode;
 using gapi::texture_target;
+using gapi::fbo_target;
+using gapi::fbo_attach_type;
+
 #define BAD_ENUM __FATAL__("Unknown enum value passed")
 
 GLenum gl_primitive_type_to_enum(primitive_type ptype) {
@@ -118,5 +121,44 @@ GLenum gl_texture_target_to_enum(texture_target target) {
   }
   return ret;
 }
+
+GLenum gl_fbo_target_to_enum(fbo_target t) {
+  GLenum ret = 0;
+
+  switch (t) {
+    case fbo_target::read:
+      ret = GL_READ_FRAMEBUFFER;
+      break;
+    
+    case fbo_target::write:
+    case fbo_target::readwrite:
+      ret = GL_FRAMEBUFFER;
+      break;
+
+    default:
+      BAD_ENUM;
+      break;
+  }
+
+  return ret;
+}
+
+GLenum gl_fbo_attach_to_enum(gapi::fbo_attach_type a) {
+  GLenum ret = 0;
+
+  switch (a) {
+    case fbo_attach_type::color0:
+      ret = GL_COLOR_ATTACHMENT0;
+      break;
+    
+    case fbo_attach_type::depth:
+      ret = GL_DEPTH_ATTACHMENT;
+      break;
+
+    default:
+      BAD_ENUM;
+      break;
+  }
+
   return ret;
 }

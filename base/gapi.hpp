@@ -172,6 +172,17 @@ enum class primitive_type {
   floating_point
 };
 
+enum class fbo_attach_type {
+  color0,
+  depth
+};
+
+enum class fbo_target {
+  read,
+  write,
+  readwrite
+};
+
 class texture_param {
 public:
   enum class type {
@@ -458,7 +469,6 @@ public:
   void apply_state(const gl_state& s);
 
   // shaders
-
   program_unit_handle create_shader(shader_type type);
 
   void delete_shader(program_unit_mut_ref program);
@@ -536,6 +546,31 @@ public:
                          primitive_type ptype,
                          bytesize_t size,
                          void* out_pixels);
+
+  // framebuffers
+
+  framebuffer_object_handle framebuffer_new();
+
+  void framebuffer_bind(fbo_target type, framebuffer_object_ref fbo);
+
+  // Assumes that a framebuffer is bound
+  void framebuffer_texture_2d(fbo_target target, 
+                              fbo_attach_type attachment,
+                              texture_target texture_target,
+                              texture_object_ref texture,
+                              miplevel_t mip);
+
+  // Assumes that a framebuffer is bound
+  void framebuffer_read_buffer(fbo_attach_type attachment);
+
+  // Assumes that a framebuffer is bound
+  void framebuffer_read_pixels(dimension_t x, 
+                               dimension_t y,
+                               dimension_t width,
+                               dimension_t height, 
+                               texture_fmt fmt,
+                               primitive_type type,
+                               void* pixels);
 };
 
 

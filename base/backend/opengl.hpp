@@ -16,9 +16,15 @@ GLint gl_wrap_mode_to_int(gapi::texture_wrap_mode mode);
 
 GLenum gl_texture_target_to_enum(gapi::texture_target target);
 
+GLenum gl_fbo_target_to_enum(gapi::fbo_target t);
+
+GLenum gl_fbo_attach_to_enum(gapi::fbo_attach_type a);
 
 template <class handleType, void glGenFn(GLsizei n, GLuint* pids)>
 void gl_gen_handle(handleType& h);
+
+template <class handleType, void (** glGenFn)(GLsizei n, GLuint* pids)>
+void glew_gen_handle(handleType& h);
 
 //------------------------------------------------------
 
@@ -51,4 +57,17 @@ void gl_gen_handle(handleType& h) {
   }
 }
 
+template <class handleType, void (** glGenFn)(GLsizei n, GLuint* pids)>
+void glew_gen_handle(handleType& h) {
+  GLuint value = 0;
+
+  void (* g)(GLsizei n, GLuint* pids) = *glGenFn;
+
+  GL_FN(g(1, &value));
+
+  if (value != 0) {
+    h.set_value(value);
+  } else {
+    h.set_null();
+  }
 }

@@ -589,4 +589,73 @@ namespace gapi {
       );
     }
   }
+
+  //-------------------------------
+  // framebuffer_object_handle
+  //-------------------------------
+
+  framebuffer_object_handle device::framebuffer_new() {
+    framebuffer_object_handle ret{};
+    glew_gen_handle<framebuffer_object_handle, &glGenFramebuffers>(ret);
+    return ret;
+  }
+
+  void device::framebuffer_bind(fbo_target type, framebuffer_object_ref fbo) {
+    if (fbo) {
+
+      if (fbo == k_framebuffer_object_none) {
+        GL_FN(glBindFramebuffer(gl_fbo_target_to_enum(type), 0));
+      }
+      else if (fbo_unbound_enforced()) {
+        GL_FN(glBindFramebuffer(gl_fbo_target_to_enum(type),
+                                fbo.value_as<GLuint>()));
+      }
+
+      m_curr_fbo_handle = fbo;
+    }
+  }
+
+  void device::framebuffer_texture_2d(fbo_target target, 
+                                      fbo_attach_type attachment,
+                                      texture_target texture_target,
+                                      texture_object_ref texture,
+                                      miplevel_t mip) {
+    if (texture) {
+      if (fbo_bound_enforced()) {
+        ASSERT(texture != k_texture_object_none);
+
+        GL_FN(glFramebufferTexture2D(gl_fbo_target_to_enum(target),
+                                    gl_fbo_attach_to_enum(attachment),
+                                    gl_texture_target_to_enum(texture_target),
+                                    texture.value_as<GLuint>(),
+                                    static_cast<GLint>(mip)));
+      }
+    }
+  }
+
+    // Assumes that a framebuffer is bound
+  void device::framebuffer_read_buffer(fbo_attach_type attachment) {
+    if (fbo_bound_enforced()) {
+      GL_FN(glReadBuffer(gl_fbo_attach_to_enum(attachment)));
+    }
+  }
+
+  // Assumes that a framebuffer is bound
+  void device::framebuffer_read_pixels(dimension_t x, 
+                               dimension_t y,
+                               dimension_t width,
+                               dimension_t height, 
+                               texture_fmt fmt,
+                               primitive_type type,
+                               void* pixels) {
+    if (fbo_bound_enforced()) {
+      GL_FN(glReadPixels(static_cast<GLint>(x),
+                         static_cast<GLint>(y),
+                         static_cast<GLsizei>(width),
+                         static_cast<GLsizei>(height),
+                         gl_fmt_to_enum(fmt),
+                         gl_primitive_type_to_enum(type),
+                         pixels));
+    }
+  }
 }
