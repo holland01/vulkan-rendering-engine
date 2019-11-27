@@ -32,7 +32,7 @@ module_textures::~module_textures() {
   for (size_t i = 0; i < tex_handles.size(); ++i) {
     // unbind to ensure that the resources aren't contested
     // when we free them.
-    g_m.gpu->texture_bind(types[i], gapi::k_texture_none);
+    g_m.gpu->texture_bind(types[i], gapi::k_texture_object_none);
     g_m.gpu->texture_delete(tex_handles[i]);
   }
 }
@@ -47,7 +47,7 @@ void module_textures::bind(module_textures::index_type id, int slot) const {
 void module_textures::unbind(module_textures::index_type id) const {
   CLOG(logflag_textures_bind, "UNBINDING texture index %i with API handle %i @ slot %i\n", id, tex_handles[id], slots[id]);
   g_m.gpu->texture_set_active_unit(slots[id]);
-  g_m.gpu->texture_bind(types[id], gapi::k_texture_none);
+  g_m.gpu->texture_bind(types[id], gapi::k_texture_object_none);
 }
 
 module_textures::params module_textures::cubemap_params(uint32_t width, uint32_t height) {
@@ -172,7 +172,7 @@ module_textures::index_type module_textures::new_texture(const module_textures::
     g_m.gpu->texture_set_param(p.type, param);
   }
 
-  g_m.gpu->texture_bind(p.type, gapi::k_texture_none);
+  g_m.gpu->texture_bind(p.type, gapi::k_texture_object_none);
 
   auto index = static_cast<module_textures::index_type>(tex_handles.size());
 

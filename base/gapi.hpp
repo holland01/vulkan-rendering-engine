@@ -385,6 +385,7 @@ struct handle_gen {
   using __name__##_handle = typename __name__##_gen::gen_type;              \
   using __name__##_ref = typename __name__##_gen::reference_type;           \
   using __name__##_mut_ref = typename __name__##_gen::mut_reference_type;   \
+  extern const __name__##_handle k_##__name__##_none;                       \
   static inline bool operator == (__name__##_ref a, __name__##_ref b) {     \
     return a.value() == b.value();                                          \
   }                                                                         \
@@ -392,17 +393,7 @@ struct handle_gen {
     return !(a == b);                                                       \
   }
 
-#define DEF_HANDLE_TYPES(__name__)                                        \
-  using __name__##_gen = handle_gen<handle_type::__name__>;               \
-  using __name__##_handle = typename __name__##_gen::gen_type;            \
-  using __name__##_ref = typename __name__##_gen::reference_type;         \
-  using __name__##_mut_ref = typename __name__##_gen::mut_reference_type; \
-  static inline bool operator == (__name__##_ref a, __name__##_ref b) {   \
-    return a.value() == b.value();                                        \
-  }                                                                       \
-  static inline bool operator != (__name__##_ref a, __name__##_ref b) {   \
-    return !(a == b);                                                     \
-  }
+#define DEF_HANDLE_TYPES(__name__) DEF_TRAITED_HANDLE_TYPES(__name__, __dummy_mixin__)
 
 DEF_HANDLE_TYPES(program_uniform)
 
@@ -492,9 +483,7 @@ public:
                         const void *pixels);
 };
 
-extern const program_handle k_program_none;
-extern const program_uniform_handle k_program_uniform_none;
-extern const texture_object_handle k_texture_none;
+
 
 struct state {
 

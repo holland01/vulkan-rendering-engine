@@ -12,7 +12,8 @@ namespace gapi {
 
   const program_handle k_program_none{k_none_value};
   const program_uniform_handle k_program_uniform_none{k_none_value};
-  const texture_object_handle k_texture_none{k_none_value};
+  const texture_object_handle k_texture_object_none{k_none_value};
+  const framebuffer_object_handle k_framebuffer_object_none{k_none_value};
 
   void device::apply_state(const gl_state& s) {
     if (s.draw_buffers.fbo) {
@@ -535,7 +536,7 @@ namespace gapi {
     if (texture) {
       APISEL(
         GL_FN(glBindTexture(gl_target_to_enum(target), 
-                            (texture != k_texture_none)
+                            (texture != k_texture_object_none)
                              ? texture.value_as<GLuint>()
                              : 0));
         ,
