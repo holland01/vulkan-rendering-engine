@@ -82,7 +82,7 @@ GLint gl_wrap_mode_to_int(texture_wrap_mode mode) {
   return ret;
 }
 
-GLenum gl_target_to_enum(texture_target target) {
+GLenum gl_texture_target_to_enum(texture_target target) {
   GLenum ret = GL_NONE;
   switch (target) {
     case texture_target::texture_2d:

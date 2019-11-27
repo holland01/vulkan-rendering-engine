@@ -276,7 +276,7 @@ GLenum module_textures::format(index_type i) const {
 }
 
 GLenum module_textures::type(index_type i) const {
-  return gl_target_to_enum(types.at(i));
+  return gl_texture_target_to_enum(types.at(i));
 }
 
 GLenum module_textures::texel_type(index_type i) const {

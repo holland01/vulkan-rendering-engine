@@ -473,7 +473,7 @@ namespace gapi {
   }
 
   void device::texture_set_param(texture_target target, texture_param_ref param) {
-    GLenum gltarget = gl_target_to_enum(target);
+    GLenum gltarget = gl_texture_target_to_enum(target);
 
     switch (param.param_type()) {
       case texture_param::type::mag_filter:
@@ -535,7 +535,7 @@ namespace gapi {
   void device::texture_bind(texture_target target, texture_object_ref texture) {
     if (texture) {
       APISEL(
-        GL_FN(glBindTexture(gl_target_to_enum(target), 
+        GL_FN(glBindTexture(gl_texture_target_to_enum(target), 
                             (texture != k_texture_object_none)
                              ? texture.value_as<GLuint>()
                              : 0));
@@ -566,7 +566,7 @@ namespace gapi {
                                 primitive_type type, 
                                 const void *pixels) {
     APISEL(
-      GL_FN(glTexImage2D( gl_target_to_enum(target),
+      GL_FN(glTexImage2D( gl_texture_target_to_enum(target),
                           static_cast<GLint>(mip),
                           gl_int_fmt_to_int(internal),
                           static_cast<GLsizei>(width),
