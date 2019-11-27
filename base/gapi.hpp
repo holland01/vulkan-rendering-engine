@@ -405,7 +405,54 @@ DEF_HANDLE_TYPES(texture_object)
 
 DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
 
+//
+// For the device class.
+//
+// Provides the following:
+//
+// 1) a handle for the given handle type
+// 2) a bound function which ensures that the handle type value is not equal
+//    to its corresponding none type
+// 3) an enforcing bound function which will crash the app if the type isn't bound
+// 4) an enforcing unbound function which will crash the app if the type is bound.
+//
+// These are used throughout the various state machine functions
+
+#define DEVICE_HANDLE_OPS(__name__)                           \
+  __name__##_handle m_curr_##__name__##{k_##__name__##_none}; \
+  bool __name__##_bound() const {                             \
+    return m_curr_##__name__## != k_##_name__##_none;         \
+  }                                                           \
+  bool __name__##_bound_enforced() const {                    \
+    auto h = __name__##_bound();                              \
+    ASSERT(h);                                                \
+    return h;                                                 \
+  }                                                           \
+  bool __name__##_unbound_enforced() const {                  \
+    auto h = ! __name__##_bound();                            \
+    ASSERT(h);                                                \
+    return h;                                                 \
+  }
+
 class device {
+  framebuffer_object_handle m_curr_fbo_handle{k_framebuffer_object_none};
+
+  bool has_fbo_bound() const { 
+    return m_curr_fbo_handle != k_framebuffer_object_none; 
+  }
+
+  bool fbo_bound_enforced() const {
+    auto h = has_fbo_bound();
+    ASSERT(h);
+    return h;
+  }
+
+  bool fbo_unbound_enforced() const {
+    auto h = !has_fbo_bound();
+    ASSERT(h);
+    return h;
+  }
+
 public:
   void apply_state(const gl_state& s);
 
