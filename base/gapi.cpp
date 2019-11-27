@@ -449,7 +449,7 @@ namespace gapi {
   }
 
   //-------------------------------
-  // textures
+  // texture_object_handle
   //-------------------------------
 
   texture_object_handle device::texture_new() {
@@ -566,5 +566,27 @@ namespace gapi {
       ,
       APISTUB
     );
-  }  
+  }
+
+  void device::texture_get_image( texture_object_ref texture, 
+                                  miplevel_t level, 
+                                  texture_fmt fmt,
+                                  primitive_type ptype,
+                                  bytesize_t size,
+                                  void* out_pixels) {
+    if (texture) {
+      ASSERT(texture != k_texture_object_none);
+
+      APISEL(
+        GL_FN(glGetTextureImage(texture.value_as<GLuint>(),
+                                static_cast<GLint>(level),
+                                gl_fmt_to_enum(fmt),
+                                gl_primitive_type_to_enum(ptype),
+                                static_cast<GLsizei>(size),
+                                out_pixels));
+        ,
+        APISTUB
+      );
+    }
+  }
 }

@@ -79,6 +79,7 @@ using handle_int_t = int64_t;
 using int_t = int64_t;
 using dimension_t = int64_t;
 using miplevel_t = uint8_t;
+using bytesize_t = int64_t;
 
 enum class backend : uint8_t {
   vulkan = 0,
@@ -528,6 +529,13 @@ public:
                         texture_fmt format, 
                         primitive_type type, 
                         const void *pixels);
+
+  void texture_get_image(texture_object_ref texture, 
+                         miplevel_t level, 
+                         texture_fmt fmt,
+                         primitive_type ptype,
+                         bytesize_t size,
+                         void* out_pixels);
 };
 
 

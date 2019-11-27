@@ -73,9 +73,11 @@ GLint gl_wrap_mode_to_int(texture_wrap_mode mode) {
     case texture_wrap_mode::clamp_to_edge:
       ret = GL_CLAMP_TO_EDGE;
       break;
+    
     case texture_wrap_mode::repeat:
       ret = GL_REPEAT;
       break;
+
     default:
       BAD_ENUM;
       break;
@@ -114,5 +116,7 @@ GLenum gl_texture_target_to_enum(texture_target target) {
       BAD_ENUM;
       break;
   }
+  return ret;
+}
   return ret;
 }
