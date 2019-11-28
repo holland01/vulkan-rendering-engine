@@ -431,9 +431,9 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
 // These are used throughout the various state machine functions
 
 #define DEVICE_HANDLE_OPS(__name__)                           \
-  __name__##_handle m_curr_##__name__##{k_##__name__##_none}; \
+  __name__##_handle m_curr_##__name__ {k_##__name__##_none}; \
   bool __name__##_bound() const {                             \
-    return m_curr_##__name__## != k_##_name__##_none;         \
+    return m_curr_##__name__ != k_##__name__##_none;        \
   }                                                           \
   bool __name__##_bound_enforced() const {                    \
     auto h = __name__##_bound();                              \
