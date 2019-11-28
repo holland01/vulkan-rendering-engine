@@ -259,8 +259,8 @@ void fill_checkerboard(darray<uint8_t>& blank, int w, int h, glm::u8vec3 mask, i
   }
 }
 
-module_textures::index_type module_textures::handle(module_textures::index_type i) const {
-  return tex_handles.at(i).value_as<GLuint>();
+gapi::texture_object_ref module_textures::handle(module_textures::index_type i) const {
+  return tex_handles.at(i);
 }
 
 uint32_t module_textures::width(index_type i) const {
@@ -271,16 +271,16 @@ uint32_t module_textures::height(index_type i) const {
   return heights.at(i);
 }
 
-GLenum module_textures::format(index_type i) const {
-  return gl_fmt_to_enum(formats.at(i));
+gapi::texture_fmt module_textures::format(index_type i) const {
+  return formats.at(i);
 }
 
-GLenum module_textures::type(index_type i) const {
-  return gl_texture_target_to_enum(types.at(i));
+gapi::texture_target module_textures::type(index_type i) const {
+  return types.at(i);
 }
 
-GLenum module_textures::texel_type(index_type i) const {
-  return gl_primitive_type_to_enum(texel_types.at(i));
+gapi::primitive_type module_textures::texel_type(index_type i) const {
+  return texel_types.at(i);
 }
 
 uint32_t module_textures::bytes_per_pixel(index_type i) const {

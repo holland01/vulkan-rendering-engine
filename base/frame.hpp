@@ -54,7 +54,7 @@ struct framebuffer_ops {
 #define POST_UNBOUND self.has_bind = false
 
   struct fbo2d {
-    darray<GLuint> fbos;
+    darray<gapi::framebuffer_object_handle> fbos;
     darray<uint32_t> widths;
     darray<uint32_t> heights;
     darray<module_textures::index_type> color_attachments;
@@ -72,9 +72,9 @@ struct framebuffer_ops {
     auto color_attachment(index_type id) const { return color_attachments.at(id); }
 
     auto make_fbo(uint32_t width, uint32_t height) {
-      GLuint fbo = 0;
-      GL_FN(glGenFramebuffers(1, &fbo));
-      GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
+      gapi::framebuffer_object_handle fbo = g_m.gpu->framebuffer_new();
+
+      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, fbo);
 
       auto depth_attachment =
         g_m.textures->new_texture(g_m.textures->depthtexture_params(width, height));
@@ -82,19 +82,19 @@ struct framebuffer_ops {
       auto color_attachment =
         g_m.textures->new_texture(g_m.textures->texture2d_rgba_params(width, height));
 
-      GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
-                                   GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D,
-                                   g_m.textures->handle(color_attachment),
-                                   0));
+      g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
+                                     gapi::fbo_attach_type::color0,
+                                     gapi::texture_target::texture_2d,
+                                     g_m.textures->handle(color_attachment),
+                                     0);
 
-      GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
-                                   GL_DEPTH_ATTACHMENT,
-                                   GL_TEXTURE_2D,
-                                   g_m.textures->handle(depth_attachment),
-                                   0));
+      g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
+                                     gapi::fbo_attach_type::depth,
+                                     gapi::texture_target::texture_2d,
+                                     g_m.textures->handle(depth_attachment),
+                                     0);
 
-      GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, gapi::k_framebuffer_object_none);
 
       index_type new_handle = I(fbos.size());
 
@@ -110,7 +110,8 @@ struct framebuffer_ops {
     void bind(index_type handle) const {
       PRE_UNBOUND;
 
-      GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, fbos[handle]));
+      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, fbos[handle]);
+
       GL_FN(glViewport(0, 0, widths[handle], heights[handle]));
 
       POST_BOUND;
@@ -138,15 +139,16 @@ struct framebuffer_ops {
         ASSERT(attach == GL_COLOR_ATTACHMENT0);
       );
 
-      GL_FN(glReadBuffer(GL_COLOR_ATTACHMENT0));
+      g_m.gpu->framebuffer_read_buffer(gapi::fbo_attach_type::color0);
 
-      GL_FN(glReadPixels(0,
-                         0,
-                         g_m.textures->width(C),
-                         g_m.textures->height(C),
-                         g_m.textures->format(C),
-                         g_m.textures->texel_type(C),
-                         buffer.data()));
+      g_m.gpu->framebuffer_read_pixels(0,
+                                       0,
+                                       g_m.textures->width(C),
+                                       g_m.textures->height(C),
+                                       g_m.textures->format(C),
+                                       g_m.textures->texel_type(C),
+                                       buffer.data());
+
       unbind(handle);
 
       return {buffer,
@@ -158,7 +160,7 @@ struct framebuffer_ops {
     void unbind(index_type handle) const {
       PRE_BOUND;
 
-      GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, gapi::k_framebuffer_object_none);
 
       ASSERT_CODE(
         GLint viewport[4] = {0};
@@ -179,7 +181,7 @@ struct framebuffer_ops {
   struct render_cube {
     std::vector<module_textures::index_type> tex_color_handles;
     std::vector<module_textures::index_type> tex_depth_handles;
-    std::vector<GLuint> fbos;
+    std::vector<gapi::framebuffer_object_handle> fbos;
     std::vector<vec3_t> positions;
     std::vector<face_mats_type> faces;
 
@@ -255,11 +257,7 @@ struct framebuffer_ops {
 
       faces.push_back(calc_look_at_mats(position, radius));
 
-      {
-        GLuint fbo = 0;
-        GL_FN(glGenFramebuffers(1, &fbo));
-        fbos.push_back(fbo);
-      }
+      fbos.push_back(g_m.gpu->framebuffer_new());
 
       return static_cast<index_type>(rcubeid);
     }
@@ -267,8 +265,7 @@ struct framebuffer_ops {
     void bind(index_type cube_id) const {
       PRE_UNBOUND;
 
-      GL_FN(glBindFramebuffer(GL_FRAMEBUFFER,
-                              fbos.at(cube_id)));
+      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, fbos.at(cube_id));
 
       GL_FN(glViewport(0,
                        0,
@@ -282,39 +279,40 @@ struct framebuffer_ops {
       auto sz = cwidth * cheight * 4 * 6;
       std::vector<uint8_t> all_faces(static_cast<size_t>(sz), 0x7f);
 
-      GL_FN(glGetTextureImage(g_m.textures->handle(tex_color_handles.at(cube_id)),
-                              0,
-                              GL_RGBA,
-                              GL_UNSIGNED_BYTE,
-                              static_cast<GLsizei>(all_faces.size()),
-                              &all_faces[0]));
+      g_m.gpu->texture_get_image(g_m.textures->handle(tex_color_handles.at(cube_id)),
+                                 0,
+                                 gapi::texture_fmt::rgba,
+                                 gapi::primitive_type::unsigned_byte,
+                                 static_cast<gapi::bytesize_t>(all_faces.size()),
+                                 &all_faces[0]);
 
       return std::move(all_faces);
     }
 
     glm::mat4 set_face(index_type cube_id, axis face) const {
-      GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
-                                   GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face),
-                                   g_m.textures->handle(tex_color_handles.at(cube_id)),
-                                   0));
+
+      uint32_t v = static_cast<uint32_t>(gapi::texture_target::texture_cube_map_px)
+                + static_cast<uint32_t>(face);
+
+      g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite, 
+                                      gapi::fbo_attach_type::color0,
+                                      static_cast<gapi::texture_target>(v),
+                                      g_m.textures->handle(tex_color_handles.at(cube_id)),
+                                      0);
 #ifdef ENVMAP_CUBE_DEPTH
-      auto target = GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(face);
+      auto target = static_cast<gapi::texture_target>(v);
 #else
-      auto target = GL_TEXTURE_2D;
+      auto target = gapi::texture_target::texture_2d;
 #endif
 
-      GL_FN(glFramebufferTexture2D(GL_FRAMEBUFFER,
-                                   GL_DEPTH_ATTACHMENT,
-                                   target,
-                                   g_m.textures->handle(tex_depth_handles.at(cube_id)),
-                                   0));
+      g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
+                                      gapi::fbo_attach_type::depth,
+                                      target,
+                                      g_m.textures->handle(tex_depth_handles.at(cube_id)),
+                                      0);
 
-      auto fbcheck = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-      if (fbcheck != GL_FRAMEBUFFER_COMPLETE) {
-        write_logf("FRAMEBUFFER BIND ERROR: code returned = 0x%x", fbcheck);
-      }
-      ASSERT(fbcheck == GL_FRAMEBUFFER_COMPLETE);
+      bool fbcheck = g_m.gpu->framebuffer_ok();
+      ASSERT(fbcheck);
 
       const auto& viewmats = faces.at(cube_id);
 
@@ -324,7 +322,9 @@ struct framebuffer_ops {
     void unbind() {
       PRE_BOUND;
 
-      GL_FN(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, 
+                                gapi::k_framebuffer_object_none);
+
       GL_FN(glViewport(0, 0, self.width, self.height));
 
       POST_UNBOUND;

@@ -658,4 +658,19 @@ namespace gapi {
                          pixels));
     }
   }
+
+  bool device::framebuffer_ok() const {
+    bool ret = false;
+    if (framebuffer_object_bound_enforced()) {
+      GLenum result;
+      GL_FN(result = glCheckFramebufferStatus(GL_FRAMEBUFFER));
+
+      ret = result == GL_FRAMEBUFFER_COMPLETE;
+      
+      if (!ret) {
+        write_logf("FRAMEBUFFER BIND ERROR: code returned = 0x%x", result);
+      }
+    }
+    return ret;
+  }
 }

@@ -556,6 +556,9 @@ public:
                                texture_fmt fmt,
                                primitive_type type,
                                void* pixels);
+
+  // Assumes that a framebuffer is bound
+  bool framebuffer_ok() const;
 };
 
 

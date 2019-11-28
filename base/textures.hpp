@@ -156,13 +156,14 @@ struct module_textures: public type_module {
 
   void fill_texture2d(gapi::texture_target paramtype, index_type tid, const uint8_t* data);
 
-  index_type handle(index_type i) const;
+  gapi::texture_object_ref handle(index_type i) const;
 
   uint32_t width(index_type i) const;
   uint32_t height(index_type i) const;
-  GLenum format(index_type i) const;
-  GLenum type(index_type i) const;
-  GLenum texel_type(index_type i) const;
+
+  gapi::texture_fmt format(index_type i) const;
+  gapi::texture_target type(index_type i) const;
+  gapi::primitive_type texel_type(index_type i) const;
 
   uint32_t bytes_per_pixel(index_type i) const;
 };
