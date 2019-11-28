@@ -447,23 +447,8 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
   }
 
 class device {
-  framebuffer_object_handle m_curr_fbo_handle{k_framebuffer_object_none};
-
-  bool has_fbo_bound() const { 
-    return m_curr_fbo_handle != k_framebuffer_object_none; 
-  }
-
-  bool fbo_bound_enforced() const {
-    auto h = has_fbo_bound();
-    ASSERT(h);
-    return h;
-  }
-
-  bool fbo_unbound_enforced() const {
-    auto h = !has_fbo_bound();
-    ASSERT(h);
-    return h;
-  }
+private:
+  DEVICE_HANDLE_OPS(framebuffer_object);
 
 public:
   void apply_state(const gl_state& s);

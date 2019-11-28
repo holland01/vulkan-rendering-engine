@@ -606,12 +606,12 @@ namespace gapi {
       if (fbo == k_framebuffer_object_none) {
         GL_FN(glBindFramebuffer(gl_fbo_target_to_enum(type), 0));
       }
-      else if (fbo_unbound_enforced()) {
+      else if (framebuffer_object_unbound_enforced()) {
         GL_FN(glBindFramebuffer(gl_fbo_target_to_enum(type),
                                 fbo.value_as<GLuint>()));
       }
 
-      m_curr_fbo_handle = fbo;
+      m_curr_framebuffer_object = fbo;
     }
   }
 
@@ -621,7 +621,7 @@ namespace gapi {
                                       texture_object_ref texture,
                                       miplevel_t mip) {
     if (texture) {
-      if (fbo_bound_enforced()) {
+      if (framebuffer_object_bound_enforced()) {
         ASSERT(texture != k_texture_object_none);
 
         GL_FN(glFramebufferTexture2D(gl_fbo_target_to_enum(target),
@@ -635,7 +635,7 @@ namespace gapi {
 
     // Assumes that a framebuffer is bound
   void device::framebuffer_read_buffer(fbo_attach_type attachment) {
-    if (fbo_bound_enforced()) {
+    if (framebuffer_object_bound_enforced()) {
       GL_FN(glReadBuffer(gl_fbo_attach_to_enum(attachment)));
     }
   }
@@ -648,7 +648,7 @@ namespace gapi {
                                texture_fmt fmt,
                                primitive_type type,
                                void* pixels) {
-    if (fbo_bound_enforced()) {
+    if (framebuffer_object_bound_enforced()) {
       GL_FN(glReadPixels(static_cast<GLint>(x),
                          static_cast<GLint>(y),
                          static_cast<GLsizei>(width),
