@@ -129,6 +129,7 @@ struct framebuffer_ops {
 
       bind(handle);
 
+#if 0
       ASSERT_CODE(
         // GL_COLOR_ATTACHMENT0 should be the default read buffer for the FBO.
         // We check this to ensure that's the case - if it isn't, then
@@ -138,6 +139,7 @@ struct framebuffer_ops {
         glGetIntegerv(GL_READ_BUFFER, &attach);
         ASSERT(attach == GL_COLOR_ATTACHMENT0);
       );
+#endif
 
       g_m.gpu->framebuffer_read_buffer(gapi::fbo_attach_type::color0);
 
