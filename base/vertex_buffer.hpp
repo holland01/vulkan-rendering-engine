@@ -2,24 +2,24 @@
 
 #include "common.hpp"
 #include "util.hpp"
-
+#include "gapi.hpp"
 #include <glm/gtc/constants.hpp>
 
 struct module_vertex_buffer {
   darray<vertex> data;
 
-  mutable GLuint vbo;
+  mutable gapi::buffer_object_handle vbo;
 
   module_vertex_buffer()
-    : vbo(0) {
+    : vbo(gapi::buffer_object_handle{}) {
   }
 
   void bind() const {
-    GL_FN(glBindBuffer(GL_ARRAY_BUFFER, vbo));
+    g_m.gpu->buffer_object_bind(gapi::buffer_object_target::vertex, vbo);
   }
 
   void unbind() const {
-    GL_FN(glBindBuffer(GL_ARRAY_BUFFER, 0));
+    g_m.gpu->buffer_object_unbind(gapi::buffer_object_target::vertex);
   }
 
   void push(const vertex& v) {
@@ -27,16 +27,16 @@ struct module_vertex_buffer {
   }
 
   void reset() const {
-    if (vbo == 0) {
-      GL_FN(glGenBuffers(1, &vbo));
+    if (vbo.is_null()) {
+      vbo = g_m.gpu->buffer_object_new();
     }
 
     bind();
 
-    GL_FN(glBufferData(GL_ARRAY_BUFFER,
-                       sizeof(data[0]) * data.size(),
-                       &data[0],
-                       GL_STATIC_DRAW));
+    g_m.gpu->buffer_object_set_data(gapi::buffer_object_target::vertex,
+                                    sizeof(data[0]) * data.size(),
+                                    data.data(),
+                                    gapi::buffer_object_usage::static_draw);
 
     unbind();
   }
