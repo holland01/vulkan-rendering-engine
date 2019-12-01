@@ -2,7 +2,8 @@
 
 #include "common.hpp"
 
-#include<variant>
+#include <variant>
+#include <unordered_map>
 
 struct gl_state;
 
@@ -376,6 +377,36 @@ struct program_unit_traits {
 
 struct __dummy_mixin__ {};
 
+//
+// NOTE:
+// default operator= for gen_type appears to be:
+// 
+// gen_type& operator=(gen_type& x) { ... }
+//
+// ...Or maybe:
+//
+// gen_type& operator=(const gen_type& x) { ... }
+//
+// Ultimately, it's something that's going to create compiler errors 
+// for the initialization of reference types.
+// To elaborate, if we create a map like so:
+//
+// using map_type = std::unordered_map<key_type, handle_type_ref>;
+//
+// ...And then do:
+//
+// map_type X;
+// X[some_key] = <const-handle-instance>;
+//
+// ...There will be an error that results due to attempting to initialize
+// a constant reference with a reference (instead of a value).
+//
+// So, for now we're stuck with having to copy handle values into the map.
+// This can be seen in situations like what's found in 
+// the macro DEVICE_HANDLE_OPS_MT (used in the device class for validation/tracking). 
+// The performance hit appears to currently be negligable, but that could change as handle types 
+// change over time. This comment is here for reference, in the event that actually happens.
+//
 template <handle_type HandleType, class Traits = __dummy_mixin__>
 struct handle_gen {
   static constexpr handle_type k_handle_type = HandleType;
@@ -431,9 +462,9 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
 // These are used throughout the various state machine functions
 
 #define DEVICE_HANDLE_OPS(__name__)                           \
-  __name__##_handle m_curr_##__name__ {k_##__name__##_none}; \
+  __name__##_handle m_curr_##__name__ {k_##__name__##_none};  \
   bool __name__##_bound() const {                             \
-    return m_curr_##__name__ != k_##__name__##_none;        \
+    return m_curr_##__name__ != k_##__name__##_none;          \
   }                                                           \
   bool __name__##_bound_enforced() const {                    \
     auto h = __name__##_bound();                              \
@@ -444,6 +475,32 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
     auto h = ! __name__##_bound();                            \
     ASSERT(h);                                                \
     return h;                                                 \
+  }
+
+#define DEVICE_HANDLE_OPS_MT(__name__, __target_enum__)                             \
+  using __name__##_bind_map =                                                       \
+    std::unordered_map<__target_enum__, __name__##_handle>;                         \
+  __name__##_bind_map  m_curr_##__name__ {                                          \
+    []() -> __name__##_bind_map {                                                   \
+      __name__##_bind_map R{};                                                      \
+      for (auto x : enum_type<__target_enum__>()) {                                 \
+        R.insert({x, k_##__name__##_none});                                         \
+      }                                                                             \
+      return R;                                                                     \
+    }()                                                                             \
+  };                                                                                \
+  bool __name__##_bound(__target_enum__ T) const {                                  \
+    return m_curr_##__name__ .at(T) != k_##__name__##_none;                         \
+  }                                                                                 \
+  bool __name__##_bound_enforced(__target_enum__ T) const {                         \
+    auto h = __name__##_bound(T);                                                   \
+    ASSERT(h);                                                                      \
+    return h;                                                                       \
+  }                                                                                 \
+  bool __name__##_unbound_enforced(__target_enum__ T) const {                       \
+    auto h = ! __name__##_bound(T);                                                 \
+    ASSERT(h);                                                                      \
+    return h;                                                                       \
   }
 
 class device {

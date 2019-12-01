@@ -64,3 +64,73 @@ void report_gl_error(GLenum err,
                      const char* func,
                      const char* file,
                      const char* expr);
+
+// https://stackoverflow.com/a/8498694
+//
+// This is a class which acts as a kind of "pseudo-reflection" for enums:
+// the goal is to be able iterate over enum class values in a for loop.
+// As an example, if we have the given enum class:
+// 
+// enum class my_enum {
+//    a,
+//    b,
+//    c,
+//    d,
+//    enum_type_first = a,
+//    enum_type_last = d
+// };
+// 
+// we can then use that class in a for loop like so:
+//
+// for (auto enum_value: enum_type<my_enum> ) {
+//     < do something with enum value >
+// }
+// 
+// Thus, we're iterating through {a, b, c, d} values with this class.
+// This is useful in a few niche situations.
+//
+// Note that enum_type_first and enum_type_last must be defined.
+
+template< typename T >
+class enum_type
+{
+public:
+   class iterator
+   {
+   public:
+      iterator( int value ) :
+         m_value( value )
+      { }
+
+      T operator*( void ) const
+      {
+         return (T)m_value;
+      }
+
+      void operator++( void )
+      {
+         ++m_value;
+      }
+
+      bool operator!=( iterator rhs )
+      {
+         return m_value != rhs.m_value;
+      }
+
+   private:
+      int m_value;
+   };
+
+};
+
+template< typename T >
+typename enum_type<T>::iterator begin( enum_type<T> )
+{
+   return typename enum_type<T>::iterator( (int)T::enum_type_first );
+}
+
+template< typename T >
+typename enum_type<T>::iterator end( enum_type<T> )
+{
+   return typename enum_type<T>::iterator( ((int)T::enum_type_last) + 1 );
+}
