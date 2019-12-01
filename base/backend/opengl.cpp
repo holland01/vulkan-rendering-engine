@@ -7,6 +7,8 @@ using gapi::texture_wrap_mode;
 using gapi::texture_object_target;
 using gapi::fbo_target;
 using gapi::fbo_attach_type;
+using gapi::buffer_object_target;
+using gapi::buffer_object_usage;
 
 #define BAD_ENUM __FATAL__("Unknown enum value passed")
 
@@ -155,6 +157,41 @@ GLenum gl_fbo_attach_to_enum(gapi::fbo_attach_type a) {
       ret = GL_DEPTH_ATTACHMENT;
       break;
 
+    default:
+      BAD_ENUM;
+      break;
+  }
+
+  return ret;
+}
+
+GLenum gl_buffer_target_to_enum(gapi::buffer_object_target b) {
+  GLenum ret = 0;
+
+  switch (b) {
+    case buffer_object_target::vertex:
+      ret = GL_ARRAY_BUFFER;
+      break;
+
+    default:
+      BAD_ENUM;
+      break;
+  }
+
+  return ret;
+}
+
+GLenum gl_buffer_usage_to_enum(gapi::buffer_object_usage b) {
+  GLenum ret = 0;
+  switch (b) {
+    case buffer_object_usage::dynamic_draw:
+      ret = GL_DYNAMIC_DRAW;
+      break;
+
+    case buffer_object_usage::static_draw:
+      ret = GL_STATIC_DRAW;
+      break;
+      
     default:
       BAD_ENUM;
       break;

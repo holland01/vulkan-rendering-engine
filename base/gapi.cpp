@@ -14,6 +14,7 @@ namespace gapi {
   const program_uniform_handle k_program_uniform_none{k_none_value};
   const texture_object_handle k_texture_object_none{k_none_value};
   const framebuffer_object_handle k_framebuffer_object_none{k_none_value};
+  const buffer_object_handle k_buffer_object_none{k_none_value};
 
   void device::apply_state(const gl_state& s) {
     if (s.draw_buffers.fbo) {
@@ -674,6 +675,42 @@ namespace gapi {
     return ret;
   }
 
+  //-------------------------------
+  // buffer_object_handle
+  //-------------------------------
+
+  buffer_object_handle device::buffer_object_new() {
+    buffer_object_handle ret{};
+    glew_gen_handle<buffer_object_handle, &glGenBuffers>(ret);
+    return ret;
+  }
+
+  void device::buffer_object_bind(buffer_object_target target, buffer_object_ref obj) {
+    if (buffer_object_unbound_enforced(target)) {
+      GL_FN(glBindBuffer(gl_buffer_target_to_enum(target), 
+                         obj.value_as<GLuint>()));
+
+      m_curr_buffer_object[target] = obj;
+    }
+  }
+
+  void device::buffer_object_unbind(buffer_object_target target) {
+    if (buffer_object_bound_enforced(target)) {
+      GL_FN(glBindBuffer(gl_buffer_target_to_enum(target),
+                         0));
+
+      m_curr_buffer_object[target] = k_buffer_object_none;
+    }
+  }
+
+  void device::buffer_object_set_data(buffer_object_target target, bytesize_t size, const void* data, buffer_object_usage usage) {
+    if (buffer_object_bound_enforced(target)) {
+      GL_FN(glBufferData(gl_buffer_target_to_enum(target),
+                        static_cast<GLsizeiptr>(size),
+                        static_cast<const GLvoid*>(data),
+                        gl_buffer_usage_to_enum(usage)));
+    }
+  }
   //-------------------------------
   // viewport
   //-------------------------------

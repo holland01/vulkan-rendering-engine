@@ -20,6 +20,10 @@ GLenum gl_fbo_target_to_enum(gapi::fbo_target t);
 
 GLenum gl_fbo_attach_to_enum(gapi::fbo_attach_type a);
 
+GLenum gl_buffer_target_to_enum(gapi::buffer_object_target b);
+
+GLenum gl_buffer_usage_to_enum(gapi::buffer_object_usage b);
+
 template <class handleType, void glGenFn(GLsizei n, GLuint* pids)>
 void gl_gen_handle(handleType& h);
 

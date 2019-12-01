@@ -98,6 +98,18 @@ enum class handle_type {
   texture_object
 };
 
+enum class buffer_object_target {
+  vertex,
+
+  enum_type_first = vertex,
+  enum_type_last = vertex
+};
+
+enum class buffer_object_usage {
+  dynamic_draw,
+  static_draw
+};
+
 enum class shader_type {
   vertex = 0,
   fragment
@@ -506,6 +518,7 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
 class device {
 private:
   DEVICE_HANDLE_OPS(framebuffer_object);
+  DEVICE_HANDLE_OPS_MT(buffer_object, buffer_object_target)
 
 public:
   void apply_state(const gl_state& s);
@@ -617,7 +630,16 @@ public:
   // Assumes that a framebuffer is bound
   bool framebuffer_object_ok() const;
 
-  
+  // buffer object 
+
+  buffer_object_handle buffer_object_new();
+
+  void buffer_object_bind(buffer_object_target binding, buffer_object_ref object);
+
+  void buffer_object_unbind(buffer_object_target target);
+
+  void buffer_object_set_data(buffer_object_target target, bytesize_t size, const void* data, buffer_object_usage usage);
+
 
   // viewport
 
