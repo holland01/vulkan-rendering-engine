@@ -559,6 +559,14 @@ public:
 
   // Assumes that a framebuffer is bound
   bool framebuffer_ok() const;
+
+  
+
+  // viewport
+
+  void viewport_set(dimension_t x, dimension_t y, dimension_t width, dimension_t height);
+
+  void viewport_get(dimension_t& out_x, dimension_t& out_y, dimension_t& out_width, dimension_t& out_height);
 };
 
 

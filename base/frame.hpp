@@ -112,7 +112,7 @@ struct framebuffer_ops {
 
       g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, fbos[handle]);
 
-      GL_FN(glViewport(0, 0, widths[handle], heights[handle]));
+      g_m.gpu->viewport_set(0, 0, widths[handle], heights[handle]);
 
       POST_BOUND;
     }
@@ -160,20 +160,29 @@ struct framebuffer_ops {
     void unbind(index_type handle) const {
       PRE_BOUND;
 
-      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, gapi::k_framebuffer_object_none);
+      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, 
+                                gapi::k_framebuffer_object_none);
 
       ASSERT_CODE(
-        GLint viewport[4] = {0};
-        GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
+        gapi::dimension_t x; 
+        gapi::dimension_t y; 
+        gapi::dimension_t width; 
+        gapi::dimension_t height;
 
-        ASSERT(viewport[0] == 0);
-        ASSERT(viewport[1] == 0);
-        ASSERT(static_cast<uint32_t>(viewport[2]) == widths[handle]);
-        ASSERT(static_cast<uint32_t>(viewport[3]) == heights[handle]);
+        g_m.gpu->viewport_get(x, y, width, height);
+
+        ASSERT(x == 0);
+        ASSERT(y == 0);
+        ASSERT(static_cast<uint32_t>(width) == widths[handle]);
+        ASSERT(static_cast<uint32_t>(height) == heights[handle]);
       );
 
-      GL_FN(glViewport(0, 0, self.width, self.height));
-
+      g_m.gpu->viewport_set(0, 
+                            0, 
+                            static_cast<gapi::dimension_t>(self.width), 
+                            static_cast<gapi::dimension_t>(self.height)
+                            );
+      
       POST_UNBOUND;
     }
   };
@@ -267,10 +276,10 @@ struct framebuffer_ops {
 
       g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, fbos.at(cube_id));
 
-      GL_FN(glViewport(0,
-                       0,
-                       cwidth,
-                       cheight));
+      g_m.gpu->viewport_set(0,
+                            0,
+                            cwidth,
+                            cheight);
 
       POST_BOUND;
     }
@@ -325,7 +334,7 @@ struct framebuffer_ops {
       g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, 
                                 gapi::k_framebuffer_object_none);
 
-      GL_FN(glViewport(0, 0, self.width, self.height));
+      g_m.gpu->viewport_set(0, 0, self.width, self.height);
 
       POST_UNBOUND;
     }

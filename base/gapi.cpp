@@ -673,4 +673,22 @@ namespace gapi {
     }
     return ret;
   }
+
+  //-------------------------------
+  // viewport
+  //-------------------------------
+
+  void device::viewport_set(dimension_t x, dimension_t y, dimension_t width, dimension_t height) {
+    GL_FN(glViewport(x, y, width, height));
+  }
+
+  void device::viewport_get(dimension_t& out_x, dimension_t& out_y, dimension_t& out_width, dimension_t& out_height) {
+    GLint viewport[4] = {0};
+    GL_FN(glGetIntegerv(GL_VIEWPORT, &viewport[0]));
+
+    out_x = static_cast<dimension_t>(viewport[0]);
+    out_y = static_cast<dimension_t>(viewport[1]);
+    out_width = static_cast<dimension_t>(viewport[2]);
+    out_height = static_cast<dimension_t>(viewport[3]);
+  }
 }
