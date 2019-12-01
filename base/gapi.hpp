@@ -534,22 +534,22 @@ public:
 
   // framebuffers
 
-  framebuffer_object_handle framebuffer_new();
+  framebuffer_object_handle framebuffer_object_new();
 
-  void framebuffer_bind(fbo_target type, framebuffer_object_ref fbo);
+  void framebuffer_object_bind(fbo_target type, framebuffer_object_ref fbo);
 
   // Assumes that a framebuffer is bound
-  void framebuffer_texture_2d(fbo_target target, 
+  void framebuffer_object_texture_2d(fbo_target target, 
                               fbo_attach_type attachment,
                               texture_object_target texture_target,
                               texture_object_ref texture,
                               miplevel_t mip);
 
   // Assumes that a framebuffer is bound
-  void framebuffer_read_buffer(fbo_attach_type attachment);
+  void framebuffer_object_read_buffer(fbo_attach_type attachment);
 
   // Assumes that a framebuffer is bound
-  void framebuffer_read_pixels(dimension_t x, 
+  void framebuffer_object_read_pixels(dimension_t x, 
                                dimension_t y,
                                dimension_t width,
                                dimension_t height, 
@@ -558,7 +558,7 @@ public:
                                void* pixels);
 
   // Assumes that a framebuffer is bound
-  bool framebuffer_ok() const;
+  bool framebuffer_object_ok() const;
 
   
 

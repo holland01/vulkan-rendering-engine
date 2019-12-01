@@ -594,13 +594,13 @@ namespace gapi {
   // framebuffer_object_handle
   //-------------------------------
 
-  framebuffer_object_handle device::framebuffer_new() {
+  framebuffer_object_handle device::framebuffer_object_new() {
     framebuffer_object_handle ret{};
     glew_gen_handle<framebuffer_object_handle, &glGenFramebuffers>(ret);
     return ret;
   }
 
-  void device::framebuffer_bind(fbo_target type, framebuffer_object_ref fbo) {
+  void device::framebuffer_object_bind(fbo_target type, framebuffer_object_ref fbo) {
     if (fbo) {
 
       if (fbo == k_framebuffer_object_none) {
@@ -615,7 +615,7 @@ namespace gapi {
     }
   }
 
-  void device::framebuffer_texture_2d(fbo_target target, 
+  void device::framebuffer_object_texture_2d(fbo_target target, 
                                       fbo_attach_type attachment,
                                       texture_object_target texture_target,
                                       texture_object_ref texture,
@@ -634,14 +634,14 @@ namespace gapi {
   }
 
     // Assumes that a framebuffer is bound
-  void device::framebuffer_read_buffer(fbo_attach_type attachment) {
+  void device::framebuffer_object_read_buffer(fbo_attach_type attachment) {
     if (framebuffer_object_bound_enforced()) {
       GL_FN(glReadBuffer(gl_fbo_attach_to_enum(attachment)));
     }
   }
 
   // Assumes that a framebuffer is bound
-  void device::framebuffer_read_pixels(dimension_t x, 
+  void device::framebuffer_object_read_pixels(dimension_t x, 
                                dimension_t y,
                                dimension_t width,
                                dimension_t height, 
@@ -659,7 +659,7 @@ namespace gapi {
     }
   }
 
-  bool device::framebuffer_ok() const {
+  bool device::framebuffer_object_ok() const {
     bool ret = false;
     if (framebuffer_object_bound_enforced()) {
       GLenum result;

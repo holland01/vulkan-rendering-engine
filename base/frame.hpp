@@ -72,9 +72,9 @@ struct framebuffer_ops {
     auto color_attachment(index_type id) const { return color_attachments.at(id); }
 
     auto make_fbo(uint32_t width, uint32_t height) {
-      gapi::framebuffer_object_handle fbo = g_m.gpu->framebuffer_new();
+      gapi::framebuffer_object_handle fbo = g_m.gpu->framebuffer_object_new();
 
-      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, fbo);
+      g_m.gpu->framebuffer_object_bind(gapi::fbo_target::readwrite, fbo);
 
       auto depth_attachment =
         g_m.textures->new_texture(g_m.textures->depthtexture_params(width, height));
@@ -82,19 +82,19 @@ struct framebuffer_ops {
       auto color_attachment =
         g_m.textures->new_texture(g_m.textures->texture2d_rgba_params(width, height));
 
-      g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
+      g_m.gpu->framebuffer_object_texture_2d(gapi::fbo_target::readwrite,
                                      gapi::fbo_attach_type::color0,
                                      gapi::texture_object_target::texture_2d,
                                      g_m.textures->handle(color_attachment),
                                      0);
 
-      g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
+      g_m.gpu->framebuffer_object_texture_2d(gapi::fbo_target::readwrite,
                                      gapi::fbo_attach_type::depth,
                                      gapi::texture_object_target::texture_2d,
                                      g_m.textures->handle(depth_attachment),
                                      0);
 
-      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, gapi::k_framebuffer_object_none);
+      g_m.gpu->framebuffer_object_bind(gapi::fbo_target::readwrite, gapi::k_framebuffer_object_none);
 
       index_type new_handle = I(fbos.size());
 
@@ -110,7 +110,7 @@ struct framebuffer_ops {
     void bind(index_type handle) const {
       PRE_UNBOUND;
 
-      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, fbos[handle]);
+      g_m.gpu->framebuffer_object_bind(gapi::fbo_target::readwrite, fbos[handle]);
 
       g_m.gpu->viewport_set(0, 0, widths[handle], heights[handle]);
 
@@ -141,9 +141,9 @@ struct framebuffer_ops {
       );
 #endif
 
-      g_m.gpu->framebuffer_read_buffer(gapi::fbo_attach_type::color0);
+      g_m.gpu->framebuffer_object_read_buffer(gapi::fbo_attach_type::color0);
 
-      g_m.gpu->framebuffer_read_pixels(0,
+      g_m.gpu->framebuffer_object_read_pixels(0,
                                        0,
                                        g_m.textures->width(C),
                                        g_m.textures->height(C),
@@ -162,7 +162,7 @@ struct framebuffer_ops {
     void unbind(index_type handle) const {
       PRE_BOUND;
 
-      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, 
+      g_m.gpu->framebuffer_object_bind(gapi::fbo_target::readwrite, 
                                 gapi::k_framebuffer_object_none);
 
       ASSERT_CODE(
@@ -268,7 +268,7 @@ struct framebuffer_ops {
 
       faces.push_back(calc_look_at_mats(position, radius));
 
-      fbos.push_back(g_m.gpu->framebuffer_new());
+      fbos.push_back(g_m.gpu->framebuffer_object_new());
 
       return static_cast<index_type>(rcubeid);
     }
@@ -276,7 +276,7 @@ struct framebuffer_ops {
     void bind(index_type cube_id) const {
       PRE_UNBOUND;
 
-      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, fbos.at(cube_id));
+      g_m.gpu->framebuffer_object_bind(gapi::fbo_target::readwrite, fbos.at(cube_id));
 
       g_m.gpu->viewport_set(0,
                             0,
@@ -305,7 +305,7 @@ struct framebuffer_ops {
       uint32_t v = static_cast<uint32_t>(gapi::texture_object_target::texture_cube_map_px)
                 + static_cast<uint32_t>(face);
 
-      g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite, 
+      g_m.gpu->framebuffer_object_texture_2d(gapi::fbo_target::readwrite, 
                                       gapi::fbo_attach_type::color0,
                                       static_cast<gapi::texture_object_target>(v),
                                       g_m.textures->handle(tex_color_handles.at(cube_id)),
@@ -316,13 +316,13 @@ struct framebuffer_ops {
       auto target = gapi::texture_object_target::texture_2d;
 #endif
 
-      g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
+      g_m.gpu->framebuffer_object_texture_2d(gapi::fbo_target::readwrite,
                                       gapi::fbo_attach_type::depth,
                                       target,
                                       g_m.textures->handle(tex_depth_handles.at(cube_id)),
                                       0);
 
-      bool fbcheck = g_m.gpu->framebuffer_ok();
+      bool fbcheck = g_m.gpu->framebuffer_object_ok();
       ASSERT(fbcheck);
 
       const auto& viewmats = faces.at(cube_id);
@@ -333,7 +333,7 @@ struct framebuffer_ops {
     void unbind() {
       PRE_BOUND;
 
-      g_m.gpu->framebuffer_bind(gapi::fbo_target::readwrite, 
+      g_m.gpu->framebuffer_object_bind(gapi::fbo_target::readwrite, 
                                 gapi::k_framebuffer_object_none);
 
       g_m.gpu->viewport_set(0, 0, self.width, self.height);
