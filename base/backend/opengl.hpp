@@ -14,7 +14,7 @@ GLint gl_filter_to_int(enumType filter);
 
 GLint gl_wrap_mode_to_int(gapi::texture_wrap_mode mode);
 
-GLenum gl_texture_target_to_enum(gapi::texture_target target);
+GLenum gl_texture_target_to_enum(gapi::texture_object_target target);
 
 GLenum gl_fbo_target_to_enum(gapi::fbo_target t);
 

@@ -152,7 +152,7 @@ enum class texture_wrap_mode {
   clamp_to_edge
 };
 
-enum class texture_target {
+enum class texture_object_target {
   texture_2d,
 
   texture_cube_map,
@@ -508,15 +508,15 @@ public:
 
   texture_object_handle texture_new();
 
-  void texture_set_param(texture_target target, texture_param_ref param);
+  void texture_set_param(texture_object_target target, texture_param_ref param);
 
   void texture_set_active_unit(int_t unit);
 
-  void texture_bind(texture_target target, texture_object_ref texture);
+  void texture_bind(texture_object_target target, texture_object_ref texture);
 
   void texture_delete(texture_object_mut_ref texture);
 
-  void texture_image_2d(texture_target target, 
+  void texture_image_2d(texture_object_target target, 
                         miplevel_t mip, 
                         texture_int_fmt internal, 
                         dimension_t width, 
@@ -541,7 +541,7 @@ public:
   // Assumes that a framebuffer is bound
   void framebuffer_texture_2d(fbo_target target, 
                               fbo_attach_type attachment,
-                              texture_target texture_target,
+                              texture_object_target texture_target,
                               texture_object_ref texture,
                               miplevel_t mip);
 

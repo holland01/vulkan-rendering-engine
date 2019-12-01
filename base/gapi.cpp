@@ -460,7 +460,7 @@ namespace gapi {
     return ret;
   }
 
-  void device::texture_set_param(texture_target target, texture_param_ref param) {
+  void device::texture_set_param(texture_object_target target, texture_param_ref param) {
     GLenum gltarget = gl_texture_target_to_enum(target);
 
     switch (param.param_type()) {
@@ -520,7 +520,7 @@ namespace gapi {
     );
   }
 
-  void device::texture_bind(texture_target target, texture_object_ref texture) {
+  void device::texture_bind(texture_object_target target, texture_object_ref texture) {
     if (texture) {
       APISEL(
         GL_FN(glBindTexture(gl_texture_target_to_enum(target), 
@@ -545,7 +545,7 @@ namespace gapi {
     }
   }
 
-  void device::texture_image_2d(texture_target target, 
+  void device::texture_image_2d(texture_object_target target, 
                                 miplevel_t mip, 
                                 texture_int_fmt internal, 
                                 dimension_t width, 
@@ -617,7 +617,7 @@ namespace gapi {
 
   void device::framebuffer_texture_2d(fbo_target target, 
                                       fbo_attach_type attachment,
-                                      texture_target texture_target,
+                                      texture_object_target texture_target,
                                       texture_object_ref texture,
                                       miplevel_t mip) {
     if (texture) {

@@ -31,7 +31,7 @@ struct module_textures: public type_module {
   darray<gapi::primitive_type> texel_types;
 
   mutable darray<gapi::int_t> slots;
-  darray<gapi::texture_target> types;
+  darray<gapi::texture_object_target> types;
 
   using index_type = int16_t;
   using cubemap_paths_type = std::array<fs::path, 6>; // UNUSED
@@ -84,7 +84,7 @@ struct module_textures: public type_module {
   struct params {
     texture_data data {};
 
-    gapi::texture_target type {gapi::texture_target::texture_2d};
+    gapi::texture_object_target type {gapi::texture_object_target::texture_2d};
 
     gapi::texture_fmt format {gapi::texture_fmt::rgba};
     gapi::texture_int_fmt internal_format {gapi::texture_int_fmt::rgba8};
@@ -123,7 +123,7 @@ struct module_textures: public type_module {
         gapi::texture_param{}.mip_max_level(mip_max_level)
       });
 
-      if (type == gapi::texture_target::texture_cube_map) {
+      if (type == gapi::texture_object_target::texture_cube_map) {
         v.insert(v.end(), {
           gapi::texture_param{}.wrap_mode_r(wrap_mode_r)
         });
@@ -154,7 +154,7 @@ struct module_textures: public type_module {
 
   index_type new_texture(const module_textures::params& p);
 
-  void fill_texture2d(gapi::texture_target paramtype, index_type tid, const uint8_t* data);
+  void fill_texture2d(gapi::texture_object_target paramtype, index_type tid, const uint8_t* data);
 
   gapi::texture_object_ref handle(index_type i) const;
 
@@ -162,7 +162,7 @@ struct module_textures: public type_module {
   uint32_t height(index_type i) const;
 
   gapi::texture_fmt format(index_type i) const;
-  gapi::texture_target type(index_type i) const;
+  gapi::texture_object_target type(index_type i) const;
   gapi::primitive_type texel_type(index_type i) const;
 
   uint32_t bytes_per_pixel(index_type i) const;

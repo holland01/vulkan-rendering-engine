@@ -87,7 +87,7 @@ module_textures::params module_textures::cubemap_params(uint32_t width, uint32_t
   p.width = width;
   p.height = height;
   p.num_channels = channels;
-  p.type = gapi::texture_target::texture_cube_map;
+  p.type = gapi::texture_object_target::texture_cube_map;
   p.data.data = d;
 
   return p;
@@ -107,7 +107,7 @@ module_textures::params module_textures::cubemap_params(uint32_t width,
   // after the fragment shader has written its fragment. 
   p.internal_format = gapi::texture_int_fmt::srgb8_alpha8;
   p.num_channels = num_channels;
-  p.type = gapi::texture_target::texture_cube_map;
+  p.type = gapi::texture_object_target::texture_cube_map;
   p.data.data = data;
 
   return p;
@@ -120,7 +120,7 @@ module_textures::params module_textures::texture2d_rgba_params(uint32_t width,
   p.width = width;
   p.height = height;
   p.num_channels = 4;
-  p.type = gapi::texture_target::texture_2d;
+  p.type = gapi::texture_object_target::texture_2d;
   p.min_filter = gapi::texture_min_filter::linear;
   p.mag_filter = gapi::texture_mag_filter::linear;
   p.format = gapi::texture_fmt::rgba;
@@ -139,7 +139,7 @@ module_textures::params module_textures::depthtexture_params(uint32_t width, uin
   p.width = width;
   p.height = height;
   p.num_channels = 4;
-  p.type = gapi::texture_target::texture_2d;
+  p.type = gapi::texture_object_target::texture_2d;
   p.min_filter = gapi::texture_min_filter::nearest;
   p.mag_filter = gapi::texture_mag_filter::nearest;
   p.format = gapi::texture_fmt::depth_component;
@@ -191,23 +191,23 @@ module_textures::index_type module_textures::new_texture(const module_textures::
 
   bind(index);
   switch (p.type) {
-  case gapi::texture_target::texture_cube_map: {
+  case gapi::texture_object_target::texture_cube_map: {
     const auto& cubemap_d = std::get<cubemap_data>(p.data.data);
 
-    fill_texture2d(gapi::texture_target::texture_cube_map_px, index, cubemap_d.px.data());
-    fill_texture2d(gapi::texture_target::texture_cube_map_nx, index, cubemap_d.nx.data());
+    fill_texture2d(gapi::texture_object_target::texture_cube_map_px, index, cubemap_d.px.data());
+    fill_texture2d(gapi::texture_object_target::texture_cube_map_nx, index, cubemap_d.nx.data());
 
-    fill_texture2d(gapi::texture_target::texture_cube_map_py, index, cubemap_d.py.data());
-    fill_texture2d(gapi::texture_target::texture_cube_map_ny, index, cubemap_d.ny.data());
+    fill_texture2d(gapi::texture_object_target::texture_cube_map_py, index, cubemap_d.py.data());
+    fill_texture2d(gapi::texture_object_target::texture_cube_map_ny, index, cubemap_d.ny.data());
 
-    fill_texture2d(gapi::texture_target::texture_cube_map_pz, index, cubemap_d.pz.data());
-    fill_texture2d(gapi::texture_target::texture_cube_map_nz, index, cubemap_d.nz.data());
+    fill_texture2d(gapi::texture_object_target::texture_cube_map_pz, index, cubemap_d.pz.data());
+    fill_texture2d(gapi::texture_object_target::texture_cube_map_nz, index, cubemap_d.nz.data());
   } break;
 
-  case gapi::texture_target::texture_2d: {
+  case gapi::texture_object_target::texture_2d: {
     const auto& d = std::get<texture_data_buffer>(p.data.data);
 
-    fill_texture2d(gapi::texture_target::texture_2d, index, d.data());
+    fill_texture2d(gapi::texture_object_target::texture_2d, index, d.data());
   } break;
 
   default:
@@ -219,7 +219,7 @@ module_textures::index_type module_textures::new_texture(const module_textures::
   return index;
 }
 
-void module_textures::fill_texture2d(gapi::texture_target paramtype, index_type tid, const uint8_t* data) {
+void module_textures::fill_texture2d(gapi::texture_object_target paramtype, index_type tid, const uint8_t* data) {
   g_m.gpu->texture_image_2d(paramtype,
                             0, // mip level
                             internal_formats[tid],
@@ -275,7 +275,7 @@ gapi::texture_fmt module_textures::format(index_type i) const {
   return formats.at(i);
 }
 
-gapi::texture_target module_textures::type(index_type i) const {
+gapi::texture_object_target module_textures::type(index_type i) const {
   return types.at(i);
 }
 
@@ -284,7 +284,6 @@ gapi::primitive_type module_textures::texel_type(index_type i) const {
 }
 
 uint32_t module_textures::bytes_per_pixel(index_type i) const {
-
   ASSERT_CODE(
     switch (gl_int_fmt_to_int(internal_formats[i])) {
     case GL_RGBA:

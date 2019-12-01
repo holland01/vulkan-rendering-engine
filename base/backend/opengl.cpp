@@ -4,7 +4,7 @@ using gapi::primitive_type;
 using gapi::texture_fmt;
 using gapi::texture_int_fmt;
 using gapi::texture_wrap_mode;
-using gapi::texture_target;
+using gapi::texture_object_target;
 using gapi::fbo_target;
 using gapi::fbo_attach_type;
 
@@ -88,31 +88,31 @@ GLint gl_wrap_mode_to_int(texture_wrap_mode mode) {
   return ret;
 }
 
-GLenum gl_texture_target_to_enum(texture_target target) {
+GLenum gl_texture_target_to_enum(texture_object_target target) {
   GLenum ret = GL_NONE;
   switch (target) {
-    case texture_target::texture_2d:
+    case texture_object_target::texture_2d:
       ret = GL_TEXTURE_2D;
       break;
-    case texture_target::texture_cube_map:
+    case texture_object_target::texture_cube_map:
       ret = GL_TEXTURE_CUBE_MAP;
       break;
-    case texture_target::texture_cube_map_px:
+    case texture_object_target::texture_cube_map_px:
       ret = GL_TEXTURE_CUBE_MAP_POSITIVE_X;
       break;
-    case texture_target::texture_cube_map_nx:
+    case texture_object_target::texture_cube_map_nx:
       ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_X;
       break;
-    case texture_target::texture_cube_map_py:
+    case texture_object_target::texture_cube_map_py:
       ret = GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
       break;
-    case texture_target::texture_cube_map_ny:
+    case texture_object_target::texture_cube_map_ny:
       ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;
       break;
-    case texture_target::texture_cube_map_pz:
+    case texture_object_target::texture_cube_map_pz:
       ret = GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
       break;
-    case texture_target::texture_cube_map_nz:
+    case texture_object_target::texture_cube_map_nz:
       ret = GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;
       break;
     default:

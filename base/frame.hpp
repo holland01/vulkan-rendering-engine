@@ -84,13 +84,13 @@ struct framebuffer_ops {
 
       g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
                                      gapi::fbo_attach_type::color0,
-                                     gapi::texture_target::texture_2d,
+                                     gapi::texture_object_target::texture_2d,
                                      g_m.textures->handle(color_attachment),
                                      0);
 
       g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
                                      gapi::fbo_attach_type::depth,
-                                     gapi::texture_target::texture_2d,
+                                     gapi::texture_object_target::texture_2d,
                                      g_m.textures->handle(depth_attachment),
                                      0);
 
@@ -302,18 +302,18 @@ struct framebuffer_ops {
 
     glm::mat4 set_face(index_type cube_id, axis face) const {
 
-      uint32_t v = static_cast<uint32_t>(gapi::texture_target::texture_cube_map_px)
+      uint32_t v = static_cast<uint32_t>(gapi::texture_object_target::texture_cube_map_px)
                 + static_cast<uint32_t>(face);
 
       g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite, 
                                       gapi::fbo_attach_type::color0,
-                                      static_cast<gapi::texture_target>(v),
+                                      static_cast<gapi::texture_object_target>(v),
                                       g_m.textures->handle(tex_color_handles.at(cube_id)),
                                       0);
 #ifdef ENVMAP_CUBE_DEPTH
       auto target = static_cast<gapi::texture_target>(v);
 #else
-      auto target = gapi::texture_target::texture_2d;
+      auto target = gapi::texture_object_target::texture_2d;
 #endif
 
       g_m.gpu->framebuffer_texture_2d(gapi::fbo_target::readwrite,
