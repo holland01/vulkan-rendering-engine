@@ -9,6 +9,8 @@
 #include "scene_graph.hpp"
 #include "view_data.hpp"
 
+#include "gapi.hpp"
+
 #include <sstream>
 
 struct duniform;
@@ -138,108 +140,6 @@ static inline darray<duniform> duniform_toggle_quad() {
   };
 }
 
-// TODO:
-// make these more type safe
-struct gl_state {
-
-  struct {
-    bool framebuffer_srgb {true};
-  } gamma {};
-
-  struct {
-    double range_near {0.0}; // [0, 1.0]
-    double range_far {1.0}; // [0, 1.0] (far can be less than near as well)
-
-    GLenum func {GL_LEQUAL}; // GL_LESS, GL_LEQUAL, GL_GEQUAL, GL_GREATER, GL_ALWAYS, GL_NEVER
-
-    // GL_TRUE -> buffer will be written to if test passes;
-    // GL_FALSE -> no write occurs regardless of the test result
-    GLboolean mask {GL_TRUE};
-
-    bool test_enabled {true};
-  } depth {};
-
-  struct {
-    bool enabled {false};
-    GLenum face {GL_BACK}; // GL_BACK, GL_FRONT, GL_FRONT_AND_BACK
-    GLenum wnd_order {GL_CCW}; // GL_CCW or GL_CW
-  } face_cull {};
-
-  struct {
-    vec4_t color_value {R(1.0)};
-    real_t depth_value {R(1.0)};
-
-    bool depth {false};
-    bool color {false};
-  } clear_buffers;
-
-  struct {
-    bool fbo {false};
-  } draw_buffers;
-
-  void apply() const {
-    if (draw_buffers.fbo) {
-      GLenum b[] = {
-        GL_COLOR_ATTACHMENT0
-      };
-      GL_FN(glDrawBuffers(1, b));
-    }
-    else {
-      GLenum b[] = {
-        GL_BACK_LEFT
-      };
-      GL_FN(glDrawBuffers(1, b));
-    }
-
-    if (depth.test_enabled) {
-      GL_FN(glEnable(GL_DEPTH_TEST));
-      GL_FN(glDepthFunc(depth.func));
-    }
-    else {
-      GL_FN(glDisable(GL_DEPTH_TEST));
-    }
-
-    GL_FN(glDepthMask(depth.mask));
-    GL_FN(glDepthRange(depth.range_near, depth.range_far));
-
-    if (face_cull.enabled) {
-      GL_FN(glEnable(GL_CULL_FACE));
-      GL_FN(glCullFace(face_cull.face));
-      GL_FN(glFrontFace(face_cull.wnd_order));
-    }
-    else {
-      GL_FN(glDisable(GL_CULL_FACE));
-    }
-
-    if (clear_buffers.depth) {
-      GL_FN(glClearDepth(clear_buffers.depth_value));
-    }
-
-    if (clear_buffers.color) {
-      GL_FN(glClearColor(clear_buffers.color_value.r,
-                         clear_buffers.color_value.g,
-                         clear_buffers.color_value.b,
-                         clear_buffers.color_value.a));
-    }
-
-    if (gamma.framebuffer_srgb) {
-      GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
-    }
-    else {
-      GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
-    }
-
-    {
-      GLenum bits = 0;
-      bits = clear_buffers.color ? (bits | GL_COLOR_BUFFER_BIT) : bits;
-      bits = clear_buffers.depth ? (bits | GL_DEPTH_BUFFER_BIT) : bits;
-      if (bits != 0) {
-        GL_FN(glClear(bits));
-      }
-    }
-  }
-};
-
 struct bind_texture {
   module_textures::index_type id;
   int slot;
@@ -269,7 +169,7 @@ struct pass_info {
 
   std::string name;
 
-  gl_state state {};
+  gapi::state state {};
 
   mutable darray<duniform> uniforms; // cleared after initial upload
 
@@ -315,7 +215,7 @@ struct pass_info {
 
   void apply() const {
     if (active) {
-      write_logf("pass: %s", name.c_str());
+      CLOG(logflag_render_pipeline_pass_info_apply, "pass: %s", name.c_str());
 
       if (frametype != frame_render_to_quad) {
         g_m.vertex_buffer->bind();
@@ -324,6 +224,7 @@ struct pass_info {
       use_program u(shader);
 
       for (const auto& bind: tex_bindings) {
+        CLOG(logflag_render_pipeline_pass_info_apply, "binding texture: %s", bind.to_string().c_str());
         g_m.textures->bind(bind.id, bind.slot);
       }
 
@@ -353,20 +254,22 @@ struct pass_info {
       switch (frametype) {
       case frame_user:
       {
-        state.apply();
+        g_m.gpu->apply_state(state);
         draw();
       } break;
 
       case frame_render_to_quad:
-        state.apply();
-        GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+        g_m.gpu->apply_state(state);
+        g_m.gpu->vertex_array_draw_without_vertex_buffer(gapi::raster_method::triangle_strip,
+                                                         0,
+                                                         4);
         break;
 
       case frame_texture2d:
       {
         ASSERT(fbo_id != framebuffer_ops::k_uninit);
         g_m.framebuffer->fbos->bind(fbo_id);
-        state.apply();
+        g_m.gpu->apply_state(state);
         draw();
         g_m.framebuffer->fbos->unbind(fbo_id);
       } break;
@@ -379,7 +282,7 @@ struct pass_info {
 
         for (auto i = 0; i < 6; ++i) {
           g_m.view->bind_view(g_m.framebuffer->rcube->set_face(fbo_id, static_cast<framebuffer_ops::render_cube::axis>(i)));
-          state.apply();
+          g_m.gpu->apply_state(state);
           draw();
         }
 

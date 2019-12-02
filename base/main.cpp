@@ -25,13 +25,11 @@
 
 #include "render_pipeline.hpp"
 #include "device_context.hpp"
+#include "gapi.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
-
-#define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
-#define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
 
 #define TEST_SPHERE_RADIUS R(5)
 #define TEST_SPHERE_POS R3v(0, 10, 0)
@@ -45,6 +43,8 @@ bool modules::init() {
   device_ctx = new device_context();
   
   if (device_ctx->init(SCREEN_WIDTH, SCREEN_HEIGHT)) {
+    gpu = new gapi::device();
+
     framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
     programs = new module_programs();
     textures = new module_textures();
@@ -72,6 +72,7 @@ void modules::free() {
     delete models;
     delete graph;
     delete vertex_buffer;
+    delete gpu;
   }
 
   delete device_ctx;
@@ -85,7 +86,7 @@ module_textures::index_type g_checkerboard_cubemap {module_textures::k_uninit};
 
 static bool g_unif_gamma_correct = true;
 
-GLuint g_vao = 0;
+gapi::vertex_array_object_handle g_vao{};
 
 static move_state  g_cam_move_state = {
   0, 0, 0, 0, 0, 0, 0
@@ -219,34 +220,7 @@ const pass_info& get_render_pass(const std::string& name) {
   return g_render_passes.at(key);
 }
 
-
 std::unordered_map<module_models::index_type, frame_model> g_frame_model_map {};
-
-struct gl_depth_func {
-  GLint prev_depth;
-
-  gl_depth_func(GLenum func) {
-    GL_FN(glGetIntegerv(GL_DEPTH_FUNC, &prev_depth));
-    GL_FN(glDepthFunc(func));
-  }
-
-  ~gl_depth_func() {
-    GL_FN(glDepthFunc(prev_depth));
-  }
-};
-
-struct gl_clear_depth {
-  real_t prev_depth;
-
-  gl_clear_depth(real_t new_depth) {
-    GL_FN(glGetFloatv(GL_DEPTH_CLEAR_VALUE, &prev_depth));
-    GL_FN(glClearDepth(new_depth));
-  }
-
-  ~gl_clear_depth() {
-    GL_FN(glClearDepth(prev_depth));
-  }
-};
 
 #define DUNIFINT(name, value) \
   duniform(static_cast<int32_t>(value), #name)
@@ -298,7 +272,7 @@ static void init_render_passes() {
 
   // environment map pass
   {
-    gl_state state {};
+    gapi::state state {};
     state.clear_buffers.depth = true;
     state.clear_buffers.color = true;
     state.face_cull.enabled = false;
@@ -314,17 +288,21 @@ static void init_render_passes() {
       {g_checkerboard_cubemap, 0}
     };
 
-    write_logf("envmap %s", tex_bindings[0].to_string().c_str());
-
     auto ft = pass_info::frame_envmap;
 
     auto shader = g_m.programs->skybox;
 
     auto init = []() {
-      g_m.framebuffer->rcube->faces[0] =
-        g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS,
-                                                  TEST_SPHERE_RADIUS);
-      g_frame_model_map[g_m.models->modind_sphere].needs_render = true;
+      // zero index works for now, but only because
+      // we have only one environment map setup in the scene currently.
+      ASSERT(g_m.framebuffer->rcube->faces.size() == 1);
+      g_m.framebuffer->rcube->faces[0] = 
+        g_m.framebuffer->rcube->calc_look_at_mats(TEST_SPHERE_POS, TEST_SPHERE_RADIUS);
+      
+      g_frame_model_map[
+        g_m.models->modind_sphere
+      ].needs_render = true;
+
       shader_pointlight_update();
     };
 
@@ -353,7 +331,7 @@ static void init_render_passes() {
 
   // wall render pass
   {
-    gl_state state {};
+    gapi::state state {};
 
     state.clear_buffers.depth = true;
     state.clear_buffers.color = true;
@@ -401,7 +379,7 @@ static void init_render_passes() {
 
   // reflect pass
   {
-    gl_state state {};
+    gapi::state state {};
 
     //state.clear_buffers.color = true;
     //state.clear_buffers.depth = true;
@@ -457,7 +435,7 @@ static void init_render_passes() {
 
   // room pass
   {
-    gl_state state {};
+    gapi::state state {};
 
     darray<duniform> unifs;
 
@@ -510,7 +488,7 @@ static void init_render_passes() {
 
   // light model pass
   {
-    gl_state state {};
+    gapi::state state {};
 
     darray<duniform> unifs;
 
@@ -548,7 +526,7 @@ static void init_render_passes() {
 
   // mouse pick
   {
-    gl_state state {};
+    gapi::state state {};
     state.gamma.framebuffer_srgb = false;
 
     state.draw_buffers.fbo = mousepick_usefbo;
@@ -604,7 +582,7 @@ static void init_render_passes() {
 
   // rendered quad
   {
-    gl_state state {};
+    gapi::state state {};
 
     state.draw_buffers.fbo = false;
 
@@ -650,15 +628,15 @@ static void init_render_passes() {
       add_render_pass(rquad);
     }
   }
-};
+}
 
 static void init_api_data() {
   g_m.view->reset_proj();
 
   g_m.programs->load();
-
-  GL_FN(glGenVertexArrays(1, &g_vao));
-  GL_FN(glBindVertexArray(g_vao));
+  
+  g_vao = g_m.gpu->vertex_array_object_new();
+  g_m.gpu->vertex_array_object_bind(g_vao);
 
   g_m.models->modind_sphere = g_m.models->new_sphere();
   g_m.models->modind_area_sphere = g_m.models->new_sphere();
@@ -673,8 +651,6 @@ static void init_api_data() {
     g_m.textures->new_texture(g_m.textures->cubemap_params(256,
                                                            256,
                                                            module_textures::cubemap_preset_test_room_0));
-
-  real_t wall_size = R(15.0);
 
   g_m.vertex_buffer->reset();
 
@@ -735,31 +711,16 @@ static void init_api_data() {
 
     g_m.graph->test_indices.floor = g_m.graph->new_node(floor);
   }
-
-  GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
-  GL_FN(glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS));
-  GL_FN(glDisable(GL_CULL_FACE));
-  //    GL_FN(glCullFace(GL_BACK));
-  //    GL_FN(glFrontFace(GL_CCW));
-  GL_FN(glEnable(GL_DEPTH_TEST));
-  GL_FN(glDepthFunc(GL_LEQUAL));
-  GL_FN(glClearDepth(1.0f));
 }
 
 static darray<uint8_t> g_debug_cubemap_buf;
-static module_textures::index_type g_debug_cm_index {module_textures::k_uninit};
 
 #define screen_cube_depth(k) (g_m.framebuffer->width * g_m.framebuffer->height * 4 * (k))
 
 static int screen_cube_index = 0;
 
 static void render() {
-  vec4_t background(0.0f, 0.5f, 0.3f, 1.0f);
-
-  SET_CLEAR_COLOR_V4(background);
-
   auto update_pickbuffer = []() -> void {
-    //GL_FN(glFinish());
     g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
   };
 
@@ -840,11 +801,10 @@ bool keydown_if_not(int key) {
 }
 
 void toggle_framebuffer_srgb() {
+  // TODO
   if (g_unif_gamma_correct) {
-    GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
   }
   else {
-    GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
   }
 }
 
@@ -991,12 +951,6 @@ public:
     vec4_t opos_clip {g_m.view->proj * opos_view};
 
     real_t ndc_depth = opos_clip.z / opos_clip.w;
-
-    module_geom::plane P {
-      opos_view.z, // d 
-      V3_BACKWARD, // normal
-      opos_view
-    };
 
     vec4_t t {screen_out(opos_clip.z, ndc_depth)};
 
@@ -1207,7 +1161,7 @@ struct eventpath {
 
   void trace(cont_type in) const {
     std::stringstream ss;
-    auto i = 0;
+    size_t i = 0;
     for (const auto& p: in) {
       ss << p;
       if (i < in.size() - 1) {
@@ -1270,8 +1224,6 @@ int main(void) {
   if (g_m.init()) {
     maybe_enable_cursor(g_m.device_ctx->window());
 
-    GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
-
     init_api_data();
     init_render_passes();
 
@@ -1290,6 +1242,5 @@ int main(void) {
 
   g_m.free();
 
-  
   return 0;
 }

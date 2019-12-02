@@ -9,6 +9,9 @@
 #include "stb_image_write.h"
 
 void framebuffer_ops::screenshot() {
+  write_logf("This needs to be converted over");
+  ASSERT(false);
+  #if 0
   std::stringstream ss;
 
   ss << "screenshoot_" << count << ".png";
@@ -44,4 +47,5 @@ void framebuffer_ops::screenshot() {
   std::string filename = ss.str();
 
   stbi_write_png(filename.c_str(), width, height, 4, static_cast<void*>(framebuffer.data()), 0);
+  #endif
 }

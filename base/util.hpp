@@ -12,7 +12,25 @@
 
 #include <inttypes.h>
 
+
+// We use the set of flags shown here to group/categorize
+// arbitrary log function calls. For any flag defined, simply add it 
+// as a bitwise OR to the variable g_log_mask (initialized in base/util.cpp).
+// Then invoke the CLOG() macro defined below, with the flag set as its first parameter.
+ 
+extern unsigned long long g_log_mask;
+
+enum {
+  logflag_programs_load = 1 << 0,
+  logflag_programs_use_program = 1 << 1,
+  logflag_textures_bind = 1 << 2,
+  logflag_render_pipeline_pass_info_apply = 1 << 3
+};
+
 #define write_logf(...) logf_impl(__LINE__, __func__, __FILE__, __VA_ARGS__) 
+
+#define CLOG(flag, ...) do { if ((g_log_mask & (flag)) != 0) { write_logf("CLOG|" __VA_ARGS__); } } while (0)
+#define CLOG_CODE(code) code
 
 // Macro'd out incase non-c++17 compilers are used.
 #define STATIC_IF(cond) if constexpr ((cond))
@@ -47,8 +65,72 @@ void report_gl_error(GLenum err,
                      const char* file,
                      const char* expr);
 
-GLuint make_shader(const char* source, GLenum type);
+// https://stackoverflow.com/a/8498694
+//
+// This is a class which acts as a kind of "pseudo-reflection" for enums:
+// the goal is to be able iterate over enum class values in a for loop.
+// As an example, if we have the given enum class:
+// 
+// enum class my_enum {
+//    a,
+//    b,
+//    c,
+//    d,
+//    enum_type_first = a,
+//    enum_type_last = d
+// };
+// 
+// we can then use that class in a for loop like so:
+//
+// for (auto enum_value: enum_type<my_enum> ) {
+//     < do something with enum value >
+// }
+// 
+// Thus, we're iterating through {a, b, c, d} values with this class.
+// This is useful in a few niche situations.
+//
+// Note that enum_type_first and enum_type_last must be defined.
 
-GLuint make_program(std::vector<GLuint> shaders);
+template< typename T >
+class enum_type
+{
+public:
+   class iterator
+   {
+   public:
+      iterator( int value ) :
+         m_value( value )
+      { }
 
-GLuint make_program(const char* vertex_src, const char* fragment_src);
+      T operator*( void ) const
+      {
+         return (T)m_value;
+      }
+
+      void operator++( void )
+      {
+         ++m_value;
+      }
+
+      bool operator!=( iterator rhs )
+      {
+         return m_value != rhs.m_value;
+      }
+
+   private:
+      int m_value;
+   };
+
+};
+
+template< typename T >
+typename enum_type<T>::iterator begin( enum_type<T> )
+{
+   return typename enum_type<T>::iterator( (int)T::enum_type_first );
+}
+
+template< typename T >
+typename enum_type<T>::iterator end( enum_type<T> )
+{
+   return typename enum_type<T>::iterator( ((int)T::enum_type_last) + 1 );
+}

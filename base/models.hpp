@@ -267,7 +267,7 @@ struct module_models {
 
     auto offset = g_m.vertex_buffer->num_vertices();
 
-    for (auto i = 0; i < vertices.size(); i += 9) {
+    for (size_t i = 0; i < vertices.size(); i += 9) {
       vec3_t a(vertices[i + 0], vertices[i + 1], vertices[i + 2]);
       vec3_t b(vertices[i + 3], vertices[i + 4], vertices[i + 5]);
       vec3_t c(vertices[i + 6], vertices[i + 7], vertices[i + 8]);
@@ -283,7 +283,7 @@ struct module_models {
   void render(index_type model, const mat4_t& world) const {
     mat4_t mv = g_m.view->view() * world;
 
-    if (g_m.programs->uniform("unif_Model") != -1) {
+    if (g_m.programs->uniform("unif_Model") != gapi::k_program_uniform_none) {
       g_m.programs->up_mat4x4("unif_Model", world);
     }
 
@@ -295,12 +295,10 @@ struct module_models {
           ? g_m.view->cubeproj
           : g_m.view->proj)));
 
-    auto ofs = vertex_offsets[model];
-    auto count = vertex_counts[model];
+    auto ofs = static_cast<gapi::offset_t>(vertex_offsets[model]);
+    auto count = static_cast<gapi::count_t>(vertex_counts[model]);
 
-    GL_FN(glDrawArrays(GL_TRIANGLES,
-                       ofs,
-                       count));
+    g_m.gpu->buffer_object_draw_vertices(gapi::raster_method::triangles, ofs, count);
   }
 
   model_type type(index_type i) const {

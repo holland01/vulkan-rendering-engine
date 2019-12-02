@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.hpp"
+#include "gapi.hpp"
 #include <inttypes.h>
 #include <unordered_map>
 
@@ -113,17 +114,7 @@ struct dmaterial {
 struct module_programs: public type_module {
   using ptr_type = std::unique_ptr<module_programs>;
 
-  struct attrib_layout {
-    GLint index;
-    GLint size;
-    GLenum type;
-    GLboolean normalized;
-    GLsizei stride;
-    const GLvoid* pointer;
-  };
-
-  using attrib_map_type = std::unordered_map<std::string, attrib_layout>;
-  using attrib_entry_type = std::pair<std::string, attrib_layout>;
+  using attrib_list = darray<gapi::int_t>;
 
   struct programdef {
     std::string name;
@@ -131,50 +122,8 @@ struct module_programs: public type_module {
     std::string fragment;
 
     darray<std::string> uniforms;
-    attrib_map_type attribs;
+    attrib_list attribs;
   };
-
-  static attrib_entry_type  attrib_layout_position() {
-    return {
-      "in_Position",
-    {
-      0,
-      3,
-      OPENGL_REAL,
-      GL_FALSE,
-      sizeof(vertex),
-      ( void*) offsetof(vertex, position)
-    }
-    };
-  }
-
-  static attrib_entry_type attrib_layout_color() {
-    return {
-      "in_Color",
-    {
-      1,
-      4,
-      OPENGL_REAL,
-      GL_FALSE,
-      sizeof(vertex),
-      ( void*) offsetof(vertex, color)
-    }
-    };
-  }
-
-  static attrib_entry_type attrib_layout_normal() {
-    return {
-      "in_Normal",
-    {
-      2,
-      3,
-      OPENGL_REAL,
-      GL_FALSE,
-      sizeof(vertex),
-      ( void*) offsetof(vertex, normal)
-    }
-    };
-  }
 
   static std::string from_bool(bool b) {
     return b ? "true" : "false";
@@ -509,32 +458,32 @@ struct module_programs: public type_module {
   darray<programdef> defs = {
     {
       "basic",
-      gen_vshader(vshader_frag_color),
-      gen_fshader(fshader_frag_color),
+      gen_vshader(vshader_frag_color, "basic"),
+      gen_fshader(fshader_frag_color, {}, "basic"),
       uniform_location_mv_proj(),
-  {
-    attrib_layout_position(),
-    attrib_layout_color()
-  }
+    {
+      gapi::constants::k_vertex_layout_position,
+      gapi::constants::k_vertex_layout_color
+    }
     },
     {
       "single_color",
-      gen_vshader(0),
-      gen_fshader(fshader_unif_color),
+      gen_vshader(0, "single_color"),
+      gen_fshader(fshader_unif_color, {}, "single_color"),
       uniform_location_mv_proj() +
-      uniform_location_color() +
-    uniform_location_toggle_quad(),
-  {
-    attrib_layout_position()
-  }
+      uniform_location_color() /*+
+      uniform_location_toggle_quad()*/,
+    {
+      gapi::constants::k_vertex_layout_position
+    }
     },
     {
       "main",
-      gen_vshader(VSHADER_POINTLIGHTS),
+      gen_vshader(VSHADER_POINTLIGHTS, "main"),
 
       gen_fshader(FSHADER_POINTLIGHTS,
                   {NUM_LIGHTS,
-                  true}),
+                  true}, "main"),
                   ([&]() -> darray<std::string> {
     return darray<std::string> {
       "unif_ModelView",
@@ -544,9 +493,9 @@ struct module_programs: public type_module {
         + uniform_location_shine();
   })(),
   {
-    attrib_layout_position(),
-    attrib_layout_color(),
-    attrib_layout_normal()
+    gapi::constants::k_vertex_layout_position,
+    gapi::constants::k_vertex_layout_color,
+    gapi::constants::k_vertex_layout_normal
   },
     },
     {
@@ -554,27 +503,27 @@ struct module_programs: public type_module {
 
       GLSL(smooth out vec2 frag_TexCoord;
 
-  // quad
-  // 01    11
-  // 00    10
-  //
-  // xy  |  vertex id
-  // 01  |  00
-  // 00  |  01
-  // 11  |  10
-  // 10  |  11
+      // quad
+      // 01    11
+      // 00    10
+      //
+      // xy  |  vertex id
+      // 01  |  00
+      // 00  |  01
+      // 11  |  10
+      // 10  |  11
 
-  void main() {
-    float x = float((gl_VertexID >> 1) & 1);
-    float y = float(1 - (gl_VertexID & 1));
+      void main() {
+        float x = float((gl_VertexID >> 1) & 1);
+        float y = float(1 - (gl_VertexID & 1));
 
-    frag_TexCoord = vec2(x, y);
+        frag_TexCoord = vec2(x, y);
 
-    x = 2.0 * x - 1.0;
-    y = 2.0 * y - 1.0;
+        x = 2.0 * x - 1.0;
+        y = 2.0 * y - 1.0;
 
-    gl_Position = vec4(x, y, 0.0, 1.0);
-  }),
+        gl_Position = vec4(x, y, 0.0, 1.0);
+      }),
 
     GLSL(smooth in vec2 frag_TexCoord;
   out vec4 fb_Color;
@@ -592,7 +541,7 @@ struct module_programs: public type_module {
        "cubemap",
 
        gen_vshader(VSHADER_POINTLIGHTS |
-       vshader_frag_texcoord),
+       vshader_frag_texcoord, "cubemap"),
 
     gen_fshader(FSHADER_POINTLIGHTS |
                 fshader_frag_texcoord |
@@ -600,7 +549,7 @@ struct module_programs: public type_module {
                 {
                 NUM_LIGHTS,
                 true        // invert normals
-                }),
+                }, "cubemap"),
               ([&]() -> darray<std::string>  {
     return darray<std::string>{
       "unif_ModelView",
@@ -611,9 +560,9 @@ struct module_programs: public type_module {
         + uniform_location_shine();
   })(),
   {
-    attrib_layout_position(),
-    attrib_layout_color(),
-    attrib_layout_normal()
+    gapi::constants::k_vertex_layout_position,
+    gapi::constants::k_vertex_layout_color,
+    gapi::constants::k_vertex_layout_normal
   }
      },
     {
@@ -641,7 +590,7 @@ struct module_programs: public type_module {
     frag_Position = vec3(unif_Model * vec4(in_Position, 1.0));
   }),
 #else
-      gen_vshader(vshader_in_normal | vshader_frag_pos_color_normal()),
+      gen_vshader(vshader_in_normal | vshader_frag_pos_color_normal(), "reflection_sphere_cubemap"),
 #endif           
 
 #if 0      
@@ -661,31 +610,29 @@ struct module_programs: public type_module {
     fb_Color = x;
   }),
 #else
-      gen_fshader(fshader_pos_color_normal() |
-      fshader_unif_texcubemap |
-                  fshader_reflect),
+      gen_fshader(fshader_pos_color_normal() | fshader_unif_texcubemap | fshader_reflect, {},
+                  "reflection_sphere_cubemap"),
 #endif
     ([&]() -> darray<std::string> {
     return darray<std::string> {
-      "unif_Model",
-        "unif_ModelView",
-        "unif_Projection",
-        "unif_TexCubeMap",
-        "unif_CameraPosition"
+      "unif_ModelView",
+      "unif_Projection",
+      "unif_TexCubeMap",
+      "unif_CameraPosition"
     };
   })(),
   {
-    attrib_layout_position(),
-    attrib_layout_color(),
-    attrib_layout_normal()
+    gapi::constants::k_vertex_layout_position,
+    gapi::constants::k_vertex_layout_color,
+    gapi::constants::k_vertex_layout_normal
   }
-    }};
+}};
 
   struct program {
-    std::unordered_map<std::string, GLint> uniforms;
-    attrib_map_type attribs;
+    std::unordered_map<std::string, gapi::program_uniform_handle> uniforms;
+    attrib_list attribs;
 
-    GLuint handle;
+    gapi::program_handle handle;
   };
 
   std::unordered_map<std::string, std::unique_ptr<program>> data;
@@ -703,10 +650,10 @@ struct module_programs: public type_module {
   using id_type = std::string;
 
   ~module_programs() {
-    GL_FN(glUseProgram(0));
+    g_m.gpu->use_program(gapi::k_program_none);
 
     for (auto& entry: data) {
-      GL_FN(glDeleteProgram(entry.second->handle));
+      g_m.gpu->delete_program(entry.second->handle);
     }
   }
 
@@ -718,14 +665,28 @@ struct module_programs: public type_module {
     for (const auto& def: defs) {
       auto p = std::make_unique<program>();
 
-      p->handle = make_program(def.vertex.c_str(), def.fragment.c_str());
+      p->handle = g_m.gpu->make_program(def.vertex, def.fragment);
 
-      for (auto unif: def.uniforms) {
-        GL_FN(p->uniforms[unif] = glGetUniformLocation(p->handle, unif.c_str()));
+      CLOG(logflag_programs_load, "loading program %s\n", def.name.c_str());
+
+      if (p->handle) {
+        for (auto unif: def.uniforms) {
+          p->uniforms[unif] = g_m.gpu->program_query_uniform(p->handle, unif);
+
+          CLOG(logflag_programs_load, "\tuniform %s -> %i\n", unif.c_str(), p->uniforms[unif].value());
+
+          if (p->uniforms[unif] == gapi::k_program_uniform_none) {
+            __FATAL__("Uniform location fetch failure for %s@%s\n", 
+                      unif.c_str(), 
+                      def.name.c_str());
+          }
+        }
+
+        p->attribs = def.attribs;
+        data[def.name] = std::move(p);
+      } else {
+        __FATAL__("Could not successfully link program %s\n", def.name.c_str());
       }
-
-      p->attribs = def.attribs;
-      data[def.name] = std::move(p);
     }
   }
 
@@ -733,75 +694,52 @@ struct module_programs: public type_module {
     current = name;
   }
 
-  auto uniform(const std::string& name) const {
-    GLint id = -1;
+  gapi::program_uniform_ref uniform(const std::string& name) const {
     auto it = data.at(current)->uniforms.find(name);
 
-    if (it != data.at(current)->uniforms.end()) {
-      id = it->second;
-      //    ASSERT(id != -1);
-
-      if (id == -1) {
-        write_logf("%s -> unif %s. Not found\n",
-        current.c_str(),
-        name.c_str());
-      }
-    }
-
-    return id;
+    return (it != data.at(current)->uniforms.end()) 
+            ? it->second 
+            : gapi::k_program_uniform_none;
   }
 
   void up_mat4x4(const std::string& name, const glm::mat4& m) const {
-    GL_FN(glUniformMatrix4fv(uniform(name), 1, GL_FALSE, &m[0][0]));
+    g_m.gpu->program_set_uniform_matrix4(uniform(name), m);
   }
 
   void up_int(const std::string& name, int i) const {
-    GL_FN(glUniform1i(uniform(name), i));
+    g_m.gpu->program_set_uniform_int(uniform(name), i);
   }
 
   void up_float(const std::string& name, float f) const {
-    GL_FN(glUniform1f(uniform(name), f));
+    g_m.gpu->program_set_uniform_float(uniform(name), f);
   }
 
   void up_vec2(const std::string& name, const vec2_t& v) const {
-    GL_FN(glUniform2fv(uniform(name), 1, &v[0]));
+    g_m.gpu->program_set_uniform_vec2(uniform(name), v);
   }
 
   void up_vec3(const std::string& name, const vec3_t& v) const {
-    GL_FN(glUniform3fv(uniform(name), 1, &v[0]));
+    g_m.gpu->program_set_uniform_vec3(uniform(name), v);
   }
 
   void up_vec4(const std::string& name, const vec4_t& v) const {
-    GL_FN(glUniform4fv(uniform(name), 1, &v[0]));
+    g_m.gpu->program_set_uniform_vec4(uniform(name), v);
   }
 
   void up_pointlight(const std::string& name, const dpointlight& pl) const {
-    GL_FN(glUniform3fv(uniform(name + ".position"), 1, &pl.position[0]));
-    GL_FN(glUniform3fv(uniform(name + ".color"), 1, &pl.color[0]));
+    g_m.gpu->program_set_uniform_vec3(uniform(name + ".position"), pl.position);
+    g_m.gpu->program_set_uniform_vec3(uniform(name + ".color"), pl.color);
   }
 
   void up_material(const std::string& name, const dmaterial& dm) const {
-    GL_FN(glUniform1f(uniform(name + ".smoothness"), dm.smoothness));
-  }
-
-  auto fetch_attrib(const std::string& program, const std::string& attrib) const {
-    return data.at(program)->attribs.at(attrib).index;
+    g_m.gpu->program_set_uniform_float(uniform(name + ".smoothness"), dm.smoothness);
   }
 
   void load_layout() const {
     const auto& p = data.at(current);
 
-    for (const auto& attrib: p->attribs) {
-      const auto& layout = attrib.second;
-
-      GL_FN(glEnableVertexAttribArray(layout.index));
-
-      GL_FN(glVertexAttribPointer(layout.index,
-                                  layout.size,
-                                  layout.type,
-                                  layout.normalized,
-                                  layout.stride,
-                                  layout.pointer));
+    for (auto X: p->attribs) {
+      g_m.gpu->vertex_layout_enable(X);
     }
   }
 
@@ -809,7 +747,7 @@ struct module_programs: public type_module {
     const auto& p = data.at(current);
 
     for (const auto& attrib: p->attribs) {
-      GL_FN(glDisableVertexAttribArray(attrib.second.index));
+      g_m.gpu->vertex_layout_disable(attrib);
     }
   }
 
@@ -818,20 +756,30 @@ struct module_programs: public type_module {
 // Make sure the VBO is bound BEFORE
 // this is initialized
 struct use_program {
-  GLuint prog;
+  CLOG_CODE(std::string clog_name;)
+  gapi::program_ref prog;
 
   use_program(const std::string& name)
-    : prog(g_m.programs->get(name)->handle){
+    : CLOG_CODE(clog_name(name)),
+      prog(g_m.programs->get(name)->handle) {
 
     g_m.programs->make_current(name);
     g_m.programs->load_layout();
-
-    GL_FN(glUseProgram(prog));
+    
+    CLOG(logflag_programs_use_program, 
+        "setting current program: %s\n", 
+        clog_name.c_str());
+    
+    g_m.gpu->use_program(prog);
   }
 
   ~use_program() {
+    CLOG(logflag_programs_use_program, 
+        "releasing current program: %s\n", 
+        clog_name.c_str());
+
     g_m.programs->unload_layout();
-    GL_FN(glUseProgram(0));
+    g_m.gpu->use_program(gapi::k_program_none);
   }
 };
 
