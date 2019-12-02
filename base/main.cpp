@@ -89,7 +89,7 @@ module_textures::index_type g_checkerboard_cubemap {module_textures::k_uninit};
 
 static bool g_unif_gamma_correct = true;
 
-GLuint g_vao = 0;
+gapi::vertex_array_object_handle g_vao{};
 
 static move_state  g_cam_move_state = {
   0, 0, 0, 0, 0, 0, 0
@@ -666,9 +666,9 @@ static void init_api_data() {
   g_m.view->reset_proj();
 
   g_m.programs->load();
-
-  GL_FN(glGenVertexArrays(1, &g_vao));
-  GL_FN(glBindVertexArray(g_vao));
+  
+  g_vao = g_m.gpu->vertex_array_object_new();
+  g_m.gpu->vertex_array_object_bind(g_vao);
 
   g_m.models->modind_sphere = g_m.models->new_sphere();
   g_m.models->modind_area_sphere = g_m.models->new_sphere();

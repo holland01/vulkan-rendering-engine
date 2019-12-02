@@ -15,6 +15,7 @@ namespace gapi {
   const texture_object_handle k_texture_object_none{k_none_value};
   const framebuffer_object_handle k_framebuffer_object_none{k_none_value};
   const buffer_object_handle k_buffer_object_none{k_none_value};
+  const vertex_array_object_handle k_vertex_array_object_none{k_none_value};
 
   void device::apply_state(const gl_state& s) {
     if (s.draw_buffers.fbo) {
@@ -737,4 +738,30 @@ namespace gapi {
     out_width = static_cast<dimension_t>(viewport[2]);
     out_height = static_cast<dimension_t>(viewport[3]);
   }
+
+
+  //-------------------------------
+  // vertex_array_object
+  //-------------------------------
+
+  vertex_array_object_handle device::vertex_array_object_new() {
+    vertex_array_object_handle ret{};
+    glew_gen_handle<vertex_array_object_handle, &glGenVertexArrays>(ret);
+    return ret;
+  }
+
+  void device::vertex_array_object_bind(vertex_array_object_ref vao) {
+    if (vertex_array_object_unbound_enforced()) {
+      GL_FN(glBindVertexArray(vao.value_as<GLuint>()));
+      m_curr_vertex_array_object = vao;
+    }
+  }
+
+  void device::vertex_array_object_unbind() {
+    if (vertex_array_object_bound_enforced()) {
+      GL_FN(glBindVertexArray(0));
+      m_curr_vertex_array_object = k_vertex_array_object_none;
+    }
+  }
+
 }

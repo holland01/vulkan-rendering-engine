@@ -528,6 +528,7 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
 class device {
 private:
   DEVICE_HANDLE_OPS(framebuffer_object);
+  DEVICE_HANDLE_OPS(vertex_array_object)
   DEVICE_HANDLE_OPS_MT(buffer_object, buffer_object_target)
 
 public:
@@ -657,6 +658,14 @@ public:
   void viewport_set(dimension_t x, dimension_t y, dimension_t width, dimension_t height);
 
   void viewport_get(dimension_t& out_x, dimension_t& out_y, dimension_t& out_width, dimension_t& out_height);
+
+  // vertex array object
+
+  vertex_array_object_handle vertex_array_object_new();
+
+  void vertex_array_object_bind(vertex_array_object_ref v);
+
+  void vertex_array_object_unbind();
 };
 
 
