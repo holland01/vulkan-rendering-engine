@@ -204,6 +204,15 @@ enum class fbo_target {
   readwrite
 };
 
+struct vertex_layout {
+  uint8_t location;
+  uint8_t vertex_stride;
+  size_t byte_offset;
+  primitive_type type;
+  uint8_t type_tuple_length;
+  bool normalized;
+};
+
 class texture_param {
 public:
   enum class type {
@@ -482,6 +491,7 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
 // 4) an enforcing unbound function which will crash the app if the type is bound.
 //
 // These are used throughout the various state machine functions
+//
 
 #define DEVICE_HANDLE_OPS(__name__)                           \
   __name__##_handle m_curr_##__name__ {k_##__name__##_none};  \
@@ -525,11 +535,76 @@ DEF_TRAITED_HANDLE_TYPES(program_unit, program_unit_traits)
     return h;                                                                       \
   }
 
+struct constants {
+  static constexpr uint8_t k_vertex_layout_position = 0;
+  static constexpr uint8_t k_vertex_layout_color = 1;
+  static constexpr uint8_t k_vertex_layout_normal = 2;
+
+  static constexpr primitive_type k_real_type = primitive_type::floating_point;
+};
+
 class device {
 private:
   DEVICE_HANDLE_OPS(framebuffer_object);
   DEVICE_HANDLE_OPS(vertex_array_object)
   DEVICE_HANDLE_OPS_MT(buffer_object, buffer_object_target)
+
+  struct {
+    darray<int16_t> locations { 
+      constants::k_vertex_layout_position, 
+      constants::k_vertex_layout_color,
+      constants::k_vertex_layout_normal
+    };
+
+    darray<uint16_t> strides {
+      sizeof(vertex),
+      sizeof(vertex),
+      sizeof(vertex)
+    };
+
+    darray<void*> offsets {
+      (void*)offsetof(vertex, position),
+      (void*)offsetof(vertex, color),
+      (void*)offsetof(vertex, normal)
+    };
+
+    darray<primitive_type> types {
+      constants::k_real_type,
+      constants::k_real_type,
+      constants::k_real_type
+    };
+
+    darray<uint8_t> tuple_sizes {
+      3,
+      4,
+      3
+    };
+
+    darray<bool> normalized {
+      false,
+      false,
+      false
+    };
+
+    darray<bool> enabled {
+      false,
+      false,
+      false
+    };
+  } 
+  m_vertex_layouts {
+
+  };
+
+  bool vertex_layout_disabled_enforced(int_t layout) { 
+    ASSERT(!m_vertex_layouts.enabled[layout]);
+    return !m_vertex_layouts.enabled[layout];
+  }
+
+  bool vertex_layout_enabled_enforced(int_t layout) {
+    ASSERT(m_vertex_layouts.enabled[layout]);
+    return m_vertex_layouts.enabled[layout];
+  }
 
 public:
   void apply_state(const gl_state& s);
@@ -666,9 +741,15 @@ public:
   void vertex_array_object_bind(vertex_array_object_ref v);
 
   void vertex_array_object_unbind();
+
+  // vertex layout
+
+  void vertex_layout_enable(int_t layout_index);
+
+  void vertex_layout_disable(int_t layout_index);
+
+  int16_t vertex_attrib_location(int_t layout_index);
 };
-
-
 
 struct state {
 

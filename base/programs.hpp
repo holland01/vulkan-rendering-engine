@@ -114,17 +114,7 @@ struct dmaterial {
 struct module_programs: public type_module {
   using ptr_type = std::unique_ptr<module_programs>;
 
-  struct attrib_layout {
-    GLint index;
-    GLint size;
-    GLenum type;
-    GLboolean normalized;
-    GLsizei stride;
-    const GLvoid* pointer;
-  };
-
-  using attrib_map_type = std::unordered_map<std::string, attrib_layout>;
-  using attrib_entry_type = std::pair<std::string, attrib_layout>;
+  using attrib_list = darray<gapi::int_t>;
 
   struct programdef {
     std::string name;
@@ -132,50 +122,8 @@ struct module_programs: public type_module {
     std::string fragment;
 
     darray<std::string> uniforms;
-    attrib_map_type attribs;
+    attrib_list attribs;
   };
-
-  static attrib_entry_type  attrib_layout_position() {
-    return {
-      "in_Position",
-    {
-      0,
-      3,
-      OPENGL_REAL,
-      GL_FALSE,
-      sizeof(vertex),
-      ( void*) offsetof(vertex, position)
-    }
-    };
-  }
-
-  static attrib_entry_type attrib_layout_color() {
-    return {
-      "in_Color",
-    {
-      1,
-      4,
-      OPENGL_REAL,
-      GL_FALSE,
-      sizeof(vertex),
-      ( void*) offsetof(vertex, color)
-    }
-    };
-  }
-
-  static attrib_entry_type attrib_layout_normal() {
-    return {
-      "in_Normal",
-      {
-        2,
-        3,
-        OPENGL_REAL,
-        GL_FALSE,
-        sizeof(vertex),
-        ( void*) offsetof(vertex, normal)
-      }
-    };
-  }
 
   static std::string from_bool(bool b) {
     return b ? "true" : "false";
@@ -513,10 +461,10 @@ struct module_programs: public type_module {
       gen_vshader(vshader_frag_color, "basic"),
       gen_fshader(fshader_frag_color, {}, "basic"),
       uniform_location_mv_proj(),
-  {
-    attrib_layout_position(),
-    attrib_layout_color()
-  }
+    {
+      gapi::constants::k_vertex_layout_position,
+      gapi::constants::k_vertex_layout_color
+    }
     },
     {
       "single_color",
@@ -525,9 +473,9 @@ struct module_programs: public type_module {
       uniform_location_mv_proj() +
       uniform_location_color() /*+
       uniform_location_toggle_quad()*/,
-  {
-    attrib_layout_position()
-  }
+    {
+      gapi::constants::k_vertex_layout_position
+    }
     },
     {
       "main",
@@ -545,9 +493,9 @@ struct module_programs: public type_module {
         + uniform_location_shine();
   })(),
   {
-    attrib_layout_position(),
-    attrib_layout_color(),
-    attrib_layout_normal()
+    gapi::constants::k_vertex_layout_position,
+    gapi::constants::k_vertex_layout_color,
+    gapi::constants::k_vertex_layout_normal
   },
     },
     {
@@ -612,9 +560,9 @@ struct module_programs: public type_module {
         + uniform_location_shine();
   })(),
   {
-    attrib_layout_position(),
-    attrib_layout_color(),
-    attrib_layout_normal()
+    gapi::constants::k_vertex_layout_position,
+    gapi::constants::k_vertex_layout_color,
+    gapi::constants::k_vertex_layout_normal
   }
      },
     {
@@ -674,15 +622,15 @@ struct module_programs: public type_module {
     };
   })(),
   {
-    attrib_layout_position(),
-    attrib_layout_color(),
-    attrib_layout_normal()
+    gapi::constants::k_vertex_layout_position,
+    gapi::constants::k_vertex_layout_color,
+    gapi::constants::k_vertex_layout_normal
   }
-    }};
+}};
 
   struct program {
     std::unordered_map<std::string, gapi::program_uniform_handle> uniforms;
-    attrib_map_type attribs;
+    attrib_list attribs;
 
     gapi::program_handle handle;
   };
@@ -790,17 +738,8 @@ struct module_programs: public type_module {
   void load_layout() const {
     const auto& p = data.at(current);
 
-    for (const auto& attrib: p->attribs) {
-      const auto& layout = attrib.second;
-
-      GL_FN(glEnableVertexAttribArray(layout.index));
-
-      GL_FN(glVertexAttribPointer(layout.index,
-                                  layout.size,
-                                  layout.type,
-                                  layout.normalized,
-                                  layout.stride,
-                                  layout.pointer));
+    for (auto X: p->attribs) {
+      g_m.gpu->vertex_layout_enable(X);
     }
   }
 
@@ -808,7 +747,7 @@ struct module_programs: public type_module {
     const auto& p = data.at(current);
 
     for (const auto& attrib: p->attribs) {
-      GL_FN(glDisableVertexAttribArray(attrib.second.index));
+      g_m.gpu->vertex_layout_disable(attrib);
     }
   }
 
@@ -826,12 +765,19 @@ struct use_program {
 
     g_m.programs->make_current(name);
     g_m.programs->load_layout();
-    CLOG(logflag_programs_use_program, "setting current program: %s\n", clog_name.c_str());
+    
+    CLOG(logflag_programs_use_program, 
+        "setting current program: %s\n", 
+        clog_name.c_str());
+    
     g_m.gpu->use_program(prog);
   }
 
   ~use_program() {
-    CLOG(logflag_programs_use_program, "releasing current program: %s\n", clog_name.c_str());
+    CLOG(logflag_programs_use_program, 
+        "releasing current program: %s\n", 
+        clog_name.c_str());
+
     g_m.programs->unload_layout();
     g_m.gpu->use_program(gapi::k_program_none);
   }

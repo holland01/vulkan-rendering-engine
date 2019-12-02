@@ -764,4 +764,43 @@ namespace gapi {
     }
   }
 
+  //-------------------------------
+  // vertex_layout
+  //-------------------------------
+
+  void device::vertex_layout_enable(int_t layout_index) {
+    if (vertex_layout_disabled_enforced(layout_index)) {
+      if (vertex_array_object_bound_enforced()) {
+
+        GL_FN(glEnableVertexAttribArray(
+          m_vertex_layouts.locations[layout_index]));
+
+        GL_FN(glVertexAttribPointer(
+          static_cast<GLuint>(m_vertex_layouts.locations[layout_index]),
+          static_cast<GLint>(m_vertex_layouts.tuple_sizes[layout_index]),
+          gl_primitive_type_to_enum(m_vertex_layouts.types[layout_index]),
+          (m_vertex_layouts.normalized[layout_index] ? GL_TRUE : GL_FALSE),
+          static_cast<GLsizei>(m_vertex_layouts.strides[layout_index]),
+          static_cast<const void*>(m_vertex_layouts.offsets[layout_index])
+        ));
+
+        m_vertex_layouts.enabled[layout_index] = true;
+      }
+    }
+  }
+
+  void device::vertex_layout_disable(int_t layout_index) {
+    if (vertex_layout_enabled_enforced(layout_index)) {
+      if (vertex_array_object_bound_enforced()) {
+        GL_FN(glDisableVertexAttribArray(
+          m_vertex_layouts.locations[layout_index]));
+
+        m_vertex_layouts.enabled[layout_index] = false;
+      }
+    }
+  }
+
+  int16_t device::vertex_attrib_location(int_t layout_index) {
+    return m_vertex_layouts.locations[layout_index];
+  }
 }
