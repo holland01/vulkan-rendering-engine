@@ -8,6 +8,7 @@ using gapi::texture_object_target;
 using gapi::fbo_target;
 using gapi::fbo_attach_type;
 using gapi::buffer_object_target;
+using gapi::raster_method;
 using gapi::buffer_object_usage;
 
 #define BAD_ENUM __FATAL__("Unknown enum value passed")
@@ -171,6 +172,30 @@ GLenum gl_buffer_target_to_enum(gapi::buffer_object_target b) {
   switch (b) {
     case buffer_object_target::vertex:
       ret = GL_ARRAY_BUFFER;
+      break;
+
+    default:
+      BAD_ENUM;
+      break;
+  }
+
+  return ret;
+}
+
+GLenum gl_raster_method_to_enum(gapi::raster_method r) {
+    GLenum ret = 0;
+
+  switch (r) {
+    case raster_method::triangles:
+      ret = GL_TRIANGLES;
+      break;
+
+    case raster_method::triangle_strip:
+      ret = GL_TRIANGLE_STRIP;
+      break;
+
+    case raster_method::lines:
+      ret = GL_LINE_STRIP;
       break;
 
     default:

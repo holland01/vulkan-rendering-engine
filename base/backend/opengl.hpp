@@ -22,6 +22,8 @@ GLenum gl_fbo_attach_to_enum(gapi::fbo_attach_type a);
 
 GLenum gl_buffer_target_to_enum(gapi::buffer_object_target b);
 
+GLenum gl_raster_method_to_enum(gapi::raster_method r);
+
 GLenum gl_buffer_usage_to_enum(gapi::buffer_object_usage b);
 
 template <class handleType, void glGenFn(GLsizei n, GLuint* pids)>

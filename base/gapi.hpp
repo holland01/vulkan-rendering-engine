@@ -81,6 +81,8 @@ using int_t = int64_t;
 using dimension_t = int64_t;
 using miplevel_t = uint8_t;
 using bytesize_t = int64_t;
+using offset_t = uint32_t;
+using count_t = offset_t;
 
 enum class backend : uint8_t {
   vulkan = 0,
@@ -108,6 +110,12 @@ enum class buffer_object_target {
 enum class buffer_object_usage {
   dynamic_draw,
   static_draw
+};
+
+enum class raster_method {
+  triangles,
+  triangle_strip,
+  lines
 };
 
 enum class shader_type {
@@ -640,6 +648,7 @@ public:
 
   void buffer_object_set_data(buffer_object_target target, bytesize_t size, const void* data, buffer_object_usage usage);
 
+  void buffer_object_draw_vertices(raster_method method, offset_t offset, count_t count);
 
   // viewport
 

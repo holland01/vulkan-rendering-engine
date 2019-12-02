@@ -711,6 +711,15 @@ namespace gapi {
                         gl_buffer_usage_to_enum(usage)));
     }
   }
+
+  void device::buffer_object_draw_vertices(raster_method method, offset_t offset, count_t count) {
+    if (buffer_object_bound_enforced(buffer_object_target::vertex)) {
+      GL_FN(glDrawArrays(gl_raster_method_to_enum(method),
+                         static_cast<GLint>(offset),
+                         static_cast<GLsizei>(count)));
+    }
+  }
+
   //-------------------------------
   // viewport
   //-------------------------------

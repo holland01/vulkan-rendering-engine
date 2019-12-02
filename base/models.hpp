@@ -295,12 +295,10 @@ struct module_models {
           ? g_m.view->cubeproj
           : g_m.view->proj)));
 
-    auto ofs = vertex_offsets[model];
-    auto count = vertex_counts[model];
+    auto ofs = static_cast<gapi::offset_t>(vertex_offsets[model]);
+    auto count = static_cast<gapi::count_t>(vertex_counts[model]);
 
-    GL_FN(glDrawArrays(GL_TRIANGLES,
-                       ofs,
-                       count));
+    g_m.gpu->buffer_object_draw_vertices(gapi::raster_method::triangles, ofs, count);
   }
 
   model_type type(index_type i) const {
