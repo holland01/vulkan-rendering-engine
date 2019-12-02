@@ -94,7 +94,7 @@ enum class handle_type {
   program_uniform,
   program_unit,
   program,
-  vertex_binding_desc,
+  vertex_array_object,
   buffer_object,
   framebuffer_object,
   texture_object
@@ -463,7 +463,7 @@ struct handle_gen {
 DEF_HANDLE_TYPES(program_uniform)
 
 DEF_HANDLE_TYPES(program)
-DEF_HANDLE_TYPES(vertex_binding_desc)
+DEF_HANDLE_TYPES(vertex_array_object)
 DEF_HANDLE_TYPES(buffer_object)
 DEF_HANDLE_TYPES(framebuffer_object)
 DEF_HANDLE_TYPES(texture_object)
