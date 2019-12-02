@@ -308,6 +308,8 @@ public:
 
   void set_null() { m_value = k_null_value; }
 
+  bool is_null() const { return m_value == k_null_value; }
+
   void assert_ok() const {
     ASSERT(static_cast<bool>(*this));
   }
