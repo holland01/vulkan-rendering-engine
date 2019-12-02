@@ -782,6 +782,8 @@ public:
 
   void vertex_array_object_unbind();
 
+  void vertex_array_draw_without_vertex_buffer(raster_method method, offset_t offset, count_t count);
+
   // vertex layout
 
   void vertex_layout_enable(int_t layout_index);

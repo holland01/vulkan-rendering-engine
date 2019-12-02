@@ -792,6 +792,18 @@ namespace gapi {
     }
   }
 
+  void device::vertex_array_draw_without_vertex_buffer(raster_method method, 
+                                                        offset_t offset, 
+                                                        count_t count) {
+    if (vertex_array_object_bound_enforced()) {
+      if (buffer_object_unbound_enforced(buffer_object_target::vertex)) {
+        GL_FN(glDrawArrays(gl_raster_method_to_enum(method),
+                           static_cast<GLint>(offset),
+                           static_cast<GLsizei>(count)));
+      }
+    }
+  }
+
   //-------------------------------
   // vertex_layout
   //-------------------------------

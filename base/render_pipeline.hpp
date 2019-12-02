@@ -260,7 +260,9 @@ struct pass_info {
 
       case frame_render_to_quad:
         g_m.gpu->apply_state(state);
-        GL_FN(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+        g_m.gpu->vertex_array_draw_without_vertex_buffer(gapi::raster_method::triangle_strip,
+                                                         0,
+                                                         4);
         break;
 
       case frame_texture2d:
