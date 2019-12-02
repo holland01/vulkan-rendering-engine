@@ -543,6 +543,44 @@ struct constants {
   static constexpr primitive_type k_real_type = primitive_type::floating_point;
 };
 
+struct state {
+
+  struct {
+    bool framebuffer_srgb {true};
+  } gamma {};
+
+  struct {
+    double range_near {0.0}; // [0, 1.0]
+    double range_far {1.0}; // [0, 1.0] (far can be less than near as well)
+
+    gapi::cmp_func_type func { gapi::cmp_func_type::lequal }; 
+
+    // GL_TRUE -> buffer will be written to if test passes;
+    // GL_FALSE -> no write occurs regardless of the test result
+    bool mask {true};
+
+    bool test_enabled {true};
+  } depth {};
+
+  struct {
+    bool enabled {false};
+    gapi::face_type face { gapi::face_type::back }; 
+    gapi::winding_order wnd_order { gapi::winding_order::ccw }; 
+  } face_cull {};
+
+  struct {
+    vec4_t color_value {R(1.0)};
+    real_t depth_value {R(1.0)};
+
+    bool depth {false};
+    bool color {false};
+  } clear_buffers;
+
+  struct {
+    bool fbo {false};
+  } draw_buffers;
+};
+
 class device {
 private:
   DEVICE_HANDLE_OPS(framebuffer_object);
@@ -607,7 +645,7 @@ private:
   }
 
 public:
-  void apply_state(const gl_state& s);
+  void apply_state(const state& s);
 
   // shaders
   program_unit_handle create_shader(shader_type type);
@@ -751,43 +789,7 @@ public:
   int16_t vertex_attrib_location(int_t layout_index);
 };
 
-struct state {
 
-  struct {
-    bool framebuffer_srgb {true};
-  } gamma {};
-
-  struct {
-    double range_near {0.0}; // [0, 1.0]
-    double range_far {1.0}; // [0, 1.0] (far can be less than near as well)
-
-    gapi::cmp_func_type func { gapi::cmp_func_type::lequal }; // GL_LESS, GL_LEQUAL, GL_GEQUAL, GL_GREATER, GL_ALWAYS, GL_NEVER
-
-    // GL_TRUE -> buffer will be written to if test passes;
-    // GL_FALSE -> no write occurs regardless of the test result
-    bool mask {true};
-
-    bool test_enabled {true};
-  } depth {};
-
-  struct {
-    bool enabled {false};
-    gapi::face_type face { gapi::face_type::back }; // GL_BACK, GL_FRONT, GL_FRONT_AND_BACK
-    gapi::winding_order wnd_order { gapi::winding_order::ccw }; // GL_CCW or GL_CW
-  } face_cull {};
-
-  struct {
-    vec4_t color_value {R(1.0)};
-    real_t depth_value {R(1.0)};
-
-    bool depth {false};
-    bool color {false};
-  } clear_buffers;
-
-  struct {
-    bool fbo {false};
-  } draw_buffers;
-};
 
 }
 

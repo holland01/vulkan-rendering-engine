@@ -17,8 +17,8 @@ namespace gapi {
   const buffer_object_handle k_buffer_object_none{k_none_value};
   const vertex_array_object_handle k_vertex_array_object_none{k_none_value};
 
-  void device::apply_state(const gl_state& s) {
-    if (s.draw_buffers.fbo) {
+  static void state_set_backbuffer(bool fbo) {
+    if (fbo) {
       GLenum b[] = {
         GL_COLOR_ATTACHMENT0
       };
@@ -30,59 +30,87 @@ namespace gapi {
       };
       GL_FN(glDrawBuffers(1, b));
     }
+  }
 
-    if (s.depth.test_enabled) {
+  static void state_set_depth_test(bool enabled, cmp_func_type cmp) {
+    if (enabled) {
       GL_FN(glEnable(GL_DEPTH_TEST));
-      GL_FN(glDepthFunc(s.depth.func));
-    }
+      GL_FN(glDepthFunc(gl_cmp_func_type_to_enum(cmp)));
+    } 
     else {
       GL_FN(glDisable(GL_DEPTH_TEST));
     }
+  }
 
-    if (s.depth.mask) {
+  static void state_set_depth_buffer_write(bool enabled) {
+    if (enabled) {
       GL_FN(glDepthMask(GL_TRUE));
     } 
     else {
       GL_FN(glDepthMask(GL_FALSE));
     }
+  }
 
-    GL_FN(glDepthRange(s.depth.range_near, s.depth.range_far));
+  static void state_set_depth_range(double near, double far) {
+    GL_FN(glDepthRange(near, far));
+  }
 
-    if (s.face_cull.enabled) {
+  static void state_set_face_cull(bool enabled, face_type f, winding_order w) {
+    if (enabled) {
       GL_FN(glEnable(GL_CULL_FACE));
-      GL_FN(glCullFace(s.face_cull.face));
-      GL_FN(glFrontFace(s.face_cull.wnd_order));
+      GL_FN(glCullFace(gl_face_type_to_enum(f)));
+      GL_FN(glFrontFace(gl_winding_order_to_enum(w)));
     }
     else {
       GL_FN(glDisable(GL_CULL_FACE));
     }
+  }
 
-    if (s.clear_buffers.depth) {
-      GL_FN(glClearDepth(s.clear_buffers.depth_value));
+  static void state_set_depth_buffer_clear(bool enabled, real_t value) {
+    if (enabled) {
+      GL_FN(glClearDepth(value));
     }
+  }
 
-    if (s.clear_buffers.color) {
-      GL_FN(glClearColor(s.clear_buffers.color_value.r,
-                         s.clear_buffers.color_value.g,
-                         s.clear_buffers.color_value.b,
-                         s.clear_buffers.color_value.a));
+  static void state_set_color_buffer_clear(bool enabled, vec4_t value) {
+    if (enabled) {
+      GL_FN(glClearColor(value.r, value.g, value.b, value.a));
     }
+  }
 
-    if (s.gamma.framebuffer_srgb) {
+  static void state_set_srgb_framebuffer_convert(bool enabled) {
+    if (enabled) {
       GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
     }
     else {
       GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
     }
+  }
 
-    {
-      GLenum bits = 0;
-      bits = s.clear_buffers.color ? (bits | GL_COLOR_BUFFER_BIT) : bits;
-      bits = s.clear_buffers.depth ? (bits | GL_DEPTH_BUFFER_BIT) : bits;
-      if (bits != 0) {
-        GL_FN(glClear(bits));
-      }
+  static void state_final(const state& s) {
+    GLenum bits = 0;
+    bits = s.clear_buffers.color ? (bits | GL_COLOR_BUFFER_BIT) : bits;
+    bits = s.clear_buffers.depth ? (bits | GL_DEPTH_BUFFER_BIT) : bits;
+    if (bits != 0) {
+      GL_FN(glClear(bits));
     }
+  }
+
+  void device::apply_state(const state& s) {
+    state_set_backbuffer(s.draw_buffers.fbo);
+
+    state_set_depth_test(s.depth.test_enabled, s.depth.func);
+    state_set_depth_buffer_write(s.depth.mask);
+    state_set_depth_range(s.depth.range_near, s.depth.range_far);
+
+    state_set_face_cull(s.face_cull.enabled, s.face_cull.face, s.face_cull.wnd_order);
+    
+    state_set_depth_buffer_clear(s.clear_buffers.depth, s.clear_buffers.depth_value);
+    state_set_color_buffer_clear(s.clear_buffers.color, s.clear_buffers.color_value);
+
+    state_set_srgb_framebuffer_convert(s.gamma.framebuffer_srgb);
+
+    state_final(s);
   }
 
   //-------------------------------

@@ -26,6 +26,12 @@ GLenum gl_raster_method_to_enum(gapi::raster_method r);
 
 GLenum gl_buffer_usage_to_enum(gapi::buffer_object_usage b);
 
+GLenum gl_winding_order_to_enum(gapi::winding_order w);
+
+GLenum gl_face_type_to_enum(gapi::face_type f);
+
+GLenum gl_cmp_func_type_to_enum(gapi::cmp_func_type c);
+
 template <class handleType, void glGenFn(GLsizei n, GLuint* pids)>
 void gl_gen_handle(handleType& h);
 

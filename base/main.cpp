@@ -302,7 +302,7 @@ static void init_render_passes() {
 
   // environment map pass
   {
-    gl_state state {};
+    gapi::state state {};
     state.clear_buffers.depth = true;
     state.clear_buffers.color = true;
     state.face_cull.enabled = false;
@@ -363,7 +363,7 @@ static void init_render_passes() {
 
   // wall render pass
   {
-    gl_state state {};
+    gapi::state state {};
 
     state.clear_buffers.depth = true;
     state.clear_buffers.color = true;
@@ -411,7 +411,7 @@ static void init_render_passes() {
 
   // reflect pass
   {
-    gl_state state {};
+    gapi::state state {};
 
     //state.clear_buffers.color = true;
     //state.clear_buffers.depth = true;
@@ -467,7 +467,7 @@ static void init_render_passes() {
 
   // room pass
   {
-    gl_state state {};
+    gapi::state state {};
 
     darray<duniform> unifs;
 
@@ -520,7 +520,7 @@ static void init_render_passes() {
 
   // light model pass
   {
-    gl_state state {};
+    gapi::state state {};
 
     darray<duniform> unifs;
 
@@ -558,7 +558,7 @@ static void init_render_passes() {
 
   // mouse pick
   {
-    gl_state state {};
+    gapi::state state {};
     state.gamma.framebuffer_srgb = false;
 
     state.draw_buffers.fbo = mousepick_usefbo;
@@ -614,7 +614,7 @@ static void init_render_passes() {
 
   // rendered quad
   {
-    gl_state state {};
+    gapi::state state {};
 
     state.draw_buffers.fbo = false;
 

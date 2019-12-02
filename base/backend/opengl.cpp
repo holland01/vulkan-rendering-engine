@@ -224,3 +224,62 @@ GLenum gl_buffer_usage_to_enum(gapi::buffer_object_usage b) {
 
   return ret;
 }
+
+
+GLenum gl_winding_order_to_enum(gapi::winding_order w) {
+  GLenum ret = 0;
+
+  switch (w) {
+    case gapi::winding_order::ccw:
+      ret = GL_CCW;
+      break;
+
+    case gapi::winding_order::cw:
+      ret = GL_CW;
+      break;
+      
+    default:
+      BAD_ENUM;
+      break;
+  }
+
+  return ret;
+}
+
+GLenum gl_face_type_to_enum(gapi::face_type f) {
+  GLenum ret = 0;
+
+  switch (f) {
+    case gapi::face_type::back:
+      ret = GL_BACK;
+      break;
+
+    case gapi::face_type::front:
+      ret = GL_FRONT;
+      break;
+    
+    case gapi::face_type::front_and_back:
+      ret = GL_FRONT_AND_BACK;
+      break;
+
+    default:
+      BAD_ENUM;
+      break;
+  }
+
+  return ret;
+}
+
+static std::unordered_map<gapi::cmp_func_type, GLenum> g_cmp_func_type {
+  { gapi::cmp_func_type::always, GL_ALWAYS },
+  { gapi::cmp_func_type::equal, GL_EQUAL },
+  { gapi::cmp_func_type::gequal, GL_GEQUAL },
+  { gapi::cmp_func_type::greater, GL_GREATER },
+  { gapi::cmp_func_type::lequal, GL_LEQUAL },
+  { gapi::cmp_func_type::less, GL_LESS },
+  { gapi::cmp_func_type::none, GL_NONE }
+};
+
+GLenum gl_cmp_func_type_to_enum(gapi::cmp_func_type c) {
+  return g_cmp_func_type[c];
+}

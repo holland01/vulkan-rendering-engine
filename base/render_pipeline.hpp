@@ -140,45 +140,6 @@ static inline darray<duniform> duniform_toggle_quad() {
   };
 }
 
-// TODO:
-// make these more type safe
-struct gl_state {
-  struct {
-    bool framebuffer_srgb {true};
-  } gamma {};
-
-  struct {
-    double range_near {0.0}; // [0, 1.0]
-    double range_far {1.0}; // [0, 1.0] (far can be less than near as well)
-
-    GLenum func {GL_LEQUAL}; // GL_LESS, GL_LEQUAL, GL_GEQUAL, GL_GREATER, GL_ALWAYS, GL_NEVER
-
-    // GL_TRUE -> buffer will be written to if test passes;
-    // GL_FALSE -> no write occurs regardless of the test result
-    GLboolean mask {GL_TRUE};
-
-    bool test_enabled {true};
-  } depth {};
-
-  struct {
-    bool enabled {false};
-    GLenum face {GL_BACK}; // GL_BACK, GL_FRONT, GL_FRONT_AND_BACK
-    GLenum wnd_order {GL_CCW}; // GL_CCW or GL_CW
-  } face_cull {};
-
-  struct {
-    vec4_t color_value {R(1.0)};
-    real_t depth_value {R(1.0)};
-
-    bool depth {false};
-    bool color {false};
-  } clear_buffers;
-
-  struct {
-    bool fbo {false};
-  } draw_buffers;
-};
-
 struct bind_texture {
   module_textures::index_type id;
   int slot;
@@ -208,7 +169,7 @@ struct pass_info {
 
   std::string name;
 
-  gl_state state {};
+  gapi::state state {};
 
   mutable darray<duniform> uniforms; // cleared after initial upload
 
