@@ -31,9 +31,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-#define SET_CLEAR_COLOR_V4(v) GL_FN(glClearColor((v).r, (v).g, (v).b, (v).a)) 
-#define CLEAR_COLOR_DEPTH GL_FN(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
-
 #define TEST_SPHERE_RADIUS R(5)
 #define TEST_SPHERE_POS R3v(0, 10, 0)
 
@@ -223,34 +220,7 @@ const pass_info& get_render_pass(const std::string& name) {
   return g_render_passes.at(key);
 }
 
-
 std::unordered_map<module_models::index_type, frame_model> g_frame_model_map {};
-
-struct gl_depth_func {
-  GLint prev_depth;
-
-  gl_depth_func(GLenum func) {
-    GL_FN(glGetIntegerv(GL_DEPTH_FUNC, &prev_depth));
-    GL_FN(glDepthFunc(func));
-  }
-
-  ~gl_depth_func() {
-    GL_FN(glDepthFunc(prev_depth));
-  }
-};
-
-struct gl_clear_depth {
-  real_t prev_depth;
-
-  gl_clear_depth(real_t new_depth) {
-    GL_FN(glGetFloatv(GL_DEPTH_CLEAR_VALUE, &prev_depth));
-    GL_FN(glClearDepth(new_depth));
-  }
-
-  ~gl_clear_depth() {
-    GL_FN(glClearDepth(prev_depth));
-  }
-};
 
 #define DUNIFINT(name, value) \
   duniform(static_cast<int32_t>(value), #name)
@@ -317,8 +287,6 @@ static void init_render_passes() {
     darray<bind_texture> tex_bindings = {
       {g_checkerboard_cubemap, 0}
     };
-
-    write_logf("envmap %s", tex_bindings[0].to_string().c_str());
 
     auto ft = pass_info::frame_envmap;
 
@@ -660,7 +628,7 @@ static void init_render_passes() {
       add_render_pass(rquad);
     }
   }
-};
+}
 
 static void init_api_data() {
   g_m.view->reset_proj();
@@ -743,15 +711,6 @@ static void init_api_data() {
 
     g_m.graph->test_indices.floor = g_m.graph->new_node(floor);
   }
-
-  GL_FN(glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
-  GL_FN(glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS));
-  GL_FN(glDisable(GL_CULL_FACE));
-  //    GL_FN(glCullFace(GL_BACK));
-  //    GL_FN(glFrontFace(GL_CCW));
-  GL_FN(glEnable(GL_DEPTH_TEST));
-  GL_FN(glDepthFunc(GL_LEQUAL));
-  GL_FN(glClearDepth(1.0f));
 }
 
 static darray<uint8_t> g_debug_cubemap_buf;
@@ -761,12 +720,7 @@ static darray<uint8_t> g_debug_cubemap_buf;
 static int screen_cube_index = 0;
 
 static void render() {
-  vec4_t background(0.0f, 0.5f, 0.3f, 1.0f);
-
-  SET_CLEAR_COLOR_V4(background);
-
   auto update_pickbuffer = []() -> void {
-    //GL_FN(glFinish());
     g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
   };
 
@@ -847,11 +801,10 @@ bool keydown_if_not(int key) {
 }
 
 void toggle_framebuffer_srgb() {
+  // TODO
   if (g_unif_gamma_correct) {
-    GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
   }
   else {
-    GL_FN(glDisable(GL_FRAMEBUFFER_SRGB));
   }
 }
 
@@ -1271,8 +1224,6 @@ int main(void) {
   if (g_m.init()) {
     maybe_enable_cursor(g_m.device_ctx->window());
 
-    GL_FN(glEnable(GL_FRAMEBUFFER_SRGB));
-
     init_api_data();
     init_render_passes();
 
@@ -1291,6 +1242,5 @@ int main(void) {
 
   g_m.free();
 
-  
   return 0;
 }
