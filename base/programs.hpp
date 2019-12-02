@@ -832,15 +832,12 @@ struct use_program {
     g_m.programs->load_layout();
     CLOG(logflag_programs_use_program, "setting current program: %s\n", clog_name.c_str());
     g_m.gpu->use_program(prog);
-
-   // GL_FN(glUseProgram(prog));
   }
 
   ~use_program() {
     CLOG(logflag_programs_use_program, "releasing current program: %s\n", clog_name.c_str());
     g_m.programs->unload_layout();
     g_m.gpu->use_program(gapi::k_program_none);
-   // GL_FN(glUseProgram(0));
   }
 };
 

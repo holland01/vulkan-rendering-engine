@@ -228,17 +228,6 @@ void module_textures::fill_texture2d(gapi::texture_object_target paramtype, inde
                             formats[tid],
                             texel_types[tid],
                             reinterpret_cast<const void*>(data));
-#if 0
-  GL_FN(glTexImage2D(paramtype,
-                     0,
-                     internal_formats[tid],
-                     widths[tid],
-                     heights[tid],
-                     0,
-                     formats[tid],
-                     texel_types[tid],
-                     data));
-#endif                    
 }
 
 void fill_checkerboard(darray<uint8_t>& blank, int w, int h, glm::u8vec3 mask, int channels) {
