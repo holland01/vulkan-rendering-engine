@@ -7,6 +7,7 @@
 
 struct gl_state;
 
+//
 // An overview of the type system for gapi follows.
 //
 // Because we want to be able to support both OpenGL and Vulkan (at least until the Vulkan implementation is complete),
@@ -73,6 +74,7 @@ struct gl_state;
 //    to _unmap_ the currently mapped API functionality. 
 //
 //      An example of case b) would be in binding/unbinding a program handle, or a vertex buffer handle.
+//
 
 namespace gapi {
 
@@ -583,8 +585,8 @@ struct state {
 
 class device {
 private:
-  DEVICE_HANDLE_OPS(framebuffer_object);
   DEVICE_HANDLE_OPS(vertex_array_object)
+  DEVICE_HANDLE_OPS(framebuffer_object)
   DEVICE_HANDLE_OPS_MT(buffer_object, buffer_object_target)
 
   struct {
@@ -679,7 +681,7 @@ public:
 
   void use_program(program_ref program);
 
-  program_handle make_program(const std::string& vertex, 
+  program_handle make_program(const std::string& vertex,
                               const std::string& fragment);
 
   // global program variables
