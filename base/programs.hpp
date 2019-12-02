@@ -787,10 +787,6 @@ struct module_programs: public type_module {
     g_m.gpu->program_set_uniform_float(uniform(name + ".smoothness"), dm.smoothness);
   }
 
-  auto fetch_attrib(const std::string& program, const std::string& attrib) const {
-    return data.at(program)->attribs.at(attrib).index;
-  }
-
   void load_layout() const {
     const auto& p = data.at(current);
 
