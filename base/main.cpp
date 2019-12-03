@@ -776,12 +776,15 @@ struct renderloop_triangle : public renderloop {
   bool ok() { return m_success; }
 
   void init() {
-    m_success = m_renderer.init();
+    m_success = m_renderer.init_context();
 
     if (m_success) {
       for (uint32_t i = 0; i < m_renderer.num_devices(); ++i) {
         m_renderer.print_device_info(i);
       }
+
+      m_renderer.set_physical_device(0);
+      m_renderer.setup_graphics_pipeline();
     }
   }
 
