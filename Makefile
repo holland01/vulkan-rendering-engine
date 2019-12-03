@@ -19,7 +19,7 @@ LIBS := $(shell pkg-config --libs glfw3)
 LIBS += $(shell pkg-config --libs glew)
 LIBS += -lstdc++fs -lvulkan
 
-CPPFLAGS=-I./base -DGLM_ENABLE_EXPERIMENTAL
+CPPFLAGS=-I./base -DGLM_ENABLE_EXPERIMENTAL -DBASE_ENABLE_VULKAN
 CXXFLAGS=-std=c++17 -Wall -Wpedantic -Werror -Wno-unused-function
 CFLAGS=
 
