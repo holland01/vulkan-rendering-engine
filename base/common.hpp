@@ -26,11 +26,14 @@
 #include <algorithm>
 #include <limits>
 #include <sstream>
+#include <iomanip>
 #include <array>
 
 #include <stdint.h>
 
 #include "util.hpp"
+
+
 
 namespace fs = std::experimental::filesystem;
 
@@ -53,6 +56,8 @@ namespace fs = std::experimental::filesystem;
 
 #define AS_STRING_SS(v) #v << ": " << v
 #define SEP_SS << ", " <<
+
+#define SS_HEX(value) "0x" << std::uppercase << std::setfill('0') << std::setw((sizeof(value)) << 1) << std::hex << (value) << std::dec
 
 #define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
 
@@ -170,12 +175,18 @@ struct modules {
   void free();
 } extern g_m;
 
+enum class render_loop {
+  complete,
+  triangle
+};
+
 struct runtime_config {
   enum drawmode {
     drawmode_normal,
     drawmode_debug_mousepick
   };
 
+ 
 #if CONFIG_QUAD_CLICK_CURSOR == 1
   bool quad_click_cursor {true};
 #else
@@ -185,6 +196,8 @@ struct runtime_config {
   bool fullscreen {false};
 
   gapi::backend api_backend{gapi::backend::vulkan};
+
+  render_loop loop {render_loop::triangle};
 
   drawmode dmode {drawmode_normal};
 } extern g_conf;

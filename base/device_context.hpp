@@ -42,7 +42,7 @@ public:
   }
 
   void glfw_settings() {
-    switch (g_conf.backend) {
+    switch (g_conf.api_backend) {
       case gapi::backend::opengl:
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OPENGL_VERSION_MAJOR);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OPENGL_VERSION_MINOR);

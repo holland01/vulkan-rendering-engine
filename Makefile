@@ -17,7 +17,7 @@ OUT = renderer
 
 LIBS := $(shell pkg-config --libs glfw3)
 LIBS += $(shell pkg-config --libs glew)
-LIBS += -lstdc++fs
+LIBS += -lstdc++fs -lvulkan
 
 CPPFLAGS=-I./base -DGLM_ENABLE_EXPERIMENTAL
 CXXFLAGS=-std=c++17 -Wall -Wpedantic -Werror -Wno-unused-function

@@ -27,6 +27,8 @@
 #include "device_context.hpp"
 #include "gapi.hpp"
 
+#include "backend/vulkan.hpp"
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -43,19 +45,21 @@ bool modules::init() {
   device_ctx = new device_context();
   
   if (device_ctx->init(SCREEN_WIDTH, SCREEN_HEIGHT)) {
-    gpu = new gapi::device();
+    if (g_conf.api_backend == gapi::backend::opengl) {
+      gpu = new gapi::device();
 
-    framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
-    programs = new module_programs();
-    textures = new module_textures();
-    vertex_buffer = new module_vertex_buffer();
-    models = new module_models();
-    geom = new module_geom();
+      framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
+      programs = new module_programs();
+      textures = new module_textures();
+      vertex_buffer = new module_vertex_buffer();
+      models = new module_models();
+      geom = new module_geom();
 
-    view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
-    graph = new scene_graph();
+      view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
+      graph = new scene_graph();
 
-    uniform_store = new shader_uniform_storage();
+      uniform_store = new shader_uniform_storage();
+    }
   }
 
   return device_ctx->ok();
@@ -719,30 +723,80 @@ static darray<uint8_t> g_debug_cubemap_buf;
 
 static int screen_cube_index = 0;
 
-static void render() {
-  auto update_pickbuffer = []() -> void {
-    g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
-  };
+struct renderloop {
+  virtual void init() = 0;
+  virtual void update() = 0;
+  virtual void render() = 0;
+};
 
-  switch (g_conf.dmode) {
-  case runtime_config::drawmode_normal:
-  {
-    for (const auto& kv: g_render_passes) {
-      kv.second.apply();
-    }
-    update_pickbuffer();
-  } break;
-
-  case runtime_config::drawmode_debug_mousepick:
-  {
-    const auto& pass_pick = get_render_pass("mousepick");
-    const auto& pass_quad = get_render_pass("rendered_quad");
-    pass_pick.apply();
-    update_pickbuffer();
-    pass_quad.apply();
-  } break;
+struct renderloop_complete : public renderloop {
+  void init() {
+    init_api_data();
+    init_render_passes();
   }
-}
+
+  void update() {
+    g_m.view->update(g_cam_move_state);
+
+    if (g_obj_manip->has_select_model_state()) {
+      g_obj_manip->update_select_model_state();
+    }
+  }
+
+  void render() {
+    auto update_pickbuffer = []() -> void {
+      g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
+    };
+
+    switch (g_conf.dmode) {
+    case runtime_config::drawmode_normal:
+    {
+      for (const auto& kv: g_render_passes) {
+        kv.second.apply();
+      }
+      update_pickbuffer();
+    } break;
+
+    case runtime_config::drawmode_debug_mousepick:
+    {
+      const auto& pass_pick = get_render_pass("mousepick");
+      const auto& pass_quad = get_render_pass("rendered_quad");
+      pass_pick.apply();
+      update_pickbuffer();
+      pass_quad.apply();
+    } break;
+    }
+  }
+};
+
+struct renderloop_triangle : public renderloop {
+  vulkan::renderer m_renderer;
+  bool m_success{false};
+
+  bool ok() { return m_success; }
+
+  void init() {
+    m_success = m_renderer.init();
+
+    if (m_success) {
+      for (uint32_t i = 0; i < m_renderer.num_devices(); ++i) {
+        m_renderer.print_device_info(i);
+      }
+    }
+  }
+
+  void update() {
+
+  }
+
+  void render() {
+    if (m_success) {
+
+    }
+  }
+};
+
+static std::unique_ptr<renderloop> g_renderloop{};
 
 
 
@@ -1224,22 +1278,23 @@ int main(void) {
   if (g_m.init()) {
     maybe_enable_cursor(g_m.device_ctx->window());
 
-    init_api_data();
-    init_render_passes();
+    switch (g_conf.loop) {
+      case render_loop::complete: g_renderloop.reset(new renderloop_complete()); break;
+      case render_loop::triangle: g_renderloop.reset(new renderloop_triangle()); break;
+    }
+
+    g_renderloop->init();
 
     while (!glfwWindowShouldClose(g_m.device_ctx->window())) {
-      g_m.view->update(g_cam_move_state);
+      g_renderloop->update();
+      g_renderloop->render();
 
-      if (g_obj_manip->has_select_model_state()) {
-        g_obj_manip->update_select_model_state();
-      }
-
-      render();
-      glfwSwapBuffers(g_m.device_ctx->window());
+      //glfwSwapBuffers(g_m.device_ctx->window());
       glfwPollEvents();
     }
   }
 
+  g_renderloop.reset(nullptr);
   g_m.free();
 
   return 0;
