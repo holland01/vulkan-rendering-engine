@@ -38,7 +38,6 @@ namespace vulkan {
 
   class renderer {
     darray<VkPhysicalDevice> m_vk_physical_devs;
-    darray<VkLayerProperties> m_vk_avail_layers;
 
     VkInstance m_vk_instance {VK_NULL_HANDLE};
 
@@ -362,19 +361,19 @@ namespace vulkan {
         uint32_t layer_count = 0;
         RVK_FN(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
         if (ok()) {
-          ret.resize(layer_count);
-          RVK_FN(vkEnumerateInstanceLayerProperties(&layer_count, &m_vk_avail_layers[0]));
+          darray<VkLayerProperties> avail_layers(layer_count);
+          RVK_FN(vkEnumerateInstanceLayerProperties(&layer_count, &avail_layers[0]));
 
           std::stringstream ss;
           ss << "Vulkan Layers found:\n";
-          for (const auto& properties: m_vk_avail_layers) {
+          for (const auto& properties: avail_layers) {
             ss << "--- " << properties.layerName << "\n";
           }
           write_logf("%s", ss.str().c_str());
 
           for (const auto& info: s_layers) {
             if (info.enable) {
-              for (const auto& properties: m_vk_avail_layers) {
+              for (const auto& properties: avail_layers) {
                 if (strcmp(properties.layerName, info.name) == 0) {
                   write_logf("Enabling Vulkan Layer: %s\n", properties.layerName);
                   ret.push_back(info.name);
