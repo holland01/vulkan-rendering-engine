@@ -142,6 +142,13 @@ struct view_data;
 
 namespace gapi {
 class device;
+
+// hardly ideal in terms of organization,
+// but we'll deal with that later.
+enum class backend : uint8_t {
+  vulkan = 0,
+  opengl
+};
 }
 
 class device_context;
@@ -176,6 +183,8 @@ struct runtime_config {
 #endif
 
   bool fullscreen {false};
+
+  gapi::backend api_backend{gapi::backend::vulkan};
 
   drawmode dmode {drawmode_normal};
 } extern g_conf;

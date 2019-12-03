@@ -86,10 +86,6 @@ using bytesize_t = int64_t;
 using offset_t = uint32_t;
 using count_t = offset_t;
 
-enum class backend : uint8_t {
-  vulkan = 0,
-  opengl
-};
 
 enum class handle_type {
   undefined = 0,
