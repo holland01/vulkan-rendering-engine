@@ -1,5 +1,19 @@
 #pragma once
 
+#if !defined(BASE_ENABLE_VULKAN)
+#define BASE_ENABLE_VULKAN
+#endif // BASE_ENABLE_VULKAN
+
+// We need to include the Vulkan headers here,
+// since GLFW3 contains vulkan specific
+// information that's dependent on the inclusion of a 
+// Vulkan header. At some point, reorganizing header includes
+// will definitely be the way to go. For now,
+// this works.
+#if defined(BASE_ENABLE_VULKAN)
+  #include <vulkan/vulkan.h>
+#endif // BASE_USE_VULKAN
+
 #include <GL/glew.h>
 #include <GL/glu.h>
 #include <GLFW/glfw3.h>
