@@ -12,6 +12,9 @@ class device_context {
 private:
   GLFWwindow* glfw_window{nullptr};
 
+  int m_screen_width{0};
+  int m_screen_height{0};
+
   bool initialized{false};
 
   void free_glfw() {
@@ -28,6 +31,9 @@ public:
   ~device_context() {
     free_glfw();
   }
+
+  int width() const { return m_screen_width; }
+  int height() const { return m_screen_height; }
 
   const GLFWwindow* window() const { 
     return glfw_window; 
@@ -71,6 +77,9 @@ public:
 
     bool success = true;
     bool glfw_init = false;
+
+    m_screen_width = screen_width;
+    m_screen_height = screen_height;
 
     if (glfwInit()) {
       glfw_init = true;
