@@ -375,7 +375,6 @@ namespace vulkan {
             if (info.enable) {
               for (const auto& properties: avail_layers) {
                 if (strcmp(properties.layerName, info.name) == 0) {
-                  write_logf("Enabling Vulkan Layer: %s\n", properties.layerName);
                   ret.push_back(info.name);
                   break;
                 }
