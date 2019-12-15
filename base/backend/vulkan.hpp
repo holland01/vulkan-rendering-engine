@@ -48,6 +48,10 @@ namespace vulkan {
 
     darray<VkImage> m_vk_swapchain_images;
 
+    VkSurfaceFormatKHR m_vk_khr_swapchain_format;
+
+    VkExtent2D m_vk_swapchain_extent;
+
     VkInstance m_vk_instance {VK_NULL_HANDLE};
 
     VkPhysicalDevice m_vk_curr_pdevice{VK_NULL_HANDLE};
@@ -58,7 +62,6 @@ namespace vulkan {
     VkQueue m_vk_present_queue{VK_NULL_HANDLE};
 
     VkSurfaceKHR m_vk_khr_surface{VK_NULL_HANDLE};
-
     VkSwapchainKHR m_vk_khr_swapchain{VK_NULL_HANDLE};
 
     VkResult m_vk_result{VK_SUCCESS};
@@ -268,6 +271,188 @@ namespace vulkan {
       return m_vk_khr_surface != VK_NULL_HANDLE;
     }
 
+    void setup_swapchain() {
+      if (ok_ldev()) {
+        if (swapchain_ok(m_vk_curr_pdevice)) {
+          swapchain_support_details details = query_swapchain_support(m_vk_curr_pdevice);
+          // Make sure that we have the standard SRGB colorspace available
+          VkSurfaceFormatKHR surface_format;
+          {
+            bool chosen = false;
+            for (const auto& format: details.formats) {
+              if (format.format == VK_FORMAT_B8G8R8A8_UNORM
+                    && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                surface_format = format;
+                chosen = true;
+                break;
+              }
+            }
+            ASSERT(chosen);
+          }
+
+          // FIFO_KHR implies vertical sync. There may be a slight latency,
+          // but for our purposes this shouldn't a problem.
+          // We can deal with potential issues that can occur
+          // with MAILBOX_KHR (provides triple buffering/lower latency)
+          // if necessary.
+          VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+          
+          // Here we select the swapchain dimensions (the dimensions of the images that have been
+          // rendered into). We want to make them as close as possible to the actual
+          // window dimensions; sometimes this will be exact, other times it won't, depending
+          // on the system.
+          //
+          // When the swapchain capabilities are queried, the driver will set the currentExtent
+          // width and height to the window dimensions if it asks us to match the dimensions with the window.
+          // Otherwise, we have a bit more wiggle room. The driver tells us this by setting
+          // currentExtent.width to UINT32_MAX. 
+          //
+          // For now, it's best to keep things simple and be conservative, 
+          // so we'll operate under the (likely) assumption that UINT32_MAX _is not_ set, 
+          // and add support for more varied dimension requirements
+          // if they pop up in the future.
+          VkExtent2D swap_extent;
+          {
+            ASSERT(details.capabilities.currentExtent.width != UINT32_MAX);
+            swap_extent = details.capabilities.currentExtent;
+          }
+
+          // Image count represents the amount of images on the swapchain.
+          // We'll use a small image count for now. Simple semantics first;
+          // we can optimize later as necessary.
+          uint32_t image_count = details.capabilities.minImageCount;
+          ASSERT(image_count != 0);
+          if (image_count == 1) {
+            image_count++;
+          }
+          ASSERT(image_count <= details.capabilities.maxImageCount);
+
+          //
+          // Here we actually create the swapchain.
+          //
+          // --
+          // On imageArrayLayers: always set to 1 unless we want to use 
+          // stereoscopic 3D rendering.
+          //
+          // --
+          // On imageUsage: VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT implies that render commands
+          // will write directly to the images on the swapchain. If we want to perform
+          // offscreen rendering, something like VK_IMAGE_USAGE_TRANSFER_DST_BIT
+          // is considered an option.
+          //
+          // --
+          // On imageSharingMode: something to keep in mind for queue family indices is that
+          // both the graphics family queue and present family queue
+          // can be shared (use the same family index). 
+          //
+          // Assuming that they are _not_ shared, then images will be drawn _on_
+          // the swapchain using the graphics queue. They will then be submitted 
+          // through the presentation queue.
+          //
+          // VK_SHARING_MODE_EXCLUSIVE implies that an image is owned by one
+          // queue family at a time and ownership must be explicitly transferred before
+          // using it in another queue family; this is what we use if the indices
+          // are the same.
+          //
+          // VK_SHARING_MODE_CONCURRENT implies that images can be used across
+          // multiple queue families without explicit ownership transfers. In advance,
+          // we specify which queue family indices the transfers will occur between.
+          //
+          // --
+          // On preTransform: represents a transform that is applied to images on the swapchain.
+          // Can range from anything to a 90 degreee clockwise rotation or a flip. For now,
+          // there is no need, so we simply use the current transform that's provided by 
+          // the swapchain capabilities.
+          //
+          // --
+          // On compositeAlpha: use VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR to ensure that we don't
+          // use the alpha channel to perform a blend operation with other windows in the 
+          // window system.
+          //
+          // --
+          // On clipped: when other windows in the window system obscure portions of our 
+          // window, we can use to tell the driver to not draw those portions. 
+          // While the tutorial this references suggests using VK_TRUE here,
+          // we instead use VK_FALSE. Technically speaking there isn't a clear indication
+          // that using VK_TRUE will cause issues, but considering that framebuffer reads
+          // are crucial to this application, it makes sense to avoid any potential
+          // sources of error, as using VK_TRUE will definitely prevent writes to portions
+          // of the screen that could be important for post processing (example: post processing
+          // that relies on interpolation of already written data that's adjacent to something
+          // which is visible, but itself is currently _not_ visible).
+          //
+          // --
+          // On oldSwapChain: at the time of this writing, we keep this set to VK_NULL_HANDLE. This will need to be
+          // none-null once we support things like window resizing, or anything that requires
+          // re-initialization of the swapchain.
+          // 
+          {
+            VkSwapchainCreateInfoKHR create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+
+            create_info.surface = m_vk_khr_surface;
+            
+            create_info.minImageCount = image_count;
+            
+            create_info.imageExtent = swap_extent;
+
+            create_info.imageFormat = surface_format.format;
+            create_info.imageColorSpace = surface_format.colorSpace;
+            create_info.imageArrayLayers = 1;
+            create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+            queue_family_indices queue_indices = query_queue_families(m_vk_curr_pdevice, 
+                                                                      m_vk_khr_surface);
+            
+            std::array<uint32_t, 2> array_indices = {
+              queue_indices.graphics_family.value(),
+              queue_indices.present_family.value()
+            };
+
+            if (queue_indices.graphics_family != queue_indices.present_family) {
+              create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+              create_info.queueFamilyIndexCount = 2;
+              create_info.pQueueFamilyIndices = array_indices.data();
+            }
+            else {
+              create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+              create_info.queueFamilyIndexCount = 0;
+              create_info.pQueueFamilyIndices = nullptr;
+            }
+
+            create_info.preTransform = details.capabilities.currentTransform;
+
+            create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+            create_info.presentMode = present_mode;
+            create_info.clipped = VK_FALSE;
+
+            create_info.oldSwapchain = VK_NULL_HANDLE;
+
+            RVK_FN(vkCreateSwapchainKHR(m_vk_curr_ldevice, &create_info, nullptr, &m_vk_khr_swapchain));
+
+            if (ok_swapchain()) {
+              uint32_t count = 0;
+              RVK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
+                                             m_vk_khr_swapchain, 
+                                             &count,
+                                             nullptr));
+              if (ok_swapchain()) {
+                m_vk_swapchain_images.resize(count);
+                RVK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
+                                              m_vk_khr_swapchain, 
+                                              &count,
+                                              m_vk_swapchain_images.data()));
+
+                m_vk_khr_swapchain_format = surface_format;
+                m_vk_swapchain_extent = swap_extent;
+              }
+            }
+          }
+        }
+      }
+    }
+
   public:
     ~renderer() {
       free_mem();
@@ -452,184 +637,7 @@ namespace vulkan {
       return m_vk_result == VK_SUCCESS;
     }
 
-    void setup_swapchain() {
-      if (ok_ldev()) {
-        if (swapchain_ok(m_vk_curr_pdevice)) {
-          swapchain_support_details details = query_swapchain_support(m_vk_curr_pdevice);
-          // Make sure that we have the standard SRGB colorspace available
-          VkSurfaceFormatKHR surface_format;
-          {
-            bool chosen = false;
-            for (const auto& format: details.formats) {
-              if (format.format == VK_FORMAT_B8G8R8A8_UNORM
-                    && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                surface_format = format;
-                chosen = true;
-                break;
-              }
-            }
-            ASSERT(chosen);
-          }
-
-          // FIFO_KHR implies vertical sync. There may be a slight latency,
-          // but for our purposes this shouldn't a problem.
-          // We can deal with potential issues that can occur
-          // with MAILBOX_KHR (provides triple buffering/lower latency)
-          // if necessary.
-          VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
-          
-          // Here we select the swapchain dimensions (the dimensions of the images that have been
-          // rendered into). We want to make them as close as possible to the actual
-          // window dimensions; sometimes this will be exact, other times it won't, depending
-          // on the system.
-          //
-          // When the swapchain capabilities are queried, the driver will set the currentExtent
-          // width and height to the window dimensions if it asks us to match the dimensions with the window.
-          // Otherwise, we have a bit more wiggle room. The driver tells us this by setting
-          // currentExtent.width to UINT32_MAX. 
-          //
-          // For now, it's best to keep things simple and be conservative, 
-          // so we'll operate under the (likely) assumption that UINT32_MAX _is not_ set, 
-          // and add support for more varied dimension requirements
-          // if they pop up in the future.
-          VkExtent2D swap_extent;
-          {
-            ASSERT(details.capabilities.currentExtent.width != UINT32_MAX);
-            swap_extent = details.capabilities.currentExtent;
-          }
-
-          // Image count represents the amount of images on the swapchain.
-          // We'll use a small image count for now. Simple semantics first;
-          // we can optimize later as necessary.
-          uint32_t image_count = details.capabilities.minImageCount;
-          ASSERT(image_count != 0);
-          if (image_count == 1) {
-            image_count++;
-          }
-          ASSERT(image_count <= details.capabilities.maxImageCount);
-
-          //
-          // Here we actually create the swapchain.
-          //
-          // --
-          // On imageArrayLayers: always set to 1 unless we want to use 
-          // stereoscopic 3D rendering.
-          //
-          // --
-          // On imageUsage: VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT implies that render commands
-          // will write directly to the images on the swapchain. If we want to perform
-          // offscreen rendering, something like VK_IMAGE_USAGE_TRANSFER_DST_BIT
-          // is considered an option.
-          //
-          // --
-          // On imageSharingMode: something to keep in mind for queue family indices is that
-          // both the graphics family queue and present family queue
-          // can be shared (use the same family index). 
-          //
-          // Assuming that they are _not_ shared, then images will be drawn _on_
-          // the swapchain using the graphics queue. They will then be submitted 
-          // through the presentation queue.
-          //
-          // VK_SHARING_MODE_EXCLUSIVE implies that an image is owned by one
-          // queue family at a time and ownership must be explicitly transferred before
-          // using it in another queue family; this is what we use if the indices
-          // are the same.
-          //
-          // VK_SHARING_MODE_CONCURRENT implies that images can be used across
-          // multiple queue families without explicit ownership transfers. In advance,
-          // we specify which queue family indices the transfers will occur between.
-          //
-          // --
-          // On preTransform: represents a transform that is applied to images on the swapchain.
-          // Can range from anything to a 90 degreee clockwise rotation or a flip. For now,
-          // there is no need, so we simply use the current transform that's provided by 
-          // the swapchain capabilities.
-          //
-          // --
-          // On compositeAlpha: use VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR to ensure that we don't
-          // use the alpha channel to perform a blend operation with other windows in the 
-          // window system.
-          //
-          // --
-          // On clipped: when other windows in the window system obscure portions of our 
-          // window, we can use to tell the driver to not draw those portions. 
-          // While the tutorial this references suggests using VK_TRUE here,
-          // we instead use VK_FALSE. Technically speaking there isn't a clear indication
-          // that using VK_TRUE will cause issues, but considering that framebuffer reads
-          // are crucial to this application, it makes sense to avoid any potential
-          // sources of error, as using VK_TRUE will definitely prevent writes to portions
-          // of the screen that could be important for post processing (example: post processing
-          // that relies on interpolation of already written data that's adjacent to something
-          // which is visible, but itself is currently _not_ visible).
-          //
-          // --
-          // On oldSwapChain: at the time of this writing, we keep this set to VK_NULL_HANDLE. This will need to be
-          // none-null once we support things like window resizing, or anything that requires
-          // re-initialization of the swapchain.
-          // 
-          {
-            VkSwapchainCreateInfoKHR create_info = {};
-            create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-
-            create_info.surface = m_vk_khr_surface;
-            
-            create_info.minImageCount = image_count;
-            
-            create_info.imageExtent = swap_extent;
-
-            create_info.imageFormat = surface_format.format;
-            create_info.imageColorSpace = surface_format.colorSpace;
-            create_info.imageArrayLayers = 1;
-            create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-            queue_family_indices queue_indices = query_queue_families(m_vk_curr_pdevice, 
-                                                                      m_vk_khr_surface);
-            
-            std::array<uint32_t, 2> array_indices = {
-              queue_indices.graphics_family.value(),
-              queue_indices.present_family.value()
-            };
-
-            if (queue_indices.graphics_family != queue_indices.present_family) {
-              create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-              create_info.queueFamilyIndexCount = 2;
-              create_info.pQueueFamilyIndices = array_indices.data();
-            }
-            else {
-              create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-              create_info.queueFamilyIndexCount = 0;
-              create_info.pQueueFamilyIndices = nullptr;
-            }
-
-            create_info.preTransform = details.capabilities.currentTransform;
-
-            create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-            create_info.presentMode = present_mode;
-            create_info.clipped = VK_FALSE;
-
-            create_info.oldSwapchain = VK_NULL_HANDLE;
-
-            RVK_FN(vkCreateSwapchainKHR(m_vk_curr_ldevice, &create_info, nullptr, &m_vk_khr_swapchain));
-
-            if (ok_swapchain()) {
-              uint32_t count = 0;
-              RVK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
-                                             m_vk_khr_swapchain, 
-                                             &count,
-                                             nullptr));
-              if (ok_swapchain()) {
-                m_vk_swapchain_images.resize(count);
-                RVK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
-                                              m_vk_khr_swapchain, 
-                                              &count,
-                                              m_vk_swapchain_images.data()));
-              }
-            }
-          }
-        }
-      }
-    }
+    
 
     void setup_graphics_pipeline() {
       setup_device_and_queues();
