@@ -1160,7 +1160,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 }
 
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-  ypos = g_m.framebuffer->height - ypos;
+  ypos = g_m.device_ctx->height() - ypos;
 
   if (g_cam_orient.active) {
     double testdx = xpos - g_cam_orient.prev_xpos;
@@ -1175,14 +1175,14 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     g_cam_orient.sdx = (g_cam_orient.dx > 0.0
                                         ? 1.0
                                         : (g_cam_orient.dx == 0.0
-                                           ? 0.0
-                                           : -1.0));
+                                          ? 0.0
+                                          : -1.0));
 
     g_cam_orient.sdy = (g_cam_orient.dy < 0.0
                                         ? 1.0
                                         : (g_cam_orient.dy == 0.0
-                                           ? 0.0
-                                           : -1.0));
+                                          ? 0.0
+                                          : -1.0));
     mat4_t xRot = glm::rotate(mat4_t(R(1.0)),
                               R(g_cam_orient.dy),
                               R3v(1.0, 0.0, 0.0));
@@ -1197,9 +1197,11 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
   g_cam_orient.prev_xpos = xpos;
   g_cam_orient.prev_ypos = ypos;
 
-  if (g_conf.quad_click_cursor) {
-    g_m.uniform_store->set_uniform("unif_ToggleQuadScreenXY",
-                                    vec2_t {g_cam_orient.prev_xpos, g_cam_orient.prev_ypos});
+  if (g_m.uniform_store != nullptr) {
+    if (g_conf.quad_click_cursor) {
+      g_m.uniform_store->set_uniform("unif_ToggleQuadScreenXY",
+                                      vec2_t {g_cam_orient.prev_xpos, g_cam_orient.prev_ypos});
+    }
   }
 }
 
