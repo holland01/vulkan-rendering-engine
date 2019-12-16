@@ -13,6 +13,8 @@
 #include <inttypes.h>
 
 
+#include <vector>
+
 // We use the set of flags shown here to group/categorize
 // arbitrary log function calls. For any flag defined, simply add it 
 // as a bitwise OR to the variable g_log_mask (initialized in base/util.cpp).
@@ -64,6 +66,8 @@ void report_gl_error(GLenum err,
                      const char* func,
                      const char* file,
                      const char* expr);
+
+std::vector<uint8_t> read_file(const std::string& path); 
 
 // https://stackoverflow.com/a/8498694
 //

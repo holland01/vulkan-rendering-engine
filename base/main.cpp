@@ -774,6 +774,8 @@ struct renderloop_triangle : public renderloop {
   vulkan::renderer m_renderer;
   bool m_success{false};
 
+  
+
   bool ok() { return m_success; }
 
   void init() {
@@ -785,6 +787,7 @@ struct renderloop_triangle : public renderloop {
       }
 
       m_renderer.set_physical_device(0);
+      m_renderer.setup_presentation();
       m_renderer.setup_graphics_pipeline();
     }
   }

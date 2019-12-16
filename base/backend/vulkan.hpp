@@ -12,6 +12,8 @@
 #include "common.hpp"
 #include <optional>
 #include <set>
+#include <initializer_list>
+#include <unordered_map>
 
 #define VK_FN(expr) vk_call((expr), #expr, __LINE__, __FILE__)
 #define RVK_FN(expr) m_vk_result = VK_FN(expr)
@@ -27,6 +29,266 @@ namespace vulkan {
     }
     return call;
   }
+
+  struct vk_type {
+  protected:
+    mutable VkResult m_vk_result;
+
+    
+    
+  public:
+    vk_type(VkResult result) : m_vk_result(result)
+    {}
+    
+    virtual bool ok() const {
+      bool r = m_vk_result == VK_SUCCESS;
+      ASSERT(r);
+      return r;
+    };
+  };
+
+  enum class shader_stage {
+    vertex,
+    fragment
+  };
+
+  enum class primitive_topology {
+    triangle_list,
+    triangle_strip
+  };
+
+#define DEFINE_CONDITION(dependent, which) \
+  bool m_##which;			\
+  bool ok_##which() const {		\
+    bool r = (dependent) && m_##which;	\
+    ASSERT(r);				\
+    return r;				\
+  }					\
+  void complete_##which() {		\
+    m_##which = true;			\
+  }
+
+#define INIT_CONDITION(which) m_##which {true}
+  
+  template <shader_stage tStage>
+  struct pipeline_shader_stage_gen : public vk_type {
+    static inline std::unordered_map<shader_stage, VkShaderStageFlagBits> s_map = {
+      { shader_stage::vertex, VK_SHADER_STAGE_VERTEX_BIT },
+      { shader_stage::fragment, VK_SHADER_STAGE_FRAGMENT_BIT }
+    };
+
+    VkPipelineShaderStageCreateInfo m_stage_info{};
+    VkShaderModule m_module;
+    darray<uint8t_t> m_spv_code;
+
+    DEFINE_CONDITION(ok(), shader_module)
+    
+    pipeline_shader_stage_gen& build_shader_module(VkDevice device) {
+      if (ok()) {
+	VkShaderModuleCreateInfo module_create_info = {};
+
+	module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	module_create_info.codeSize = m_spv_code.size();
+	module_create_info.pCode = reinterpret_cast<uint32_t*>(m_spv_code.data());
+	
+	RVK_FN(vkCreateShaderModule(device, &module_create_info, nullptr, &m_module));
+
+	complete_shader_module();
+      }
+
+      return *this;
+    }
+
+    pipeline_shader_stage_gen& build_create_info() {
+      if (ok_shader_module()) {
+	m_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	m_stage_info.stage = s_map.at(tStage);
+	m_stage_info.module = m_module;
+	m_stage_info.pName = "main";
+      }
+
+      return *this;
+    }
+    
+    pipeline_shader_stage_gen(VkResult r, darray<uint8_t> spv_code)
+      : vk_type(r),
+	m_spv_code{spv_code},
+	INIT_CONDITION(shader_module)
+    {}
+  };
+
+  struct pipeline_vertex_input_gen : public vk_type {
+    VkPipelineVertexInputStateCreateInfo m_input_state_info;
+
+    pipeline_vertex_input_gen(VkResult r)
+      : vk_type(r) {}
+
+    pipeline_vertex_input_gen& build_create_info() {
+      if (ok()) {
+	m_input_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	m_input_state_info.vertexBindingDescriptionCount = 0;
+	m_input_state_info.pVertexBindingDescriptions = nullptr; // optional
+	m_input_state_info.vertexAttributeDescriptionCount = 0; 
+	m_input_state_info.pVertexAttributeDescriptions = nullptr; // optional
+      }
+      return *this;
+    }
+  };
+
+  template <primitive_topology tTopo, bool tPrimitiveRestartEnable>
+  struct pipeline_input_assembly_gen : public vk_type {
+    static inline std::unordered_map<primitive_topology, VkPrimitiveTopology> s_map = {
+      { primitive_topology::triangle_list, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST },
+      { primitive_topology::triangle_strip, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP }
+    };
+
+    VkPipelineInputAssemblyStateCreateInfo m_input_asm_info;
+
+    pipeline_input_assembly_gen(VkResult r)
+      : vk_type(r) {}
+    
+    pipeline_input_assembly_gen& build_create_info() {
+      if (ok()) {
+	m_input_asm_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	m_input_asm_info.topology = s_map.at(tTopo);
+	m_input_asm_info.primitiveRestartEnable =
+	  tPrimitiveRestartEnable
+	  ? VK_TRUE
+	  : VK_FALSE;
+      }
+      return *this;
+    }
+  };
+
+  template <int tNumViewports = 1, int tNumScissors = 1>
+  struct pipeline_viewport_state_gen : public vk_type {
+    float m_x, m_y;
+    float m_depth_min, m_depth_max;
+
+    const VkExtent2D& m_extent;
+    
+    VkViewport m_viewport_info;
+    VkRect2D m_scissor;
+    VkPipelineViewportStatecreateInfo m_viewport_state;
+    
+    pipeline_viewport_state_gen(VkResult r, float x, float y, const VkExtent2D& extent, float dmin, float dmax)
+      : vk_type(r),
+	m_x(x), m_y(y),
+        m_extent(extent),
+	m_depth_min(dmin), m_depth_max(dmax)
+    {}
+
+    pipeline_viewport_state_gen& build_create_info() {
+      if (ok()) {
+	static_assert(tNumViewports == 1);
+	static_assert(tNumScissors == 1);
+	
+	m_viewport_info.x = m_x;
+	m_viewport_info.y = m_y;
+	m_viewport_info.width = m_extent.width;
+	m_viewport_info.height = m_extent.height;
+	m_viewport_info.minDepth = m_depth_min;
+	m_viewport_info.depthMax = m_depth_max;
+
+	m_scissor.offset = {0, 0};
+	m_scissor.extent = m_extent;
+
+	m_viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	m_viewport_state.viewportCount = tNumViewports;
+	m_viewport_state.pViewports = &m_viewport_info;
+	m_viewport_state.scissorCount = tNumScissors;
+	m_viewport_state.pScissors = &m_scissor;
+      }
+      return *this;
+    }
+  };
+
+  struct 
+  
+  template <class inputAssemblyGenType>
+  struct pipeline_program_gen : public vk_type {
+    using input_assembly_gen_type = inputAssemblyGenType;
+
+    using this_type = pipeline_program_gen<input_assembly_gen_type>;
+    
+    darray<pipeline_shader_stage_gen> m_stages;
+    pipeline_vertex_input_gen m_vertex_input_state;
+    input_assembly_gen_type m_input_assembly;
+    pipeline_viewport_gen m_viewport;
+    
+    DEFINE_CONDITION(ok(), vertex_input_state)
+
+    DEFINE_CONDITION(ok_vertex_input_state(), input_assembly_state)
+
+    DEFINE_CONDITION(ok_input_assembly_state(), viewport_setup)
+    
+    DEFINE_CONDITION(ok(), shader_stages)
+    
+    pipeline_program_gen(VkResult r, std::initializer_list<pipeline_shader_stage_gen> info)
+      :
+    vk_type(r),
+      INIT_CONDITION(vertex_input_state),
+      INIT_CONDITION(input_assembly_state),
+      INIT_CONDITION(viewport_setup),
+      INIT_CONDITION(shader_stages) {
+      
+      m_stages.insert(stages.end(),
+		      info.begin(),
+		      info.end());
+    }
+
+    this_type& build_vertex_input_state() {
+      if (ok()) {
+	m_vertex_input_state.build_create_info();
+
+	if (m_vertex_input_state.ok()) {
+	  complete_vertex_input_state();
+	}
+      }
+      return *this;
+    }
+
+    this_type& build_input_assembly_state() {
+      if (ok_vertex_input_state()) {
+	m_input_assembly.build_create_info();
+
+	if (m_input_assembly.ok()) {
+	  complete_input_assembly_state();
+	}
+      }
+      return *this;
+    }
+
+    this_type& build_viewport() {
+      if (ok_input_assembly_state()) {
+	m_viewport.build_create_info();
+	
+	if (m_viewport.ok()) {
+	  complete_viewport_setup();
+	}
+      }
+    }
+    
+    this_type& build_shader_stages() {
+      if (ok()) {
+	bool ok = true;
+	size_t i = 0;
+	while (ok && i < m_stages.size()) {
+	  m_stages[i]
+	    .build_shader_module()
+	    .build_create_info();
+	  
+	  ok = stages[i].ok();
+
+	  i++;
+	}
+	if (ok) {
+	  complete_shader_stages();
+	}
+      }
+      return *this;
+    }
+  };
 
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
@@ -48,6 +310,8 @@ namespace vulkan {
 
     darray<VkImage> m_vk_swapchain_images;
 
+    darray<VkImageView> m_vk_swapchain_image_views;
+
     VkSurfaceFormatKHR m_vk_khr_swapchain_format;
 
     VkExtent2D m_vk_swapchain_extent;
@@ -65,6 +329,8 @@ namespace vulkan {
     VkSwapchainKHR m_vk_khr_swapchain{VK_NULL_HANDLE};
 
     VkResult m_vk_result{VK_SUCCESS};
+
+    bool m_ok_present{false};
 
     struct vk_layer_info {
       const char* name{nullptr};
@@ -87,14 +353,14 @@ namespace vulkan {
       if (ok()) {
         uint32_t queue_fam_count = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(device,
-                                                        &queue_fam_count, 
-                                                        nullptr);
+						 &queue_fam_count, 
+						 nullptr);
         ASSERT(queue_fam_count > 0);
         darray<VkQueueFamilyProperties> queue_props(queue_fam_count);
 
         vkGetPhysicalDeviceQueueFamilyProperties(device,
-                                                  &queue_fam_count,
-                                                  queue_props.data());
+						 &queue_fam_count,
+						 queue_props.data());
 
         uint32_t i = 0;
         while (i < queue_fam_count) {
@@ -114,6 +380,22 @@ namespace vulkan {
       }
       
       return indices;
+    }
+
+    VkShaderModule make_shader_module(const darray<uint8_t>& spv_code) {
+      VkShaderModule ret;
+
+      if (ok_present()) {
+	VkShaderModuleCreateInfo create_info = {};
+
+	create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	create_info.codeSize = spv_code.size();
+	create_info.pCode = reinterpret_cast<uint32_t*>(spv_code.data());
+      
+	RVK_FN(vkCreateShaderModule(m_vk_curr_ldevice, &create_info, nullptr, &ret));
+      }
+
+      return ret;
     }
 
     swapchain_support_details query_swapchain_support(VkPhysicalDevice device) {
@@ -210,6 +492,7 @@ namespace vulkan {
                     indices.graphics_family.value());
 
         float priority = 1.0f;
+	
         for (uint32_t queue: unique_queue_indices) {
           VkDeviceQueueCreateInfo queue_create_info = {};
           queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -453,6 +736,80 @@ namespace vulkan {
       }
     }
 
+    
+    // make_image_views
+    //
+    // The idea behind this function is to generate image views from
+    // a series of source images.
+    //
+    // One use case we have for this is the images in the swapchain:
+    // we need to be able to present them to the screen after they've been 
+    // rendered to. Another is for the processing of textures.
+    //
+    // Each image view requires a create-info struct, and this create-info struct
+    // defines how the image itself is to be interpreted by the image view.
+    // 
+    // --
+    // On image: represents the source image for the corresponding image view.
+    //
+    // --
+    // On viewType: we'll stick with VK_IMAGE_VIEW_TYPE_2D for now. That said,
+    // for textures we could, for example, specify VK_IMAGE_VIEW_TYPE_CUBE 
+    // for a cube map.
+    //
+    // --
+    // On format: the actual format of the image itself. 
+    //
+    // --
+    // On components: these are designed to specify how different color channels should be used.
+    // It's possible for each component to take on the value of, for example, the red channel.
+    // It's also possible to set each component to a constant value (e.g., alpha always 1).
+    //
+    // --
+    // On subresourceRange: this describes a) the image's purpose, and b) how it is to be accessed.
+    // 
+    darray<VkImageView> make_image_views(const darray<VkImage>& source_images, VkFormat format) {
+      darray<VkImageView> ret{};
+      ret.resize(source_images.size());
+
+      for (size_t i = 0; i < ret.size(); ++i) {
+        if (ok_swapchain()) {
+          VkImageViewCreateInfo create_info = {};
+
+          create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+          create_info.image = source_images[i];
+          create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+          
+          create_info.format = format;
+          
+          create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+          create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+          create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+          create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+          create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+          create_info.subresourceRange.baseMipLevel = 0;
+          create_info.subresourceRange.levelCount = 1;
+          create_info.subresourceRange.baseArrayLayer = 0;
+          create_info.subresourceRange.layerCount = 1;
+
+          RVK_FN(vkCreateImageView(m_vk_curr_ldevice, 
+                                   &create_info,
+                                   nullptr,
+                                   &ret[i]));
+        }
+      }
+
+      return ret;
+    }
+
+    void setup_swapchain_image_views() {
+      if (ok_swapchain()) {
+        m_vk_swapchain_image_views = make_image_views(m_vk_swapchain_images, 
+                                                      m_vk_khr_swapchain_format.format);
+      }
+    }
+
   public:
     ~renderer() {
       free_mem();
@@ -484,6 +841,12 @@ namespace vulkan {
 
     bool ok_swapchain() const {
       bool r = ok_ldev() && m_vk_khr_swapchain != VK_NULL_HANDLE;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_present() const {
+      bool r = ok() && m_ok_present;
       ASSERT(r);
       return r;
     }
@@ -637,11 +1000,56 @@ namespace vulkan {
       return m_vk_result == VK_SUCCESS;
     }
 
-    
-
-    void setup_graphics_pipeline() {
+    void setup_presentation() {
       setup_device_and_queues();
       setup_swapchain();
+      setup_swapchain_image_views();
+
+      if (ok_swapchain()) {
+	m_ok_present = true;
+      }
+    }
+
+    void setup_graphics_pipeline() {
+      if (ok_present()) {
+	//
+	// create shader programs
+	// 
+	auto spv_vshader = read_file("resources/shaders/triangle.vert.spv");
+	auto spv_fshader = read_file("resources/shaders/triangle.frag.spv");
+
+	ASSERT(!spv_vshader.empty());
+	ASSERT(!spv_fshader.empty());
+	
+	VkShaderModule vshader_module = make_shader_module(spv_vshader);
+	VkShaderModule fshader_module = make_shader_module(spv_fshader);
+
+	VkPipelineShaderStageCreateInfo vshader_create = {};
+	vshader_create.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vshader_create.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vshader_create.module = vshader_module;
+	vshader_create.pName = "main";
+
+	VkPipelineShaderStageCreateInfo fshader_create = {};
+	fshader_create.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fshader_create.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fshader_create.module = fshader_module;
+	fshader_create.pName = "main";
+
+	std::array<VkPipelineShaderStageCreateInfo, 2> stages =
+	  {
+	   vshader_create,
+	   fshader_create
+	  };
+	
+	free_vk_device_handle<VkShaderModule, &vkDestroyShaderModule>(vshader_module);
+	free_vk_device_handle<VkShaderModule, &vkDestroyShaderModule>(fshader_module);
+
+	
+	{
+
+	}
+      }
     }
 
     template <class vkHandleType, void (*vkDestroyFn)(vkHandleType, const VkAllocationCallbacks*)>
@@ -671,10 +1079,25 @@ namespace vulkan {
         }
       }
     }
+    
+    template <class vkHandleType,
+              void (*vkDestroyFn)(VkDevice, vkHandleType, const VkAllocationCallbacks*)>
+    void free_vk_ldevice_handles(darray<vkHandleType>& handles) {
+      if (ok_ldev()) {
+        for (auto h: handles) {
+          if (h != VK_NULL_HANDLE) {
+            vkDestroyFn(m_vk_curr_ldevice, h, nullptr);
+          }
+        }
+        handles.clear();
+      }
+    }
+
 
     void free_mem() {
-      free_vk_ldevice_handle<VkSwapchainKHR, &vkDestroySwapchainKHR>(m_vk_khr_swapchain);
+      free_vk_ldevice_handles<VkImageView, &vkDestroyImageView>(m_vk_swapchain_image_views);
 
+      free_vk_ldevice_handle<VkSwapchainKHR, &vkDestroySwapchainKHR>(m_vk_khr_swapchain);
       // vkDestroyDevice will destroy any associated queues along with it.
       free_vk_handle<VkDevice, &vkDestroyDevice>(m_vk_curr_ldevice);
       free_vk_instance_handle<VkSurfaceKHR, &vkDestroySurfaceKHR>(m_vk_khr_surface);

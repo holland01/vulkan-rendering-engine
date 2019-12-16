@@ -1,5 +1,7 @@
 #include "util.hpp"
 
+#include <fstream>
+
 #if defined(BASE_DEBUG)
 unsigned long long g_log_mask = 
   logflag_programs_load | 
@@ -85,4 +87,24 @@ void report_gl_error(GLenum err, int line, const char* func, const char* file,
 
     die();
   }
+}
+
+std::vector<uint8_t> read_file(const std::string& path) {
+  // std::ios::ate opens the file already seeked
+  // to the very end
+  std::ifstream file(path, std::ios::ate | std::ios::binary);
+
+  std::vector<uint8_t> ret{};
+  
+  if (file.is_open()) {
+    size_t fsz = file.tellg();
+
+    ret.resize(fsz);
+    
+    file.seekg(0);
+    file.read(ret.data(), fsz);
+    file.close();
+  }
+
+  return ret;
 }
