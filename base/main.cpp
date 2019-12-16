@@ -724,6 +724,7 @@ static darray<uint8_t> g_debug_cubemap_buf;
 static int screen_cube_index = 0;
 
 struct renderloop {
+  virtual ~renderloop() {}
   virtual void init() = 0;
   virtual void update() = 0;
   virtual void render() = 0;
