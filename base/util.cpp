@@ -102,7 +102,7 @@ std::vector<uint8_t> read_file(const std::string& path) {
     ret.resize(fsz);
     
     file.seekg(0);
-    file.read(ret.data(), fsz);
+    file.read(reinterpret_cast<char*>(ret.data()), fsz);
     file.close();
   }
 

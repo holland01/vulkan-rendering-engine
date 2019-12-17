@@ -48,29 +48,37 @@ namespace vulkan {
   };
 
   enum class shader_stage {
-    vertex,
+    vertex = 0,
     fragment
   };
 
   enum class primitive_topology {
-    triangle_list,
+    triangle_list = 0,
     triangle_strip
   };
 
+  enum class polygon_mode {
+    fill = 0,
+    line,
+    point
+  };
+
 #define DEFINE_CONDITION(dependent, which) \
-  bool m_##which;			\
+  bool m_cond_##which;			\
   bool ok_##which() const {		\
-    bool r = (dependent) && m_##which;	\
+    bool r = (dependent) && m_cond_##which;	\
     ASSERT(r);				\
     return r;				\
   }					\
   void complete_##which() {		\
-    m_##which = true;			\
-  }
-
-#define INIT_CONDITION(which) m_##which {true}
+    m_cond_##which = true;			\
+  }					
   
-  template <shader_stage tStage>
+
+#define INIT_CONDITION(which) m_cond_##which {true}
+
+#define TO_VK_BOOL(cond) ((cond) ? VK_TRUE : VK_FALSE)
+  
   struct pipeline_shader_stage_gen : public vk_type {
     static inline std::unordered_map<shader_stage, VkShaderStageFlagBits> s_map = {
       { shader_stage::vertex, VK_SHADER_STAGE_VERTEX_BIT },
@@ -79,7 +87,8 @@ namespace vulkan {
 
     VkPipelineShaderStageCreateInfo m_stage_info{};
     VkShaderModule m_module;
-    darray<uint8t_t> m_spv_code;
+    darray<uint8_t> m_spv_code;
+    VkShaderStageFlagBits m_shader_stage_type;
 
     DEFINE_CONDITION(ok(), shader_module)
     
@@ -102,7 +111,7 @@ namespace vulkan {
     pipeline_shader_stage_gen& build_create_info() {
       if (ok_shader_module()) {
 	m_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	m_stage_info.stage = s_map.at(tStage);
+	m_stage_info.stage = m_shader_stage_type;
 	m_stage_info.module = m_module;
 	m_stage_info.pName = "main";
       }
@@ -110,9 +119,10 @@ namespace vulkan {
       return *this;
     }
     
-    pipeline_shader_stage_gen(VkResult r, darray<uint8_t> spv_code)
+    pipeline_shader_stage_gen(VkResult r, darray<uint8_t> spv_code, shader_stage stage)
       : vk_type(r),
 	m_spv_code{spv_code},
+	m_shader_stage_type{s_map.at(stage)},
 	INIT_CONDITION(shader_module)
     {}
   };
@@ -151,10 +161,7 @@ namespace vulkan {
       if (ok()) {
 	m_input_asm_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	m_input_asm_info.topology = s_map.at(tTopo);
-	m_input_asm_info.primitiveRestartEnable =
-	  tPrimitiveRestartEnable
-	  ? VK_TRUE
-	  : VK_FALSE;
+	m_input_asm_info.primitiveRestartEnable = TO_VK_BOOL(tPrimitiveRestartEnable);
       }
       return *this;
     }
@@ -169,13 +176,17 @@ namespace vulkan {
     
     VkViewport m_viewport_info;
     VkRect2D m_scissor;
-    VkPipelineViewportStatecreateInfo m_viewport_state;
+    VkPipelineViewportStateCreateInfo m_viewport_state;
     
-    pipeline_viewport_state_gen(VkResult r, float x, float y, const VkExtent2D& extent, float dmin, float dmax)
+    pipeline_viewport_state_gen(VkResult r,
+				float x, float y,
+				const VkExtent2D& extent,
+				float dmin, float dmax)
       : vk_type(r),
 	m_x(x), m_y(y),
         m_extent(extent),
-	m_depth_min(dmin), m_depth_max(dmax)
+	m_depth_min(dmin),
+	m_depth_max(dmax)
     {}
 
     pipeline_viewport_state_gen& build_create_info() {
@@ -188,7 +199,7 @@ namespace vulkan {
 	m_viewport_info.width = m_extent.width;
 	m_viewport_info.height = m_extent.height;
 	m_viewport_info.minDepth = m_depth_min;
-	m_viewport_info.depthMax = m_depth_max;
+	m_viewport_info.maxDepth = m_depth_max;
 
 	m_scissor.offset = {0, 0};
 	m_scissor.extent = m_extent;
@@ -203,36 +214,85 @@ namespace vulkan {
     }
   };
 
-  struct 
+  template <bool tDepthClampEnable, bool tRasterizerDiscardEnable, polygon_mode tPolygonMode>
+  struct pipeline_rasterizer_state_gen : public vk_type {
+    static inline std::unordered_map<polygon_mode, VkPolygonMode> s_map = {
+      {polygon_mode::fill, VK_POLYGON_MODE_FILL},
+      {polygon_mode::line, VK_POLYGON_MODE_LINE},
+      {polygon_mode::point, VK_POLYGON_MODE_POINT}
+    };
+
+    using this_type = pipeline_rasterizer_state_gen<tDepthClampEnable, tRasterizerDiscardEnable, tPolygonMode>;
+    
+    VkPipelineRasterizationStateCreateInfo m_rasterizer_info;
+
+    pipeline_rasterizer_state_gen(VkResult r)
+      : vk_type(r)
+    {}
+    
+    this_type& build_create_info() {
+      if (ok()) {
+	m_rasterizer_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	m_rasterizer_info.depthClampEnable = TO_VK_BOOL(tDepthClampEnable);
+	m_rasterizer_info.rasterizerDiscardEnable = TO_VK_BOOL(tRasterizerDiscardEnable);
+	m_rasterizer_info.polygonMode = s_map.at(tPolygonMode);
+      }
+      return *this;
+    }
+  };
   
   template <class inputAssemblyGenType>
-  struct pipeline_program_gen : public vk_type {
+  struct pipeline_gen : public vk_type {
     using input_assembly_gen_type = inputAssemblyGenType;
+    using viewport_state_gen_type = pipeline_viewport_state_gen<1, 1>;
+    
+    // depth clamp disabled; rasterizer discard disabled
+    using rasterizer_state_gen_type = pipeline_rasterizer_state_gen<false, false, polygon_mode::fill>;
+    
+    using this_type = pipeline_gen<input_assembly_gen_type>;
 
-    using this_type = pipeline_program_gen<input_assembly_gen_type>;
+    VkDevice m_device;
     
     darray<pipeline_shader_stage_gen> m_stages;
     pipeline_vertex_input_gen m_vertex_input_state;
     input_assembly_gen_type m_input_assembly;
-    pipeline_viewport_gen m_viewport;
+    viewport_state_gen_type m_viewport;
+    rasterizer_state_gen_type m_rasterizer;
     
     DEFINE_CONDITION(ok(), vertex_input_state)
 
     DEFINE_CONDITION(ok_vertex_input_state(), input_assembly_state)
 
     DEFINE_CONDITION(ok_input_assembly_state(), viewport_setup)
+
+    DEFINE_CONDITION(ok_viewport_setup(), rasterizer_state)
     
     DEFINE_CONDITION(ok(), shader_stages)
     
-    pipeline_program_gen(VkResult r, std::initializer_list<pipeline_shader_stage_gen> info)
+    pipeline_gen(VkResult r,
+		 VkDevice device,
+		 pipeline_vertex_input_gen vertex_input_state,
+		 input_assembly_gen_type input_assembly,
+		 viewport_state_gen_type viewport,
+		 rasterizer_state_gen_type rasterizer,
+		 std::initializer_list<pipeline_shader_stage_gen> info)
       :
-    vk_type(r),
+      vk_type(r),
+
+      m_device{device},
+      
+      m_vertex_input_state{vertex_input_state},
+      m_input_assembly{input_assembly},
+      m_viewport{viewport},
+      m_rasterizer{rasterizer},
+      
       INIT_CONDITION(vertex_input_state),
       INIT_CONDITION(input_assembly_state),
       INIT_CONDITION(viewport_setup),
+      INIT_CONDITION(rasterizer_state),
       INIT_CONDITION(shader_stages) {
       
-      m_stages.insert(stages.end(),
+      m_stages.insert(m_stages.end(),
 		      info.begin(),
 		      info.end());
     }
@@ -268,6 +328,16 @@ namespace vulkan {
 	}
       }
     }
+
+    this_type& build_rasterizer_state() {
+      if (ok_viewport_setup()) {
+	m_rasterizer.build_create_info();
+
+	if (m_rasterizer.ok()) {
+	  complete_rasterizer_state();
+	}
+      }
+    }
     
     this_type& build_shader_stages() {
       if (ok()) {
@@ -275,10 +345,10 @@ namespace vulkan {
 	size_t i = 0;
 	while (ok && i < m_stages.size()) {
 	  m_stages[i]
-	    .build_shader_module()
+	    .build_shader_module(m_device)
 	    .build_create_info();
 	  
-	  ok = stages[i].ok();
+	  ok = m_stages[i].ok();
 
 	  i++;
 	}
@@ -382,7 +452,7 @@ namespace vulkan {
       return indices;
     }
 
-    VkShaderModule make_shader_module(const darray<uint8_t>& spv_code) {
+    VkShaderModule make_shader_module(darray<uint8_t> spv_code) {
       VkShaderModule ret;
 
       if (ok_present()) {
@@ -1042,8 +1112,8 @@ namespace vulkan {
 	   fshader_create
 	  };
 	
-	free_vk_device_handle<VkShaderModule, &vkDestroyShaderModule>(vshader_module);
-	free_vk_device_handle<VkShaderModule, &vkDestroyShaderModule>(fshader_module);
+	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(vshader_module);
+	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(fshader_module);
 
 	
 	{
