@@ -15,350 +15,42 @@
 #include <initializer_list>
 #include <unordered_map>
 
-#define VK_FN(expr) vk_call((expr), #expr, __LINE__, __FILE__)
-#define RVK_FN(expr) m_vk_result = VK_FN(expr)
+#include "device_context.hpp"
+
+#define VK_FN(expr)						\
+  do {								\
+    if (api_ok()) {						\
+      g_vk_result = vk_call((expr), #expr, __LINE__, __FILE__);	\
+    }								\
+  } while (0)
+
+#define VK_ZERO_STRUCT(stack_variable) memset(&(stack_variable), 0, sizeof(stack_variable))
 
 namespace vulkan {
-  VkResult vk_call(VkResult call, const char* expr, int line, const char* file) {
-    if (call != VK_SUCCESS) {
-      write_logf("VULKAN ERROR: %s@%s:%i -> 0x%x\n", 
-                 expr, 
-                 file, 
-                 line, 
-                 call);
-    }
-    return call;
-  }
-
-  struct vk_type {
-  protected:
-    mutable VkResult m_vk_result;
-
-    
-    
-  public:
-    vk_type(VkResult result) : m_vk_result(result)
-    {}
-    
-    virtual bool ok() const {
-      bool r = m_vk_result == VK_SUCCESS;
-      ASSERT(r);
-      return r;
-    };
-  };
-
-  enum class shader_stage {
-    vertex = 0,
-    fragment
-  };
-
-  enum class primitive_topology {
-    triangle_list = 0,
-    triangle_strip
-  };
-
-  enum class polygon_mode {
-    fill = 0,
-    line,
-    point
-  };
-
-#define DEFINE_CONDITION(dependent, which) \
-  bool m_cond_##which;			\
-  bool ok_##which() const {		\
-    bool r = (dependent) && m_cond_##which;	\
-    ASSERT(r);				\
-    return r;				\
-  }					\
-  void complete_##which() {		\
-    m_cond_##which = true;			\
-  }					
+  extern VkResult g_vk_result;
   
+  VkResult vk_call(VkResult call, const char* expr, int line, const char* file);
 
-#define INIT_CONDITION(which) m_cond_##which {true}
+  bool api_ok();
 
-#define TO_VK_BOOL(cond) ((cond) ? VK_TRUE : VK_FALSE)
+  VkPipelineVertexInputStateCreateInfo default_vertex_input_state_settings();
+  VkPipelineInputAssemblyStateCreateInfo default_input_assembly_state_settings();
+  VkPipelineViewportStateCreateInfo default_viewport_state_settings();
+  VkPipelineRasterizationStateCreateInfo default_rasterization_state_settings();
+  VkPipelineMultisampleStateCreateInfo default_multisample_state_settings();
+  VkPipelineColorBlendAttachmentState default_color_blend_attach_state_settings();
+  VkPipelineColorBlendStateCreateInfo default_color_blend_state_settings();
+  VkPipelineLayoutCreateInfo default_pipeline_layout_settings();
+
+  VkAttachmentDescription default_colorbuffer_settings(VkFormat swapchain_format);
+
+  VkAttachmentReference default_colorbuffer_ref_settings();
   
-  struct pipeline_shader_stage_gen : public vk_type {
-    static inline std::unordered_map<shader_stage, VkShaderStageFlagBits> s_map = {
-      { shader_stage::vertex, VK_SHADER_STAGE_VERTEX_BIT },
-      { shader_stage::fragment, VK_SHADER_STAGE_FRAGMENT_BIT }
-    };
-
-    VkPipelineShaderStageCreateInfo m_stage_info{};
-    VkShaderModule m_module;
-    darray<uint8_t> m_spv_code;
-    VkShaderStageFlagBits m_shader_stage_type;
-
-    DEFINE_CONDITION(ok(), shader_module)
-    
-    pipeline_shader_stage_gen& build_shader_module(VkDevice device) {
-      if (ok()) {
-	VkShaderModuleCreateInfo module_create_info = {};
-
-	module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	module_create_info.codeSize = m_spv_code.size();
-	module_create_info.pCode = reinterpret_cast<uint32_t*>(m_spv_code.data());
-	
-	RVK_FN(vkCreateShaderModule(device, &module_create_info, nullptr, &m_module));
-
-	complete_shader_module();
-      }
-
-      return *this;
-    }
-
-    pipeline_shader_stage_gen& build_create_info() {
-      if (ok_shader_module()) {
-	m_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	m_stage_info.stage = m_shader_stage_type;
-	m_stage_info.module = m_module;
-	m_stage_info.pName = "main";
-      }
-
-      return *this;
-    }
-    
-    pipeline_shader_stage_gen(VkResult r, darray<uint8_t> spv_code, shader_stage stage)
-      : vk_type(r),
-	m_spv_code{spv_code},
-	m_shader_stage_type{s_map.at(stage)},
-	INIT_CONDITION(shader_module)
-    {}
-  };
-
-  struct pipeline_vertex_input_gen : public vk_type {
-    VkPipelineVertexInputStateCreateInfo m_input_state_info;
-
-    pipeline_vertex_input_gen(VkResult r)
-      : vk_type(r) {}
-
-    pipeline_vertex_input_gen& build_create_info() {
-      if (ok()) {
-	m_input_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	m_input_state_info.vertexBindingDescriptionCount = 0;
-	m_input_state_info.pVertexBindingDescriptions = nullptr; // optional
-	m_input_state_info.vertexAttributeDescriptionCount = 0; 
-	m_input_state_info.pVertexAttributeDescriptions = nullptr; // optional
-      }
-      return *this;
-    }
-  };
-
-  template <primitive_topology tTopo, bool tPrimitiveRestartEnable>
-  struct pipeline_input_assembly_gen : public vk_type {
-    static inline std::unordered_map<primitive_topology, VkPrimitiveTopology> s_map = {
-      { primitive_topology::triangle_list, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST },
-      { primitive_topology::triangle_strip, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP }
-    };
-
-    VkPipelineInputAssemblyStateCreateInfo m_input_asm_info;
-
-    pipeline_input_assembly_gen(VkResult r)
-      : vk_type(r) {}
-    
-    pipeline_input_assembly_gen& build_create_info() {
-      if (ok()) {
-	m_input_asm_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	m_input_asm_info.topology = s_map.at(tTopo);
-	m_input_asm_info.primitiveRestartEnable = TO_VK_BOOL(tPrimitiveRestartEnable);
-      }
-      return *this;
-    }
-  };
-
-  template <int tNumViewports = 1, int tNumScissors = 1>
-  struct pipeline_viewport_state_gen : public vk_type {
-    float m_x, m_y;
-    float m_depth_min, m_depth_max;
-
-    const VkExtent2D& m_extent;
-    
-    VkViewport m_viewport_info;
-    VkRect2D m_scissor;
-    VkPipelineViewportStateCreateInfo m_viewport_state;
-    
-    pipeline_viewport_state_gen(VkResult r,
-				float x, float y,
-				const VkExtent2D& extent,
-				float dmin, float dmax)
-      : vk_type(r),
-	m_x(x), m_y(y),
-        m_extent(extent),
-	m_depth_min(dmin),
-	m_depth_max(dmax)
-    {}
-
-    pipeline_viewport_state_gen& build_create_info() {
-      if (ok()) {
-	static_assert(tNumViewports == 1);
-	static_assert(tNumScissors == 1);
-	
-	m_viewport_info.x = m_x;
-	m_viewport_info.y = m_y;
-	m_viewport_info.width = m_extent.width;
-	m_viewport_info.height = m_extent.height;
-	m_viewport_info.minDepth = m_depth_min;
-	m_viewport_info.maxDepth = m_depth_max;
-
-	m_scissor.offset = {0, 0};
-	m_scissor.extent = m_extent;
-
-	m_viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	m_viewport_state.viewportCount = tNumViewports;
-	m_viewport_state.pViewports = &m_viewport_info;
-	m_viewport_state.scissorCount = tNumScissors;
-	m_viewport_state.pScissors = &m_scissor;
-      }
-      return *this;
-    }
-  };
-
-  template <bool tDepthClampEnable, bool tRasterizerDiscardEnable, polygon_mode tPolygonMode>
-  struct pipeline_rasterizer_state_gen : public vk_type {
-    static inline std::unordered_map<polygon_mode, VkPolygonMode> s_map = {
-      {polygon_mode::fill, VK_POLYGON_MODE_FILL},
-      {polygon_mode::line, VK_POLYGON_MODE_LINE},
-      {polygon_mode::point, VK_POLYGON_MODE_POINT}
-    };
-
-    using this_type = pipeline_rasterizer_state_gen<tDepthClampEnable, tRasterizerDiscardEnable, tPolygonMode>;
-    
-    VkPipelineRasterizationStateCreateInfo m_rasterizer_info;
-
-    pipeline_rasterizer_state_gen(VkResult r)
-      : vk_type(r)
-    {}
-    
-    this_type& build_create_info() {
-      if (ok()) {
-	m_rasterizer_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	m_rasterizer_info.depthClampEnable = TO_VK_BOOL(tDepthClampEnable);
-	m_rasterizer_info.rasterizerDiscardEnable = TO_VK_BOOL(tRasterizerDiscardEnable);
-	m_rasterizer_info.polygonMode = s_map.at(tPolygonMode);
-      }
-      return *this;
-    }
-  };
+  VkViewport make_viewport(vec2_t origin, VkExtent2D dim, float depthmin, float depthmax);
   
-  template <class inputAssemblyGenType>
-  struct pipeline_gen : public vk_type {
-    using input_assembly_gen_type = inputAssemblyGenType;
-    using viewport_state_gen_type = pipeline_viewport_state_gen<1, 1>;
-    
-    // depth clamp disabled; rasterizer discard disabled
-    using rasterizer_state_gen_type = pipeline_rasterizer_state_gen<false, false, polygon_mode::fill>;
-    
-    using this_type = pipeline_gen<input_assembly_gen_type>;
+  VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code);
 
-    VkDevice m_device;
-    
-    darray<pipeline_shader_stage_gen> m_stages;
-    pipeline_vertex_input_gen m_vertex_input_state;
-    input_assembly_gen_type m_input_assembly;
-    viewport_state_gen_type m_viewport;
-    rasterizer_state_gen_type m_rasterizer;
-    
-    DEFINE_CONDITION(ok(), vertex_input_state)
-
-    DEFINE_CONDITION(ok_vertex_input_state(), input_assembly_state)
-
-    DEFINE_CONDITION(ok_input_assembly_state(), viewport_setup)
-
-    DEFINE_CONDITION(ok_viewport_setup(), rasterizer_state)
-    
-    DEFINE_CONDITION(ok(), shader_stages)
-    
-    pipeline_gen(VkResult r,
-		 VkDevice device,
-		 pipeline_vertex_input_gen vertex_input_state,
-		 input_assembly_gen_type input_assembly,
-		 viewport_state_gen_type viewport,
-		 rasterizer_state_gen_type rasterizer,
-		 std::initializer_list<pipeline_shader_stage_gen> info)
-      :
-      vk_type(r),
-
-      m_device{device},
-      
-      m_vertex_input_state{vertex_input_state},
-      m_input_assembly{input_assembly},
-      m_viewport{viewport},
-      m_rasterizer{rasterizer},
-      
-      INIT_CONDITION(vertex_input_state),
-      INIT_CONDITION(input_assembly_state),
-      INIT_CONDITION(viewport_setup),
-      INIT_CONDITION(rasterizer_state),
-      INIT_CONDITION(shader_stages) {
-      
-      m_stages.insert(m_stages.end(),
-		      info.begin(),
-		      info.end());
-    }
-
-    this_type& build_vertex_input_state() {
-      if (ok()) {
-	m_vertex_input_state.build_create_info();
-
-	if (m_vertex_input_state.ok()) {
-	  complete_vertex_input_state();
-	}
-      }
-      return *this;
-    }
-
-    this_type& build_input_assembly_state() {
-      if (ok_vertex_input_state()) {
-	m_input_assembly.build_create_info();
-
-	if (m_input_assembly.ok()) {
-	  complete_input_assembly_state();
-	}
-      }
-      return *this;
-    }
-
-    this_type& build_viewport() {
-      if (ok_input_assembly_state()) {
-	m_viewport.build_create_info();
-	
-	if (m_viewport.ok()) {
-	  complete_viewport_setup();
-	}
-      }
-    }
-
-    this_type& build_rasterizer_state() {
-      if (ok_viewport_setup()) {
-	m_rasterizer.build_create_info();
-
-	if (m_rasterizer.ok()) {
-	  complete_rasterizer_state();
-	}
-      }
-    }
-    
-    this_type& build_shader_stages() {
-      if (ok()) {
-	bool ok = true;
-	size_t i = 0;
-	while (ok && i < m_stages.size()) {
-	  m_stages[i]
-	    .build_shader_module(m_device)
-	    .build_create_info();
-	  
-	  ok = m_stages[i].ok();
-
-	  i++;
-	}
-	if (ok) {
-	  complete_shader_stages();
-	}
-      }
-      return *this;
-    }
-  };
+  VkPipelineShaderStageCreateInfo make_shader_stage_settings(VkShaderModule module, VkShaderStageFlagBits type);
 
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
@@ -382,6 +74,8 @@ namespace vulkan {
 
     darray<VkImageView> m_vk_swapchain_image_views;
 
+    VkPipelineLayout m_vk_pipeline_layout{VK_NULL_HANDLE};
+
     VkSurfaceFormatKHR m_vk_khr_swapchain_format;
 
     VkExtent2D m_vk_swapchain_extent;
@@ -397,8 +91,6 @@ namespace vulkan {
 
     VkSurfaceKHR m_vk_khr_surface{VK_NULL_HANDLE};
     VkSwapchainKHR m_vk_khr_swapchain{VK_NULL_HANDLE};
-
-    VkResult m_vk_result{VK_SUCCESS};
 
     bool m_ok_present{false};
 
@@ -462,7 +154,7 @@ namespace vulkan {
 	create_info.codeSize = spv_code.size();
 	create_info.pCode = reinterpret_cast<uint32_t*>(spv_code.data());
       
-	RVK_FN(vkCreateShaderModule(m_vk_curr_ldevice, &create_info, nullptr, &ret));
+	VK_FN(vkCreateShaderModule(m_vk_curr_ldevice, &create_info, nullptr, &ret));
       }
 
       return ret;
@@ -473,15 +165,15 @@ namespace vulkan {
       ASSERT(m_vk_khr_surface != VK_NULL_HANDLE);
       if (m_vk_khr_surface != VK_NULL_HANDLE) {
         if (ok()) {
-          RVK_FN(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_vk_khr_surface, &details.capabilities));
+          VK_FN(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_vk_khr_surface, &details.capabilities));
         }
         if (ok()) {
           uint32_t format_count = 0;
-          RVK_FN(vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_vk_khr_surface, &format_count, nullptr));
+          VK_FN(vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_vk_khr_surface, &format_count, nullptr));
           if (ok()) {
             ASSERT(format_count != 0);
             details.formats.resize(format_count);
-            RVK_FN(vkGetPhysicalDeviceSurfaceFormatsKHR(device, 
+            VK_FN(vkGetPhysicalDeviceSurfaceFormatsKHR(device, 
                                                         m_vk_khr_surface, 
                                                         &format_count, 
                                                         details.formats.data()));
@@ -489,14 +181,14 @@ namespace vulkan {
         }
         if (ok()) {
           uint32_t present_mode_count = 0;
-          RVK_FN(vkGetPhysicalDeviceSurfacePresentModesKHR(device, 
+          VK_FN(vkGetPhysicalDeviceSurfacePresentModesKHR(device, 
                                                             m_vk_khr_surface, 
                                                             &present_mode_count,
                                                             nullptr));
           if (ok()) {
             ASSERT(present_mode_count != 0);
             details.present_modes.resize(present_mode_count);
-            RVK_FN(vkGetPhysicalDeviceSurfacePresentModesKHR(device,
+            VK_FN(vkGetPhysicalDeviceSurfacePresentModesKHR(device,
                                                               m_vk_khr_surface,
                                                               &present_mode_count,
                                                               details.present_modes.data()));
@@ -518,12 +210,12 @@ namespace vulkan {
       bool r = false;
       if (ok()) {
         uint32_t extension_count;
-        RVK_FN(vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr));
+        VK_FN(vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr));
 
         if (ok()) {
           std::vector<VkExtensionProperties> avail_ext(extension_count);
 
-          RVK_FN(vkEnumerateDeviceExtensionProperties(device, 
+          VK_FN(vkEnumerateDeviceExtensionProperties(device, 
                                                       nullptr, 
                                                       &extension_count, 
                                                       avail_ext.data()));
@@ -593,7 +285,7 @@ namespace vulkan {
         dev_create_info.enabledExtensionCount = static_cast<uint32_t>(s_device_extensions.size());
         dev_create_info.ppEnabledExtensionNames = s_device_extensions.data();
 
-        RVK_FN(vkCreateDevice(m_vk_curr_pdevice, 
+        VK_FN(vkCreateDevice(m_vk_curr_pdevice, 
                               &dev_create_info, 
                               nullptr, 
                               &m_vk_curr_ldevice));
@@ -616,7 +308,7 @@ namespace vulkan {
 
     bool setup_surface() {
       if (ok()) {
-        RVK_FN(glfwCreateWindowSurface(m_vk_instance, 
+        VK_FN(glfwCreateWindowSurface(m_vk_instance, 
                                        g_m.device_ctx->window(),
                                        nullptr,
                                        &m_vk_khr_surface));
@@ -782,17 +474,17 @@ namespace vulkan {
 
             create_info.oldSwapchain = VK_NULL_HANDLE;
 
-            RVK_FN(vkCreateSwapchainKHR(m_vk_curr_ldevice, &create_info, nullptr, &m_vk_khr_swapchain));
+            VK_FN(vkCreateSwapchainKHR(m_vk_curr_ldevice, &create_info, nullptr, &m_vk_khr_swapchain));
 
             if (ok_swapchain()) {
               uint32_t count = 0;
-              RVK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
+              VK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
                                              m_vk_khr_swapchain, 
                                              &count,
                                              nullptr));
               if (ok_swapchain()) {
                 m_vk_swapchain_images.resize(count);
-                RVK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
+                VK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
                                               m_vk_khr_swapchain, 
                                               &count,
                                               m_vk_swapchain_images.data()));
@@ -863,7 +555,7 @@ namespace vulkan {
           create_info.subresourceRange.baseArrayLayer = 0;
           create_info.subresourceRange.layerCount = 1;
 
-          RVK_FN(vkCreateImageView(m_vk_curr_ldevice, 
+          VK_FN(vkCreateImageView(m_vk_curr_ldevice, 
                                    &create_info,
                                    nullptr,
                                    &ret[i]));
@@ -886,7 +578,7 @@ namespace vulkan {
     }
 
     bool ok() const {
-      bool r = m_vk_result == VK_SUCCESS;
+      bool r = api_ok();
       ASSERT(r);
       return r; 
     }
@@ -982,14 +674,14 @@ namespace vulkan {
     void query_physical_devices() {
       if (ok()) {
         uint32_t device_count = 0;
-        RVK_FN(vkEnumeratePhysicalDevices(m_vk_instance, 
+        VK_FN(vkEnumeratePhysicalDevices(m_vk_instance, 
                                           &device_count, 
                                           nullptr));
 
         if (ok()) {
           m_vk_physical_devs.resize(device_count);
 
-          RVK_FN(vkEnumeratePhysicalDevices(m_vk_instance,
+          VK_FN(vkEnumeratePhysicalDevices(m_vk_instance,
                                             &device_count,
                                             &m_vk_physical_devs[0]));
         }
@@ -1000,10 +692,10 @@ namespace vulkan {
       darray<const char*> ret;
       if (ok()) {
         uint32_t layer_count = 0;
-        RVK_FN(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
+        VK_FN(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
         if (ok()) {
           darray<VkLayerProperties> avail_layers(layer_count);
-          RVK_FN(vkEnumerateInstanceLayerProperties(&layer_count, &avail_layers[0]));
+          VK_FN(vkEnumerateInstanceLayerProperties(&layer_count, &avail_layers[0]));
 
           std::stringstream ss;
           ss << "Vulkan Layers found:\n";
@@ -1059,7 +751,7 @@ namespace vulkan {
       }
       write_logf("%s\n", ss.str().c_str());
 
-      RVK_FN(vkCreateInstance(&create_info, nullptr, &m_vk_instance));
+      VK_FN(vkCreateInstance(&create_info, nullptr, &m_vk_instance));
 
       if (ok()) {
         if (setup_surface()) {
@@ -1067,7 +759,7 @@ namespace vulkan {
         }
       }
 
-      return m_vk_result == VK_SUCCESS;
+      return api_ok();
     }
 
     void setup_presentation() {
@@ -1111,14 +803,46 @@ namespace vulkan {
 	   vshader_create,
 	   fshader_create
 	  };
+
+
+	auto vertex_input_state = default_vertex_input_state_settings();
+	auto input_assembly_state = default_input_assembly_state_settings();
+
+	
+	auto viewport = make_viewport(R2(0), m_vk_swapchain_extent, 0.0f, 1.0f);
+	
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 };
+	scissor.extent = m_vk_swapchain_extent;
+
+	auto viewport_state = default_viewport_state_settings();
+	viewport_state.viewportCount = 1;
+	viewport_state.pViewports = &viewport;
+	viewport_state.scissorCount = 1;
+	viewport_state.pScissors = &scissor;
+
+	auto rasterization_state = default_rasterization_state_settings();
+
+	auto multisample_state = default_multisample_state_settings();
+
+	
+	auto color_blend_attach_state = default_color_blend_attach_state_settings();
+	auto color_blend_state = default_color_blend_state_settings();
+	color_blend_state.attachmentCount = 1;
+	color_blend_state.pAttachments = &color_blend_attach_state;
+
+	auto pipeline_layout = default_pipeline_layout_settings();
+
+	VK_FN(vkCreatePipelineLayout(m_vk_curr_ldevice, &pipeline_layout, nullptr, &m_vk_pipeline_layout));
+
+	
+	
+	//
+	// Free memory
+	//
 	
 	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(vshader_module);
 	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(fshader_module);
-
-	
-	{
-
-	}
       }
     }
 
@@ -1163,8 +887,9 @@ namespace vulkan {
       }
     }
 
-
     void free_mem() {
+      free_vk_ldevice_handle<VkPipelineLayout, &vkDestroyPipelineLayout>(m_vk_pipeline_layout);
+      
       free_vk_ldevice_handles<VkImageView, &vkDestroyImageView>(m_vk_swapchain_image_views);
 
       free_vk_ldevice_handle<VkSwapchainKHR, &vkDestroySwapchainKHR>(m_vk_khr_swapchain);
