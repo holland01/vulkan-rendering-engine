@@ -39,6 +39,7 @@ namespace vulkan {
 
   VkPipelineViewportStateCreateInfo default_viewport_state_settings() {
     VkPipelineViewportStateCreateInfo vps = {};
+    vps.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     vps.viewportCount = 0;
     vps.pViewports = nullptr;
     vps.scissorCount = 0;

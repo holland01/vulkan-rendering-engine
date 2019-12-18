@@ -74,7 +74,13 @@ namespace vulkan {
 
     darray<VkImageView> m_vk_swapchain_image_views;
 
+    darray<VkFramebuffer> m_vk_swapchain_framebuffers;
+
     VkPipelineLayout m_vk_pipeline_layout{VK_NULL_HANDLE};
+
+    VkRenderPass m_vk_render_pass{VK_NULL_HANDLE};
+
+    VkPipeline m_vk_graphics_pipeline;
 
     VkSurfaceFormatKHR m_vk_khr_swapchain_format;
 
@@ -798,7 +804,7 @@ namespace vulkan {
 	fshader_create.module = fshader_module;
 	fshader_create.pName = "main";
 
-	std::array<VkPipelineShaderStageCreateInfo, 2> stages =
+	std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages =
 	  {
 	   vshader_create,
 	   fshader_create
@@ -835,7 +841,50 @@ namespace vulkan {
 
 	VK_FN(vkCreatePipelineLayout(m_vk_curr_ldevice, &pipeline_layout, nullptr, &m_vk_pipeline_layout));
 
+	auto colorbuffer = default_colorbuffer_settings(m_vk_khr_swapchain_format.format);
+	auto colorbuffer_ref = default_colorbuffer_ref_settings();
+
+	VkSubpassDescription subpass = {};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorbuffer_ref;
+
+	VkRenderPassCreateInfo render_pass_info = {};
+	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	render_pass_info.attachmentCount = 1;
+	render_pass_info.pAttachments = &colorbuffer;
+	render_pass_info.subpassCount = 1;
+	render_pass_info.pSubpasses = &subpass;
+
+	VK_FN(vkCreateRenderPass(m_vk_curr_ldevice,
+				 &render_pass_info,
+				 nullptr,
+				 &m_vk_render_pass));
+
+	VkGraphicsPipelineCreateInfo pipeline_info = {};
+	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipeline_info.stageCount = 2;
+	pipeline_info.pStages = shader_stages.data();
+	pipeline_info.pVertexInputState = &vertex_input_state;
+	pipeline_info.pInputAssemblyState = &input_assembly_state;
+	pipeline_info.pViewportState = &viewport_state;
+	pipeline_info.pRasterizationState = &rasterization_state;
+	pipeline_info.pMultisampleState = &multisample_state;
+	pipeline_info.pDepthStencilState = nullptr;
+	pipeline_info.pColorBlendState = &color_blend_state;
+	pipeline_info.pDynamicState = nullptr;
+	pipeline_info.layout = m_vk_pipeline_layout;
+	pipeline_info.renderPass = m_vk_render_pass;
+	pipeline_info.subpass = 0;
+	pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
+	pipeline_info.basePipelineIndex = -1;
 	
+	VK_FN(vkCreateGraphicsPipelines(m_vk_curr_ldevice,
+					VK_NULL_HANDLE,
+					1,
+					&pipeline_info,
+					nullptr,
+					&m_vk_graphics_pipeline));
 	
 	//
 	// Free memory
@@ -843,6 +892,32 @@ namespace vulkan {
 	
 	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(vshader_module);
 	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(fshader_module);
+      }
+    }
+
+    void setup_framebuffers() {
+      if (ok_present()) {
+	m_vk_swapchain_framebuffers.resize(m_vk_swapchain_image_views.size());
+
+	for (size_t i = 0; i < m_vk_swapchain_image_views.size(); ++i) {
+	  VkImageView attachments[] = {
+	    m_vk_swapchain_image_views[i] 
+	  };
+
+	  VkFramebufferCreateInfo framebuffer_info = {};
+	  framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	  framebuffer_info.renderPass = m_vk_render_pass;
+	  framebuffer_info.attachmentCount = 1;
+	  framebuffer_info.pAttachments = attachments;
+	  framebuffer_info.width = m_vk_swapchain_extent.width;
+	  framebuffer_info.height = m_vk_swapchain_extent.height;
+	  framebuffer_info.layers = 1;
+
+	  VK_FN(vkCreateFramebuffer(m_vk_curr_ldevice,
+				    &framebuffer_info,
+				    nullptr,
+				    &m_vk_swapchain_framebuffers[i]));
+	}
       }
     }
 
@@ -888,7 +963,11 @@ namespace vulkan {
     }
 
     void free_mem() {
+      free_vk_ldevice_handles<VkFramebuffer, &vkDestroyFramebuffer>(m_vk_swapchain_framebuffers);
+      
+      free_vk_ldevice_handle<VkPipeline, &vkDestroyPipeline>(m_vk_graphics_pipeline);
       free_vk_ldevice_handle<VkPipelineLayout, &vkDestroyPipelineLayout>(m_vk_pipeline_layout);
+      free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
       
       free_vk_ldevice_handles<VkImageView, &vkDestroyImageView>(m_vk_swapchain_image_views);
 

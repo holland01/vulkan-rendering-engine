@@ -789,6 +789,7 @@ struct renderloop_triangle : public renderloop {
       m_renderer.set_physical_device(0);
       m_renderer.setup_presentation();
       m_renderer.setup_graphics_pipeline();
+      m_renderer.setup_framebuffers();
     }
   }
 
