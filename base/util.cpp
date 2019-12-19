@@ -1,4 +1,6 @@
-#include "util.hpp"
+#include "common.hpp"
+#include "device_context.hpp"
+#include "render_loop.hpp"
 
 #include <fstream>
 
@@ -19,12 +21,12 @@ static std::vector<std::string> g_msg_cache;
 static constexpr bool g_cache_disabled = true;
 
 static void die() {
-#if defined(BASE_ON_DIE_TRIGGER_SEGFAULT)
-  volatile unsigned* tmp = 0x0;
-  *tmp = 1;
-#else 
-  exit(EXIT_FAILURE);
-#endif
+  if (g_m.loop != nullptr) {
+    g_m.loop->set_running(false);
+  }
+  else {
+    exit(1);
+  }
 }
 
 static void maybe_print(std::vector<std::string>& cache, const std::string& msg, int line, const char* func, const char* file) {
