@@ -76,6 +76,10 @@ namespace vulkan {
 
     darray<VkFramebuffer> m_vk_swapchain_framebuffers;
 
+    darray<VkCommandBuffer> m_vk_command_buffers;
+
+    VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
+    
     VkPipelineLayout m_vk_pipeline_layout{VK_NULL_HANDLE};
 
     VkRenderPass m_vk_render_pass{VK_NULL_HANDLE};
@@ -921,6 +925,41 @@ namespace vulkan {
       }
     }
 
+    void setup_command_pool() {
+      if (ok_present()) {
+	queue_family_indices indices = query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
+
+	VkCommandPoolCreateInfo pool_info = {};
+	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	pool_info.queueFamilyIndex = indices.graphics_family.value();
+	pool_info.flags = 0;
+
+	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
+      }      
+    }
+
+    void setup_command_buffers() {
+      if (ok_present()) {
+	m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
+
+	VkCommandBufferAllocateInfo alloc_info = {};
+
+	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	alloc_info.commandPool = m_vk_command_pool;
+	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	alloc_info.commandBufferCount = static_cast<uint32_t>(m_vk_command_buffers.size());
+
+	VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, m_vk_command_buffers.data()));
+      }
+    }
+
+    void setup() {
+      setup_presentation();
+      setup_graphics_pipeline();
+      setup_framebuffers();
+      setup_command_pool();
+    }
+
     template <class vkHandleType, void (*vkDestroyFn)(vkHandleType, const VkAllocationCallbacks*)>
     void free_vk_handle(vkHandleType& handle) {
       if (handle != VK_NULL_HANDLE) {
@@ -963,6 +1002,9 @@ namespace vulkan {
     }
 
     void free_mem() {
+
+      free_vk_ldevice_handle<VkCommandPool, &vkDestroyCommandPool>(m_vk_command_pool);
+      
       free_vk_ldevice_handles<VkFramebuffer, &vkDestroyFramebuffer>(m_vk_swapchain_framebuffers);
       
       free_vk_ldevice_handle<VkPipeline, &vkDestroyPipeline>(m_vk_graphics_pipeline);
