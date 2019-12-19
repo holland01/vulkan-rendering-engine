@@ -1248,7 +1248,7 @@ void render_loop_triangle::init() {
 }
 
 void render_loop_triangle::update() {
-  
+  glfwPollEvents();
 }
 
 void render_loop_triangle::render() {
@@ -1262,6 +1262,8 @@ void render_loop_complete::init() {
 }
 
 void render_loop_complete::update() {
+  glfwPollEvents();
+  
   g_m.view->update(g_cam_move_state);
 
   if (g_obj_manip->has_select_model_state()) {
@@ -1292,6 +1294,8 @@ void render_loop_complete::render() {
       pass_quad.apply();
     } break;
   }
+
+  glfwSwapBuffers(g_m.device_ctx->window());
 }
 
 
@@ -1306,9 +1310,6 @@ int main(void) {
     while (g_m.loop->running()) {
       g_m.loop->update();
       g_m.loop->render();
-
-      //glfwSwapBuffers(g_m.device_ctx->window());
-      glfwPollEvents();
     }
   }
 
