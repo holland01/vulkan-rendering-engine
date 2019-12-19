@@ -91,17 +91,25 @@ bool modules::init() {
 
 void modules::free() {
   if (device_ctx->ok()) {
-    delete view;
-    delete framebuffer;
-    delete uniform_store;
-    delete programs;
-    delete textures;
-    delete geom;
-    delete models;
-    delete graph;
-    delete vertex_buffer;
-    delete gpu;
     delete loop;
+    
+    switch (g_conf.api_backend) {
+    case gapi::backend::opengl:{
+      delete view;
+      delete framebuffer;
+      delete uniform_store;
+      delete programs;
+      delete textures;
+      delete geom;
+      delete models;
+      delete graph;
+      delete vertex_buffer;
+      delete gpu;
+    } break;
+      
+    case gapi::backend::vulkan:
+      break;
+    }
   }
 
   delete device_ctx;
