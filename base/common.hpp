@@ -186,6 +186,7 @@ struct modules {
   view_data* view {nullptr};
   device_context* device_ctx {nullptr};
   gapi::device* gpu {nullptr};
+  render_loop* loop{nullptr};
 
   bool init();
   void free();

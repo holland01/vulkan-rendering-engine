@@ -78,6 +78,12 @@ bool modules::init() {
 
       uniform_store = new shader_uniform_storage();
     }
+
+    switch (g_conf.loop) {
+    case render_loop_type::complete: loop = new render_loop_complete(); break;
+    case render_loop_type::triangle: loop = new render_loop_triangle(); break;
+    default: break;
+    }
   }
 
   return device_ctx->ok();
@@ -95,6 +101,7 @@ void modules::free() {
     delete graph;
     delete vertex_buffer;
     delete gpu;
+    delete loop;
   }
 
   delete device_ctx;
@@ -743,10 +750,6 @@ static int screen_cube_index = 0;
 
 
 
-static std::unique_ptr<renderloop> g_renderloop{};
-
-
-
 // origin for coordinates is the top left
 // of the window
 struct camera_orientation {
@@ -1283,30 +1286,25 @@ void render_loop_complete::render() {
   }
 }
 
+
 int main(void) {
   g_key_states.fill(false);
 
   if (g_m.init()) {
     maybe_enable_cursor(g_m.device_ctx->window());
+    
+    g_m.loop->init();
 
-    switch (g_conf.loop) {
-      case render_loop::complete: g_renderloop.reset(new renderloop_complete()); break;
-      case render_loop::triangle: g_renderloop.reset(new renderloop_triangle()); break;
-    }
-
-    g_renderloop->init();
-
-    while (!glfwWindowShouldClose(g_m.device_ctx->window())) {
-      g_renderloop->update();
-      g_renderloop->render();
+    while (g_m.loop->running()) {
+      g_m.loop->update();
+      g_m.loop->render();
 
       //glfwSwapBuffers(g_m.device_ctx->window());
       glfwPollEvents();
     }
   }
 
-  g_renderloop.reset(nullptr);
   g_m.free();
-
+  
   return 0;
 }
