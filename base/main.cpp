@@ -1251,7 +1251,7 @@ void render_loop_triangle::update() {
 }
 
 void render_loop_triangle::render() {
-  
+  m_renderer.render();
 }
 
 void render_loop_complete::init() {
