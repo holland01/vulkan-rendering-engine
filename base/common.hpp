@@ -172,6 +172,8 @@ enum class backend : uint8_t {
 
 class device_context;
 
+struct render_loop;
+
 struct modules {
   framebuffer_ops* framebuffer {nullptr};
   module_programs* programs {nullptr};
@@ -189,7 +191,7 @@ struct modules {
   void free();
 } extern g_m;
 
-enum class render_loop {
+enum class render_loop_type {
   complete,
   triangle
 };
@@ -211,7 +213,7 @@ struct runtime_config {
 
   gapi::backend api_backend{gapi::backend::vulkan};
 
-  render_loop loop {render_loop::triangle};
+  render_loop_type loop {render_loop_type::triangle};
 
   drawmode dmode {drawmode_normal};
 } extern g_conf;
