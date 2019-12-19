@@ -1070,6 +1070,46 @@ namespace vulkan {
       setup_semaphores();
     }
 
+    void render() {
+      if (ok_semaphores()) {
+	constexpr uint64_t k_timeout_ns = 10000000000; // 10 seconds
+	uint32_t image_index = UINT32_MAX;
+	
+	VK_FN(vkAcquireNextImageKHR(m_vk_curr_ldevice,
+				    m_vk_khr_swapchain,
+				    k_timeout_ns,
+				    m_vk_sem_image_available,
+				    VK_NULL_HANDLE,
+				    &image_index));
+
+	if (ok()) {
+	  ASSERT(m_vk_command_buffers.size() == m_vk_swapchain_images.size());
+	  ASSERT(image_index < m_vk_command_buffers.size());
+
+	  VkSubmitInfo submit_info = {};
+	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	  VkSemaphore wait_semaphores[] = { m_vk_sem_image_available };
+	  VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }
+	  submit_info.waitSemaphoreCount = 1;
+	  submit_info.pWaitSemaphores = wait_semaphores;
+	  submit_info.pWaitDstStageMask = wait_stages;
+
+	  submit_info.commandBufferCount = 1;
+	  submit_info.pCommandBuffers = &m_vk_command_buffers[image_index];
+
+	  VkSemaphore signal_semaphores[] = { m_vk_sem_render_finished  };
+	  submit_info.signalSemaphoreCount = 1;
+	  submit_info.pSignalSemaphores = signal_semaphores;
+
+	  VK_FN(vkQueueSubmit(m_vk_graphics_queue,
+			      1,
+			      &submit_info,
+			      VK_NULL_HANDLE));
+	}      
+      }
+    }
+    
     template <class vkHandleType, void (*vkDestroyFn)(vkHandleType, const VkAllocationCallbacks*)>
     void free_vk_handle(vkHandleType& handle) {
       if (handle != VK_NULL_HANDLE) {
