@@ -1242,7 +1242,7 @@ void render_loop_triangle::init() {
     m_renderer.setup();
   }
     
-  if (m_renderer.ok_present()) {
+  if (m_renderer.ok_semaphores()) {
     post_init();
   }
 }

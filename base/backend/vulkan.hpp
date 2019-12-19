@@ -991,6 +991,73 @@ namespace vulkan {
 	alloc_info.commandBufferCount = static_cast<uint32_t>(m_vk_command_buffers.size());
 
 	VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, m_vk_command_buffers.data()));
+
+	size_t i = 0;
+	
+        while (i < m_vk_command_buffer.size() && ok()) {
+	  VkCommandBufferBeginInfo begin_info = {};
+	  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	  begin_info.flags = 0;
+	  begin_info.pInheritanceInfo = nullptr;
+
+	  VK_FN(vkBeginCommandBuffer(m_vk_command_buffers[i], &begin_info));
+
+	  if (ok()) {
+	    VkRenderPassBeginInfo render_pass_info = {};
+	    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	    render_pass_info.renderPass = m_vk_render_pass;
+	    render_pass_info.framebuffer = m_vk_swapchain_framebuffers[i];
+
+	    // shader loads and stores take place within this region
+	    render_pass_info.renderArea.offset = {0, 0};
+	    render_pass_info.renderArea.extent = m_vk_swapchain_extent;
+
+	    // for the color attachment's VK_ATTACHMENT_LOAD_OP_CLEAR
+	    // operation
+	    render_pass_info.clearValueCount = 1;
+	    VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+	    render_pass_info.pClearValues = &clear_color;
+
+	    vkCmdBeginRenderPass(m_vk_command_buffers[i],
+				 &render_pass_info,
+				 VK_SUBPASS_CONTENTS_INLINE);
+
+	    vkCmdBindPipeline(m_vk_command_buffers[i],
+			      VK_PIPELINE_BIND_POINT_GRAPHICS,
+			      m_vk_graphics_pipeline);
+
+	    vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
+
+	    VK_FN(vkEndCommandBuffer(m_vk_command_buffers[i]));
+	  }
+
+	  i++;
+	}
+
+	if (ok()) {
+	  m_ok_command_buffers = true;
+	}
+      }
+    }
+
+    void setup_semaphores() {
+      if (ok_command_buffers()) {
+	VkSemaphoreCreateInfo semaphore_info = {};
+	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
+				&semaphore_info,
+				nullptr,
+				&m_vk_sem_image_available));
+
+	VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
+				&semaphore_info,
+				nullptr,
+				&m_vk_sem_render_finished));
+
+	if (ok()) {
+	  m_ok_semaphores = true;
+	}
       }
     }
 
@@ -999,6 +1066,8 @@ namespace vulkan {
       setup_graphics_pipeline();
       setup_framebuffers();
       setup_command_pool();
+      setup_command_buffers();
+      setup_semaphores();
     }
 
     template <class vkHandleType, void (*vkDestroyFn)(vkHandleType, const VkAllocationCallbacks*)>
@@ -1043,7 +1112,8 @@ namespace vulkan {
     }
 
     void free_mem() {
-
+      free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_image_available);
+      free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_render_finished);
       free_vk_ldevice_handle<VkCommandPool, &vkDestroyCommandPool>(m_vk_command_pool);
       
       free_vk_ldevice_handles<VkFramebuffer, &vkDestroyFramebuffer>(m_vk_swapchain_framebuffers);
