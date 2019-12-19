@@ -10,12 +10,14 @@
 #if defined(BASE_ENABLE_VULKAN)
 
 #include "common.hpp"
+#include "device_context.hpp"
+
 #include <optional>
 #include <set>
 #include <initializer_list>
 #include <unordered_map>
-
-#include "device_context.hpp"
+#include <iomanip>
+#include <iostream>
 
 #define VK_FN(expr)						\
   do {								\
@@ -78,6 +80,12 @@ namespace vulkan {
 
     darray<VkCommandBuffer> m_vk_command_buffers;
 
+    std::array<float, 9> m_vertex_buffer_vertices{
+             0.0f, -0.5, 0.0f,
+	     0.5f, 0.5f, 0.0f,
+            -0.5f, 0.5f, 0.0f
+    };
+    
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
     
     VkPipelineLayout m_vk_pipeline_layout{VK_NULL_HANDLE};
@@ -105,12 +113,17 @@ namespace vulkan {
     VkSemaphore m_vk_sem_image_available;
     VkSemaphore m_vk_sem_render_finished;
 
+    VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
+    VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
+
     bool m_ok_present{false};
     bool m_ok_graphics_pipeline{false};
+    bool m_ok_vertex_buffer{false};
     bool m_ok_framebuffers{false};
     bool m_ok_command_pool{false};
     bool m_ok_command_buffers{false};
     bool m_ok_semaphores{false};
+    
     
     struct vk_layer_info {
       const char* name{nullptr};
@@ -126,6 +139,20 @@ namespace vulkan {
     static inline darray<const char*> s_device_extensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
+
+    darray<VkMemoryType> get_physical_device_memory_types(VkPhysicalDevice device) {
+      darray<VkMemoryType> ret{};
+      if (ok()) {
+        VkPhysicalDeviceMemoryProperties out_properties = {};
+	vkGetPhysicalDeviceMemoryProperties(device, &out_properties);
+	ret.resize(out_properties.memoryTypeCount);
+
+	for (size_t i = 0; i < ret.size(); ++i) {
+	  ret[i] = out_properties.memoryTypes[i];
+	}
+      }
+      return ret;
+    }
 
     queue_family_indices query_queue_families(VkPhysicalDevice device, VkSurfaceKHR surface) {
       queue_family_indices indices {};
@@ -590,6 +617,68 @@ namespace vulkan {
       }
     }
 
+    void setup_vertex_buffer() {
+      if (ok_graphics_pipeline()) {
+	queue_family_indices queue_info = query_queue_families(m_vk_curr_pdevice,
+							       m_vk_khr_surface);
+
+	constexpr size_t k_buf_size = sizeof(float) * 9;
+	
+	VkBufferCreateInfo buffer_info = {};
+	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buffer_info.pNext = nullptr;
+	buffer_info.flags = 0;
+	buffer_info.size = k_buf_size;
+	buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+	  VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	
+	// TODO: add support for separate present/graphics
+	// queue families
+	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	buffer_info.queueFamilyIndexCount = 1;
+	uint32_t queue_families[] = { queue_info.graphics_family.value() };
+	buffer_info.pQueueFamilyIndices = queue_families;
+
+	VK_FN(vkCreateBuffer(m_vk_curr_ldevice, &buffer_info, nullptr, &m_vk_vertex_buffer));
+
+	if (ok()) {
+
+	  darray<VkMemoryType> mem_types = get_physical_device_memory_types(m_vk_curr_pdevice);
+
+	  ASSERT(!mem_types.empty());
+	
+	  std::stringstream ss;
+	  ss << "Memory types (" << mem_types.size() << ")\n";
+	  for (VkMemoryType mt: mem_types) {
+	    ss << "..\n"
+	       << "....propertyFlags = " << SS_HEX(mt.propertyFlags) << "\n"
+	       << "....heapIndex = " << SS_HEX(mt.heapIndex) << "\n"; 
+	  }
+	  std::cout << ss.str() << std::endl;
+		
+	  VkMemoryAllocateInfo balloc_info = {};
+	  balloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	  balloc_info.pNext = nullptr;
+	  balloc_info.allocationSize = sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size();
+	  balloc_info.memoryTypeIndex = 0;
+	  
+	  VK_FN(vkAllocateMemory(m_vk_curr_ldevice,
+				 &balloc_info,
+				 nullptr,
+				 &m_vk_vertex_buffer_mem));
+
+	  VK_FN(vkBindBufferMemory(m_vk_curr_ldevice,
+				   m_vk_vertex_buffer,
+				   m_vk_vertex_buffer_mem,
+				   0));
+
+	  if (ok()) {	    
+	    m_ok_vertex_buffer = true;
+	  }
+	}
+      }
+    }
+
   public:
     ~renderer() {
       free_mem();
@@ -633,6 +722,12 @@ namespace vulkan {
 
     bool ok_graphics_pipeline() const {
       bool r = ok() && m_ok_graphics_pipeline;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_vertex_buffer() const {
+      bool r = ok() && m_ok_vertex_buffer;
       ASSERT(r);
       return r;
     }
@@ -825,7 +920,7 @@ namespace vulkan {
 	//
 	// create shader programs
 	// 
-	auto spv_vshader = read_file("resources/shaders/triangle.vert.spv");
+	auto spv_vshader = read_file("resources/shaders/triangle2.vert.spv");
 	auto spv_fshader = read_file("resources/shaders/triangle.frag.spv");
 
 	ASSERT(!spv_vshader.empty());
@@ -854,6 +949,24 @@ namespace vulkan {
 
 
 	auto vertex_input_state = default_vertex_input_state_settings();
+
+	VkVertexInputAttributeDescription iad = {};
+	iad.location = 0;
+	iad.binding = 0;
+	iad.format = VK_FORMAT_R32G32B32_SFLOAT;
+	iad.offset = 0;
+
+	VkVertexInputBindingDescription ibd = {};
+	ibd.binding = 0;
+	ibd.stride = sizeof(float) * 3;
+	ibd.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+	vertex_input_state.vertexBindingDescriptionCount = 1;
+	vertex_input_state.pVertexBindingDescriptions = &ibd;
+	vertex_input_state.vertexAttributeDescriptionCount = 1;
+	vertex_input_state.pVertexAttributeDescriptions = &iad;
+
+	
 	auto input_assembly_state = default_input_assembly_state_settings();
 
 	
@@ -940,7 +1053,7 @@ namespace vulkan {
     }
 
     void setup_framebuffers() {
-      if (ok_graphics_pipeline()) {
+      if (ok_vertex_buffer()) {
 	m_vk_swapchain_framebuffers.resize(m_vk_swapchain_image_views.size());
 
 	for (size_t i = 0; i < m_vk_swapchain_image_views.size(); ++i) {
@@ -985,7 +1098,7 @@ namespace vulkan {
     void setup_command_buffers() {
       if (ok_command_pool()) {
 	m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
-
+	
 	VkCommandBufferAllocateInfo alloc_info = {};
 	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	alloc_info.commandPool = m_vk_command_pool;
@@ -995,6 +1108,9 @@ namespace vulkan {
 	VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, m_vk_command_buffers.data()));
 
 	size_t i = 0;
+
+	VkDeviceSize vertex_buffer_ofs = 0;
+	
 	
         while (i < m_vk_command_buffers.size() && ok()) {
 	  VkCommandBufferBeginInfo begin_info = {};
@@ -1002,8 +1118,8 @@ namespace vulkan {
 	  begin_info.flags = 0;
 	  begin_info.pInheritanceInfo = nullptr;
 
-	  VK_FN(vkBeginCommandBuffer(m_vk_command_buffers[i], &begin_info));
-
+	  VK_FN(vkBeginCommandBuffer(m_vk_command_buffers[i], &begin_info));	  
+	  
 	  if (ok()) {
 	    VkRenderPassBeginInfo render_pass_info = {};
 	    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1027,6 +1143,18 @@ namespace vulkan {
 	    vkCmdBindPipeline(m_vk_command_buffers[i],
 			      VK_PIPELINE_BIND_POINT_GRAPHICS,
 			      m_vk_graphics_pipeline);
+	    
+	    vkCmdBindVertexBuffers(m_vk_command_buffers[i],
+				   0,
+				   1,
+				   &m_vk_vertex_buffer,
+				   &vertex_buffer_ofs);
+
+	    vkCmdUpdateBuffer(m_vk_command_buffers[i],
+			      m_vk_vertex_buffer,
+			      0,
+			      sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
+			      m_vertex_buffer_vertices.data());
 
 	    vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
 
@@ -1066,6 +1194,7 @@ namespace vulkan {
     void setup() {
       setup_presentation();
       setup_graphics_pipeline();
+      setup_vertex_buffer();
       setup_framebuffers();
       setup_command_pool();
       setup_command_buffers();
