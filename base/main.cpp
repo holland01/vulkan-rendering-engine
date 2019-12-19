@@ -29,6 +29,8 @@
 
 #include "backend/vulkan.hpp"
 
+#include "render_loop.hpp"
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -40,6 +42,22 @@
 #define ROOM_SPHERE_POS R3v(0, 0, 0)
 
 const real_t PI_OVER_6 = (PI_OVER_2 / R(6));
+
+struct render_loop_triangle : public render_loop {
+  vulkan::renderer m_renderer;
+
+  void init();
+  void update();
+  void render();
+};
+
+
+struct render_loop_complete : public render_loop {
+  void init();
+  void update();
+  void render();
+};
+
 
 bool modules::init() {
   device_ctx = new device_context();
@@ -724,79 +742,6 @@ static darray<uint8_t> g_debug_cubemap_buf;
 static int screen_cube_index = 0;
 
 
-struct renderloop_complete : public renderloop {
-  void init() {
-    init_api_data();
-    init_render_passes();
-  }
-
-  void update() {
-    g_m.view->update(g_cam_move_state);
-
-    if (g_obj_manip->has_select_model_state()) {
-      g_obj_manip->update_select_model_state();
-    }
-  }
-
-  void render() {
-    auto update_pickbuffer = []() -> void {
-      g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
-    };
-
-    switch (g_conf.dmode) {
-    case runtime_config::drawmode_normal:
-    {
-      for (const auto& kv: g_render_passes) {
-        kv.second.apply();
-      }
-      update_pickbuffer();
-    } break;
-
-    case runtime_config::drawmode_debug_mousepick:
-    {
-      const auto& pass_pick = get_render_pass("mousepick");
-      const auto& pass_quad = get_render_pass("rendered_quad");
-      pass_pick.apply();
-      update_pickbuffer();
-      pass_quad.apply();
-    } break;
-    }
-  }
-};
-
-struct renderloop_triangle : public renderloop {
-  vulkan::renderer m_renderer;
-  bool m_success{false};
-
-  
-
-  bool ok() { return m_success; }
-
-  void init() {
-    m_success = m_renderer.init_context();
-
-    if (m_success) {
-      for (uint32_t i = 0; i < m_renderer.num_devices(); ++i) {
-        m_renderer.print_device_info(i);
-      }
-
-      m_renderer.set_physical_device(0);
-      m_renderer.setup_presentation();
-      m_renderer.setup_graphics_pipeline();
-      m_renderer.setup_framebuffers();
-    }
-  }
-
-  void update() {
-
-  }
-
-  void render() {
-    if (m_success) {
-
-    }
-  }
-};
 
 static std::unique_ptr<renderloop> g_renderloop{};
 
@@ -1273,6 +1218,68 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods
       break;
     }
     break;
+  }
+}
+
+void render_loop_triangle::init() {
+  if (m_renderer.init_context()) {
+    for (uint32_t i = 0; i < m_renderer.num_devices(); ++i) {
+      m_renderer.print_device_info(i);
+    }
+
+    m_renderer.set_physical_device(0);
+    m_renderer.setup();
+  }
+    
+  if (m_renderer.ok_present()) {
+    post_init();
+  }
+}
+
+void render_loop_triangle::update() {
+  
+}
+
+void render_loop_triangle::render() {
+  
+}
+
+void render_loop_complete::init() {
+  init_api_data();
+  init_render_passes();
+  post_init();
+}
+
+void render_loop_complete::update() {
+  g_m.view->update(g_cam_move_state);
+
+  if (g_obj_manip->has_select_model_state()) {
+    g_obj_manip->update_select_model_state();
+  }
+}
+
+void render_loop_complete::render() {
+  auto update_pickbuffer = []() -> void {
+			     g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
+			   };
+
+  switch (g_conf.dmode) {
+  case runtime_config::drawmode_normal:
+    {
+      for (const auto& kv: g_render_passes) {
+        kv.second.apply();
+      }
+      update_pickbuffer();
+    } break;
+
+  case runtime_config::drawmode_debug_mousepick:
+    {
+      const auto& pass_pick = get_render_pass("mousepick");
+      const auto& pass_quad = get_render_pass("rendered_quad");
+      pass_pick.apply();
+      update_pickbuffer();
+      pass_quad.apply();
+    } break;
   }
 }
 
