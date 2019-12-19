@@ -977,6 +977,8 @@ namespace vulkan {
 	pool_info.flags = 0;
 
 	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
+
+	m_ok_command_pool = true;
       }      
     }
 
@@ -994,7 +996,7 @@ namespace vulkan {
 
 	size_t i = 0;
 	
-        while (i < m_vk_command_buffer.size() && ok()) {
+        while (i < m_vk_command_buffers.size() && ok()) {
 	  VkCommandBufferBeginInfo begin_info = {};
 	  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	  begin_info.flags = 0;
@@ -1090,7 +1092,8 @@ namespace vulkan {
 	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
 	  VkSemaphore wait_semaphores[] = { m_vk_sem_image_available };
-	  VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }
+	  //VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	  VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
 	  submit_info.waitSemaphoreCount = 1;
 	  submit_info.pWaitSemaphores = wait_semaphores;
 	  submit_info.pWaitDstStageMask = wait_stages;
@@ -1106,7 +1109,28 @@ namespace vulkan {
 			      1,
 			      &submit_info,
 			      VK_NULL_HANDLE));
-	}      
+
+	  VkPresentInfoKHR present_info = {};
+	  present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	  present_info.waitSemaphoreCount = 1;
+	  present_info.pWaitSemaphores = signal_semaphores;
+
+	  VkSwapchainKHR swap_chains[] = { m_vk_khr_swapchain };
+
+	  present_info.swapchainCount = 1;
+	  present_info.pSwapchains = swap_chains;
+	  present_info.pImageIndices =  &image_index;
+
+	  present_info.pResults = nullptr;
+
+	  VK_FN(vkQueuePresentKHR(m_vk_present_queue, &present_info));
+	}
+      }
+    }
+
+    void present() {
+      if (ok_semaphores()) {
+
       }
     }
     
