@@ -48,7 +48,6 @@
 #include "util.hpp"
 
 
-
 namespace fs = std::experimental::filesystem;
 
 #define SCREEN_WIDTH 1366
@@ -202,7 +201,6 @@ struct runtime_config {
     drawmode_normal,
     drawmode_debug_mousepick
   };
-
  
 #if CONFIG_QUAD_CLICK_CURSOR == 1
   bool quad_click_cursor {true};

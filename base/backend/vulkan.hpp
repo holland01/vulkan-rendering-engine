@@ -111,6 +111,7 @@ namespace vulkan {
     bool m_ok_command_pool{false};
     bool m_ok_command_buffers{false};
     bool m_ok_semaphores{false};
+    
     struct vk_layer_info {
       const char* name{nullptr};
       bool enable{false};
@@ -984,7 +985,6 @@ namespace vulkan {
 	m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
 
 	VkCommandBufferAllocateInfo alloc_info = {};
-
 	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	alloc_info.commandPool = m_vk_command_pool;
 	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -1154,6 +1154,7 @@ namespace vulkan {
     void free_mem() {
       free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_image_available);
       free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_render_finished);
+      
       free_vk_ldevice_handle<VkCommandPool, &vkDestroyCommandPool>(m_vk_command_pool);
       
       free_vk_ldevice_handles<VkFramebuffer, &vkDestroyFramebuffer>(m_vk_swapchain_framebuffers);

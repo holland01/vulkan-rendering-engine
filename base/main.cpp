@@ -51,7 +51,6 @@ struct render_loop_triangle : public render_loop {
   void render();
 };
 
-
 struct render_loop_complete : public render_loop {
   void init();
   void update();
