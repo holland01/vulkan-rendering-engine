@@ -102,8 +102,15 @@ namespace vulkan {
     VkSurfaceKHR m_vk_khr_surface{VK_NULL_HANDLE};
     VkSwapchainKHR m_vk_khr_swapchain{VK_NULL_HANDLE};
 
-    bool m_ok_present{false};
+    VkSemaphore m_vk_sem_image_available;
+    VkSemaphore m_vk_sem_render_finished;
 
+    bool m_ok_present{false};
+    bool m_ok_graphics_pipeline{false};
+    bool m_ok_framebuffers{false};
+    bool m_ok_command_pool{false};
+    bool m_ok_command_buffers{false};
+    bool m_ok_semaphores{false};
     struct vk_layer_info {
       const char* name{nullptr};
       bool enable{false};
@@ -623,6 +630,36 @@ namespace vulkan {
       return r;
     }
 
+    bool ok_graphics_pipeline() const {
+      bool r = ok() && m_ok_graphics_pipeline;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_framebuffers() const {
+      bool r = ok() && m_ok_framebuffers;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_command_pool() const {
+      bool r = ok() && m_ok_command_pool;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_command_buffers() const {
+      bool r = ok() && m_ok_command_buffers;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_semaphores() const {
+      bool r = ok() && m_ok_semaphores;
+      ASSERT(r);
+      return r;
+    }
+
     uint32_t num_devices() const { return m_vk_physical_devs.size(); }
 
     bool is_device_suitable(VkPhysicalDevice device) {
@@ -896,11 +933,13 @@ namespace vulkan {
 	
 	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(vshader_module);
 	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(fshader_module);
+
+	m_ok_graphics_pipeline = true;
       }
     }
 
     void setup_framebuffers() {
-      if (ok_present()) {
+      if (ok_graphics_pipeline()) {
 	m_vk_swapchain_framebuffers.resize(m_vk_swapchain_image_views.size());
 
 	for (size_t i = 0; i < m_vk_swapchain_image_views.size(); ++i) {
@@ -922,11 +961,13 @@ namespace vulkan {
 				    nullptr,
 				    &m_vk_swapchain_framebuffers[i]));
 	}
+
+	m_ok_framebuffers = true;
       }
     }
 
     void setup_command_pool() {
-      if (ok_present()) {
+      if (ok_framebuffers()) {
 	queue_family_indices indices = query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
 
 	VkCommandPoolCreateInfo pool_info = {};
@@ -939,7 +980,7 @@ namespace vulkan {
     }
 
     void setup_command_buffers() {
-      if (ok_present()) {
+      if (ok_command_pool()) {
 	m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
 
 	VkCommandBufferAllocateInfo alloc_info = {};
