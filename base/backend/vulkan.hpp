@@ -204,7 +204,72 @@ namespace vulkan {
       return indices;
     }
 
-    VkShaderModule make_shader_module(darray<uint8_t> spv_code) {
+        VkSharingMode query_queue_sharing_mode() const {
+      queue_family_indices details =
+	query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
+
+      return details.graphics_family.value() == details.present_family.value()
+	? VK_SHARING_MODE_EXCLUSIVE
+	: VK_SHARING_MODE_CONCURRENT;
+    }
+
+    uint32_t* query_graphics_buffer_indices(uint32_t* out_num_indices) const {
+      static uint32_t queue_families[1] = {0};
+
+      queue_family_indices details =
+	query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
+
+      queue_families[0] = details.graphics_family.value();
+      *out_num_indices = 1;
+      
+      return &queue_families[0];
+    }
+
+    VkBufferCreateInfo make_vertex_buffer_create_info(VkDeviceSize size) const {
+      VkBufferCreateInfo buffer_info = {};
+      
+      buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+      buffer_info.pNext = nullptr;
+      buffer_info.flags = 0;
+
+      buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+	  VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+      buffer_info.size = size;
+      
+      buffer_info.sharingMode = query_queue_sharing_mode();
+
+      uint32_t num_indices = 0;
+      
+      buffer_info.pQueueFamilyIndices = query_graphics_buffer_indices(&num_indices);
+      buffer_info.queueFamilyIndexCount = num_indices;
+
+      return buffer_info;
+    }
+
+    std::optional<VkMemoryRequirements> query_vertex_buffer_memory_requirements(VkDeviceSize size) const {
+      std::optional<VkMemoryRequirements> ret{};
+      if (ok_graphics_pipeline()) {
+	VkBufferCreateInfo buffer_info = make_vertex_buffer_create_info(size);
+	
+	VkBuffer dummy_buffer = 0;
+	VK_FN(vkCreateBuffer(m_vk_curr_ldevice, &buffer_info, nullptr, &dummy_buffer));
+
+	if (ok() && dummy_buffer != VK_NULL_HANDLE) {
+	  VkMemoryRequirements r = {};
+	  vkGetBufferMemoryRequirements(m_vk_curr_ldevice,
+					dummy_buffer,
+					&r);
+
+	  ret = r;
+	}
+	
+	free_vk_ldevice_handle<VkBuffer, &vkDestroyBuffer>(dummy_buffer);
+      }
+      return ret;
+    }
+
+    VkShaderModule make_shader_module(darray<uint8_t> spv_code) const {
       VkShaderModule ret;
 
       if (ok_present()) {
