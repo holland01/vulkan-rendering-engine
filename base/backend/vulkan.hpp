@@ -140,6 +140,21 @@ namespace vulkan {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
+    void print_physical_device_memory_types() {
+      darray<VkMemoryType> mem_types = get_physical_device_memory_types(m_vk_curr_pdevice);
+
+      ASSERT(!mem_types.empty());
+	
+      std::stringstream ss;
+      ss << "Memory types (" << mem_types.size() << ")\n";
+      for (VkMemoryType mt: mem_types) {
+	ss << "..\n"
+	   << "....propertyFlags = " << SS_HEX(mt.propertyFlags) << "\n"
+	   << "....heapIndex = " << SS_HEX(mt.heapIndex) << "\n"; 
+      }
+      std::cout << ss.str() << std::endl;
+    }
+    
     darray<VkMemoryType> get_physical_device_memory_types(VkPhysicalDevice device) {
       darray<VkMemoryType> ret{};
       if (ok()) {
