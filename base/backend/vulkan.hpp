@@ -1347,6 +1347,8 @@ namespace vulkan {
 	  present_info.pResults = nullptr;
 
 	  VK_FN(vkQueuePresentKHR(m_vk_present_queue, &present_info));
+
+	  VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
 	}
       }
     }
