@@ -1212,6 +1212,19 @@ namespace vulkan {
 	  VK_FN(vkBeginCommandBuffer(m_vk_command_buffers[i], &begin_info));	  
 	  
 	  if (ok()) {
+	    vkCmdBindVertexBuffers(m_vk_command_buffers[i],
+				   0,
+				   1,
+				   &m_vk_vertex_buffer,
+				   &vertex_buffer_ofs);
+
+	    vkCmdUpdateBuffer(m_vk_command_buffers[i],
+			      m_vk_vertex_buffer,
+			      0,
+			      sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
+			      m_vertex_buffer_vertices.data());
+
+	    
 	    VkRenderPassBeginInfo render_pass_info = {};
 	    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	    render_pass_info.renderPass = m_vk_render_pass;
@@ -1235,20 +1248,9 @@ namespace vulkan {
 			      VK_PIPELINE_BIND_POINT_GRAPHICS,
 			      m_vk_graphics_pipeline);
 	    
-	    vkCmdBindVertexBuffers(m_vk_command_buffers[i],
-				   0,
-				   1,
-				   &m_vk_vertex_buffer,
-				   &vertex_buffer_ofs);
-
-	    vkCmdUpdateBuffer(m_vk_command_buffers[i],
-			      m_vk_vertex_buffer,
-			      0,
-			      sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
-			      m_vertex_buffer_vertices.data());
-
 	    vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
 
+	    vkCmdEndRenderPass(m_vk_command_buffers[i]);
 	    VK_FN(vkEndCommandBuffer(m_vk_command_buffers[i]));
 	  }
 
