@@ -1372,6 +1372,7 @@ namespace vulkan {
               void (*vkDestroyFn)(VkDevice, vkHandleType, const VkAllocationCallbacks*)>
     void free_vk_ldevice_handle(vkHandleType& handle) const {
       if (ok_ldev()) {
+	VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
         if (handle != VK_NULL_HANDLE) {
           vkDestroyFn(m_vk_curr_ldevice, handle, nullptr);
           handle = VK_NULL_HANDLE;
@@ -1383,6 +1384,7 @@ namespace vulkan {
               void (*vkDestroyFn)(VkDevice, vkHandleType, const VkAllocationCallbacks*)>
     void free_vk_ldevice_handles(darray<vkHandleType>& handles) const {
       if (ok_ldev()) {
+	VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
         for (auto h: handles) {
           if (h != VK_NULL_HANDLE) {
             vkDestroyFn(m_vk_curr_ldevice, h, nullptr);
@@ -1393,6 +1395,9 @@ namespace vulkan {
     }
 
     void free_mem() {
+      if (m_vk_curr_ldevice != VK_NULL_HANDLE) {
+	vkDeviceWaitIdle(m_vk_curr_ldevice);
+      }
       free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_image_available);
       free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_render_finished);
       
