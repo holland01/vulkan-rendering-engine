@@ -1026,11 +1026,11 @@ namespace vulkan {
 
 	auto vertex_input_state = default_vertex_input_state_settings();
 
-	VkVertexInputAttributeDescription iad = {};
-	iad.location = 0;
-	iad.binding = 0;
-	iad.format = VK_FORMAT_R32G32B32_SFLOAT;
-	iad.offset = 0;
+	VkVertexInputAttributeDescription iad_position = {};
+        iad_position.location = 0;
+	iad_position.binding = 0;
+	iad_position.format = VK_FORMAT_R32G32B32_SFLOAT;
+	iad_position.offset = 0;
 
 	VkVertexInputBindingDescription ibd = {};
 	ibd.binding = 0;
@@ -1040,7 +1040,7 @@ namespace vulkan {
 	vertex_input_state.vertexBindingDescriptionCount = 1;
 	vertex_input_state.pVertexBindingDescriptions = &ibd;
 	vertex_input_state.vertexAttributeDescriptionCount = 1;
-	vertex_input_state.pVertexAttributeDescriptions = &iad;
+	vertex_input_state.pVertexAttributeDescriptions = &iad_position;
 
 	
 	auto input_assembly_state = default_input_assembly_state_settings();
