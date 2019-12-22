@@ -154,7 +154,7 @@ namespace vulkan {
       return ret;
     }
 
-    queue_family_indices query_queue_families(VkPhysicalDevice device, VkSurfaceKHR surface) {
+    queue_family_indices query_queue_families(VkPhysicalDevice device, VkSurfaceKHR surface) const {
       queue_family_indices indices {};
 
       if (ok()) {
@@ -1264,7 +1264,7 @@ namespace vulkan {
     }
     
     template <class vkHandleType, void (*vkDestroyFn)(vkHandleType, const VkAllocationCallbacks*)>
-    void free_vk_handle(vkHandleType& handle) {
+    void free_vk_handle(vkHandleType& handle) const {
       if (handle != VK_NULL_HANDLE) {
         vkDestroyFn(handle, nullptr);
         handle = VK_NULL_HANDLE;
@@ -1273,7 +1273,7 @@ namespace vulkan {
 
     template <class vkHandleType, 
               void (*vkDestroyFn)(VkInstance, vkHandleType, const VkAllocationCallbacks*)>
-    void free_vk_instance_handle(vkHandleType& handle) {
+    void free_vk_instance_handle(vkHandleType& handle) const {
       if (handle != VK_NULL_HANDLE) {
         vkDestroyFn(m_vk_instance, handle, nullptr);
         handle = VK_NULL_HANDLE;
@@ -1282,7 +1282,7 @@ namespace vulkan {
 
     template <class vkHandleType,
               void (*vkDestroyFn)(VkDevice, vkHandleType, const VkAllocationCallbacks*)>
-    void free_vk_ldevice_handle(vkHandleType& handle) {
+    void free_vk_ldevice_handle(vkHandleType& handle) const {
       if (ok_ldev()) {
         if (handle != VK_NULL_HANDLE) {
           vkDestroyFn(m_vk_curr_ldevice, handle, nullptr);
@@ -1293,7 +1293,7 @@ namespace vulkan {
     
     template <class vkHandleType,
               void (*vkDestroyFn)(VkDevice, vkHandleType, const VkAllocationCallbacks*)>
-    void free_vk_ldevice_handles(darray<vkHandleType>& handles) {
+    void free_vk_ldevice_handles(darray<vkHandleType>& handles) const {
       if (ok_ldev()) {
         for (auto h: handles) {
           if (h != VK_NULL_HANDLE) {
