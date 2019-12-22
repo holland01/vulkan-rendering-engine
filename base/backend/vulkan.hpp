@@ -1396,10 +1396,21 @@ namespace vulkan {
       }
     }
 
+    // VkSwapchainKHR owns the VkImages
+    // we've derived from it (in m_vk_swapchain_images),
+    // so we don't free those VkImages ourselves
+    //
+    // The command pool also will free any allocated command
+    // buffers.
     void free_mem() {
       if (m_vk_curr_ldevice != VK_NULL_HANDLE) {
 	vkDeviceWaitIdle(m_vk_curr_ldevice);
       }
+
+      free_vk_ldevice_handle<VkDeviceMemory, &vkFreeMemory>(m_vk_vertex_buffer_mem);
+      
+      free_vk_ldevice_handle<VkBuffer, &vkDestroyBuffer>(m_vk_vertex_buffer);
+      
       free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_image_available);
       free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_render_finished);
       
@@ -1412,7 +1423,7 @@ namespace vulkan {
       free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
       
       free_vk_ldevice_handles<VkImageView, &vkDestroyImageView>(m_vk_swapchain_image_views);
-
+      
       free_vk_ldevice_handle<VkSwapchainKHR, &vkDestroySwapchainKHR>(m_vk_khr_swapchain);
       // vkDestroyDevice will destroy any associated queues along with it.
       free_vk_handle<VkDevice, &vkDestroyDevice>(m_vk_curr_ldevice);
