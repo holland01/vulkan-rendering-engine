@@ -1350,12 +1350,6 @@ namespace vulkan {
 	}
       }
     }
-
-    void present() {
-      if (ok_semaphores()) {
-
-      }
-    }
     
     template <class vkHandleType, void (*vkDestroyFn)(vkHandleType, const VkAllocationCallbacks*)>
     void free_vk_handle(vkHandleType& handle) const {
