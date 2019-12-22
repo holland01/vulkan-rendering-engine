@@ -696,51 +696,47 @@ namespace vulkan {
                                                       m_vk_khr_swapchain_format.format);
       }
     }
-
+    
     void setup_vertex_buffer() {
       if (ok_graphics_pipeline()) {
-	queue_family_indices queue_info = query_queue_families(m_vk_curr_pdevice,
-							       m_vk_khr_surface);
-
-	constexpr size_t k_buf_size = sizeof(float) * 9;
+	const VkDeviceSize k_buf_verts_size =
+	  sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size();
 	
-	VkBufferCreateInfo buffer_info = {};
-	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	buffer_info.pNext = nullptr;
-	buffer_info.flags = 0;
-	buffer_info.size = k_buf_size;
-	buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-	  VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	
-	// TODO: add support for separate present/graphics
-	// queue families
-	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	buffer_info.queueFamilyIndexCount = 1;
-	uint32_t queue_families[] = { queue_info.graphics_family.value() };
-	buffer_info.pQueueFamilyIndices = queue_families;
+	std::optional<VkMemoryRequirements> mem_reqs =
+	  query_vertex_buffer_memory_requirements(k_buf_verts_size);
 
+	ASSERT(mem_reqs.has_value());
+
+	// This is a _required_ allocation size
+	// for the vertex buffer - not using this size will create
+	// an error in the API's validation layers.
+	const VkDeviceSize k_buf_size = mem_reqs.value().size;
+	
+	VkBufferCreateInfo buffer_info = make_vertex_buffer_create_info(k_buf_size);
+       
 	VK_FN(vkCreateBuffer(m_vk_curr_ldevice, &buffer_info, nullptr, &m_vk_vertex_buffer));
 
-	if (ok()) {
+	// find which memory type index is available
+	// for this vertex buffer; the i'th bit
+	// represents a memory type index,
+	// and its bit is set if and only if that
+	// memory type is supported.
+	uint32_t memory_type_bits = mem_reqs.value().memoryTypeBits; 
+	uint32_t memory_type_index = 0;
+	while ((memory_type_bits & 1) == 0 && memory_type_index < 32) {
+	  memory_type_index++;
+	  memory_type_bits >>= 1;
+	}
+	// if this fails, we need to investigate
+	// the host's hardware/level of vulkan support.
+	ASSERT(memory_type_index < 32);
 
-	  darray<VkMemoryType> mem_types = get_physical_device_memory_types(m_vk_curr_pdevice);
-
-	  ASSERT(!mem_types.empty());
-	
-	  std::stringstream ss;
-	  ss << "Memory types (" << mem_types.size() << ")\n";
-	  for (VkMemoryType mt: mem_types) {
-	    ss << "..\n"
-	       << "....propertyFlags = " << SS_HEX(mt.propertyFlags) << "\n"
-	       << "....heapIndex = " << SS_HEX(mt.heapIndex) << "\n"; 
-	  }
-	  std::cout << ss.str() << std::endl;
-		
+	if (ok() && m_vk_vertex_buffer != VK_NULL_HANDLE) {	  		
 	  VkMemoryAllocateInfo balloc_info = {};
 	  balloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	  balloc_info.pNext = nullptr;
-	  balloc_info.allocationSize = sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size();
-	  balloc_info.memoryTypeIndex = 0;
+	  balloc_info.allocationSize = k_buf_size;
+	  balloc_info.memoryTypeIndex = memory_type_index;
 	  
 	  VK_FN(vkAllocateMemory(m_vk_curr_ldevice,
 				 &balloc_info,
