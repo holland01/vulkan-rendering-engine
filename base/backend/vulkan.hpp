@@ -1080,12 +1080,27 @@ namespace vulkan {
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorbuffer_ref;
 
+	VkSubpassDependency dependency = {};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	
 	VkRenderPassCreateInfo render_pass_info = {};
 	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+
 	render_pass_info.attachmentCount = 1;
 	render_pass_info.pAttachments = &colorbuffer;
+
 	render_pass_info.subpassCount = 1;
 	render_pass_info.pSubpasses = &subpass;
+	
+	render_pass_info.dependencyCount = 1;
+	render_pass_info.pDependencies = &dependency;
 
 	VK_FN(vkCreateRenderPass(m_vk_curr_ldevice,
 				 &render_pass_info,
@@ -1289,7 +1304,7 @@ namespace vulkan {
 				    VK_NULL_HANDLE,
 				    &image_index));
 
-	if (ok()) {
+	if (ok()) {	  
 	  ASSERT(m_vk_command_buffers.size() == m_vk_swapchain_images.size());
 	  ASSERT(image_index < m_vk_command_buffers.size());
 
@@ -1297,8 +1312,9 @@ namespace vulkan {
 	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
 	  VkSemaphore wait_semaphores[] = { m_vk_sem_image_available };
-	  //VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	  VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
+	  
+	  VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };	  	  
+	  
 	  submit_info.waitSemaphoreCount = 1;
 	  submit_info.pWaitSemaphores = wait_semaphores;
 	  submit_info.pWaitDstStageMask = wait_stages;
