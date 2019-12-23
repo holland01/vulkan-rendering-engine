@@ -54,6 +54,12 @@ namespace vulkan {
 
   VkPipelineShaderStageCreateInfo make_shader_stage_settings(VkShaderModule module, VkShaderStageFlagBits type);
 
+    // Find _a_ memory in `memory_type_bits_req` that includes all of `req_properties`
+  int32_t find_memory_properties(const VkPhysicalDeviceMemoryProperties* memory_properties,
+				 uint32_t memory_type_bits_req,
+				 VkMemoryPropertyFlags req_properties);
+
+
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
     std::optional<uint32_t> present_family{};

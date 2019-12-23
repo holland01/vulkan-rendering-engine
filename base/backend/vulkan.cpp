@@ -173,3 +173,30 @@ namespace vulkan {
   }
 
 }
+  
+  // Find _a_ memory in `memory_type_bits_req` that includes all of `req_properties`
+  int32_t find_memory_properties(const VkPhysicalDeviceMemoryProperties* memory_properties,
+				 uint32_t memory_type_bits_req,
+				 VkMemoryPropertyFlags req_properties) {
+    const uint32_t memory_count = memory_properties->memoryTypeCount;
+    uint32_t memory_index = 0;
+    int32_t ret_val = -1;
+
+    while (memory_index < memory_count && ret_val == -1) {
+      const uint32_t type_bits = 1 << memory_index;
+
+      if ((type_bits & memory_type_bits_req) != 0) {
+	const VkMemoryPropertyFlags properties =
+	  memory_properties->memoryTypes[memory_index].propertyFlags;
+
+	if ((properties & req_properties) == req_properties) {
+	  ret_val = static_cast<int32_t>(memory_index);
+	}
+      }
+
+      memory_index++;
+    }
+
+    return ret_val;
+  }
+  
