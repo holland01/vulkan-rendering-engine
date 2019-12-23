@@ -1,5 +1,7 @@
 #include "vulkan.hpp"
 
+#define BASE_TEXTURE2D_DEFAULT_VK_FORMAT VK_FORMAT_R8G8B8A8_UNORM
+
 namespace vulkan {
 
   VkResult g_vk_result = VK_SUCCESS;
@@ -172,7 +174,6 @@ namespace vulkan {
     return stage_info;
   }
 
-}
   
   // Find _a_ memory in `memory_type_bits_req` that includes all of `req_properties`
   int32_t find_memory_properties(const VkPhysicalDeviceMemoryProperties* memory_properties,
@@ -200,3 +201,269 @@ namespace vulkan {
     return ret_val;
   }
   
+  static VkImageCreateInfo default_image_create_info_texture2d(const device_resource_properties& properties) {
+    VkImageCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    create_info.pNext = nullptr;
+
+    create_info.flags = VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
+    create_info.imageType = VK_IMAGE_TYPE_3D;
+    create_info.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
+
+    create_info.extent.width = 0;
+    create_info.extent.height = 0;
+    create_info.extent.depth = 1;
+
+    create_info.mipLevels = 1;
+    create_info.arrayLayers = 1;
+
+    create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    create_info.tiling = VK_IMAGE_TILING_LINEAR;
+    create_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+      
+    create_info.sharingMode = properties.queue_sharing_mode;
+
+    create_info.queueFamilyIndexCount = properties.queue_family_indices.size();
+    create_info.pQueueFamilyIndices = properties.queue_family_indices.data();
+      
+    create_info.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+    
+    return create_info;
+  }
+
+  static
+  VkImageViewCreateInfo default_image_view_create_info_texture2d() {
+    VkImageViewCreateInfo create_info = {};
+    
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.pNext = nullptr;
+    create_info.flags = 0;
+    create_info.image = VK_NULL_HANDLE;
+
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    create_info.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
+    
+    create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+    create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    create_info.subresourceRange.baseMipLevel = 0;
+    create_info.subresourceRange.levelCount = 1;
+
+    create_info.subresourceRange.baseArrayLayer = 0;
+    create_info.subresourceRange.layerCount = 1;
+
+    return create_info;
+  }
+
+  static VkExtent3D calc_minimum_dimensions_texture2d(uint32_t width,
+						      uint32_t height,
+						      uint32_t bytes_per_pixel,
+						      const VkMemoryRequirements& requirements) {
+    // If any of these are not a power of 2,
+    // there is no guarantee that,
+    // once the loop finishes,
+    // calc_size() == requirements.size will be true.
+    //
+    // We want this to be true:
+    // any deviation from this format
+    // will require a different method
+    // of adjusting the width and height
+    // to meet the required size.
+    ASSERT(is_power_2(requirements.size));
+    ASSERT(is_power_2(width));
+    ASSERT(is_power_2(height));
+    ASSERT(is_power_2(bytes_per_pixel));
+    
+    VkExtent3D ext;
+
+    ext.width = UINT32_MAX;
+    ext.height = UINT32_MAX;
+    ext.depth = 1;
+
+    uint32_t flipflop = 0;
+    
+    auto calc_size =
+      [&width, &height, &bytes_per_pixel]() -> VkDeviceSize {
+	return static_cast<VkDeviceSize>(width * height * bytes_per_pixel);
+      };
+    
+    while (calc_size() < requirements.size) {
+      if (flipflop == 0) {
+	width <<= 1;
+      }
+      else {
+	height <<= 1;
+      }
+      flipflop ^= 1;
+    }
+
+    ASSERT(calc_size() == requirements.size);
+    
+    ext.width = width;
+    ext.height = height; 
+    
+    return ext;
+  }
+
+  static 
+  image_requirements get_image_requirements_texture2d(const device_resource_properties& properties,
+						      uint32_t width,
+						      uint32_t height,
+						      uint32_t bytes_per_pixel,
+						      VkImageLayout layout) {
+
+    // this is all that's supported currently
+    ASSERT(bytes_per_pixel == 4); 
+    
+    image_requirements ret{};
+
+    ret.desired.width = width;
+    ret.desired.height = height;
+    ret.desired.depth = 1;
+
+    ret.bytes_per_pixel = bytes_per_pixel;
+    
+    VkImageCreateInfo create_info =
+      default_image_create_info_texture2d(properties);
+
+    create_info.extent.width = width;
+    create_info.extent.height = height;
+    create_info.initialLayout = layout;
+
+    // 4 bytes per pixel is compatible with this format,
+    // which is what we're defaulting to for now. This
+    // is here to ensure that, if that's ever changed in the future,
+    // we're forced to ensure that the format's represented size meets
+    // what we're passing to calc_minimum_dimensions_texture2d()
+    ASSERT(create_info.format == BASE_TEXTURE2D_DEFAULT_VK_FORMAT);
+
+
+    VkImage dummy_image{VK_NULL_HANDLE};
+    
+    VK_FN(vkCreateImage(properties.device,
+			&create_info,
+			nullptr,
+			&dummy_image));
+    
+    if (api_ok() && dummy_image != VK_NULL_HANDLE) {
+      VkMemoryRequirements req = {};
+
+      vkGetImageMemoryRequirements(properties.device,
+				   dummy_image,
+				   &req);
+
+      
+      ret.required = calc_minimum_dimensions_texture2d(width,
+						       height,
+						       bytes_per_pixel,
+						       req);	      
+
+      // find an appropriate memory type index
+      // for our image that we can base the storage
+      // off of
+      {
+	VkPhysicalDeviceMemoryProperties memory_properties = {};
+      
+	vkGetPhysicalDeviceMemoryProperties(properties.physical_device,
+					    &memory_properties);
+
+	constexpr VkMemoryPropertyFlags k_mem_flags =
+	  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+	  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+	  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+	int32_t memory_type_index =
+	  find_memory_properties(&memory_properties,
+				 req.memoryTypeBits,
+				 k_mem_flags);
+      
+	ASSERT(memory_type_index != -1);
+
+	ret.memory_type_index =
+	  static_cast<uint32_t>(memory_type_index);
+      }
+
+      vkDestroyImage(properties.device, dummy_image, nullptr);
+    }
+
+    ASSERT(ret.ok());
+
+    return ret;
+  }
+
+  texture2d_data make_texture2d(const device_resource_properties& properties,
+				uint32_t width,
+				uint32_t height,
+				uint32_t bytes_per_pixel,
+				const darray<uint8_t>& pixels) {
+    texture2d_data ret{};
+
+    image_requirements req = get_image_requirements_texture2d(properties,
+							      width,
+							      height,
+							      bytes_per_pixel,
+							      VK_IMAGE_LAYOUT_PREINITIALIZED);
+
+    if (api_ok() && req.ok()) {
+      VkMemoryAllocateInfo info = {};
+      
+      info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+      info.pNext = nullptr;
+      info.allocationSize = req.memory_size();
+      info.memoryTypeIndex = req.memory_type_index;
+
+      VK_FN(vkAllocateMemory(properties.device,
+			     &info,
+			     nullptr,
+			     &ret.memory));      
+    }
+
+    if (api_ok() && ret.memory != VK_NULL_HANDLE) {
+      VkImageCreateInfo create_info = default_image_create_info_texture2d(properties);
+
+      create_info.extent.width = width;
+      create_info.extent.height = height;
+      create_info.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+
+      ret.format = create_info.format;
+      
+      VK_FN(vkCreateImage(properties.device,
+			  &create_info,
+			  nullptr,
+			  &ret.image));
+    }
+
+    bool bound = false;
+    if (api_ok() && ret.image != VK_NULL_HANDLE) {
+      VK_FN(vkBindImageMemory(properties.device,
+			      ret.image,
+			      ret.memory,
+			      0));
+
+      bound = api_ok();
+    }
+      
+    if (bound) {
+      VkImageViewCreateInfo create_info = default_image_view_create_info_texture2d();
+
+      create_info.image = ret.image;
+
+      VK_FN(vkCreateImageView(properties.device,
+			      &create_info,
+			      nullptr,
+			      &ret.image_view));
+
+
+      
+    }
+    
+    ASSERT(ret.ok());
+
+    return ret;
+  }
+
+} // end namespace vulkan

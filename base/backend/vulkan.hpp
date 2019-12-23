@@ -59,7 +59,87 @@ namespace vulkan {
 				 uint32_t memory_type_bits_req,
 				 VkMemoryPropertyFlags req_properties);
 
+  struct device_resource_properties {
+    darray<uint32_t> queue_family_indices;
+    VkPhysicalDevice physical_device{VK_NULL_HANDLE};
+    VkDevice device{VK_NULL_HANDLE};
+    VkSharingMode queue_sharing_mode{VK_SHARING_MODE_EXCLUSIVE};
+  };
 
+  struct image_requirements {
+    VkExtent3D desired{UINT32_MAX, UINT32_MAX, UINT32_MAX};
+    VkExtent3D required{UINT32_MAX, UINT32_MAX, UINT32_MAX};
+    uint32_t bytes_per_pixel{UINT32_MAX};
+    uint32_t memory_type_index{UINT32_MAX};
+
+    VkDeviceSize memory_size() const {
+      ASSERT(ok());
+      
+      return
+	static_cast<VkDeviceSize>((bytes_per_pixel * required.width * required.height) *
+				  required.depth);
+    }
+    
+    bool ok() const {
+      const bool ok_desired =
+	desired.width != UINT32_MAX &&
+	desired.height != UINT32_MAX &&
+	desired.depth != UINT32_MAX;
+      
+      const bool ok_required =
+	required.width != UINT32_MAX &&
+	required.height != UINT32_MAX &&
+	required.depth != UINT32_MAX;
+
+      const bool ok_cmp =
+	desired.width <= required.width &&
+	desired.height <= required.height &&
+	desired.depth <= required.depth;
+
+      return
+	(bytes_per_pixel <= 4) &&
+	(memory_type_index < 32) &&
+	ok_desired &&
+	ok_required &&
+	ok_cmp;		    
+    }
+  };
+
+  struct texture2d_data {
+    VkSampler sampler{VK_NULL_HANDLE};
+    VkImage image{VK_NULL_HANDLE};
+    VkImageView image_view{VK_NULL_HANDLE};
+    VkDeviceMemory memory{VK_NULL_HANDLE};
+    VkFormat format{VK_FORMAT_UNDEFINED};
+    
+    uint32_t width{UINT32_MAX};
+    uint32_t height{UINT32_MAX};    
+
+    bool ok() const {
+      return
+	sampler != VK_NULL_HANDLE &&
+	image != VK_NULL_HANDLE &&
+	image_view != VK_NULL_HANDLE &&
+	memory != VK_NULL_HANDLE &&
+	format != VK_FORMAT_UNDEFINED &&
+	width != UINT32_MAX &&
+	height != UINT32_MAX;
+    }
+
+    void free_mem(VkDevice device) {
+      ASSERT(ok());
+      
+      VK_FN(vkDeviceWaitIdle(device));
+
+      if (api_ok()) {
+	vkFreeMemory(device, memory, nullptr);
+	vkDestroySampler(device, sampler, nullptr);
+	vkDestroyImageView(device, image_view, nullptr);
+	vkDestroyImage(device, image, nullptr);
+      }
+    }
+  };
+    
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
     std::optional<uint32_t> present_family{};
