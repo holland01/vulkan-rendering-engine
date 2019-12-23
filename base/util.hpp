@@ -69,6 +69,8 @@ void report_gl_error(GLenum err,
 
 std::vector<uint8_t> read_file(const std::string& path); 
 
+
+
 // https://stackoverflow.com/a/8498694
 //
 // This is a class which acts as a kind of "pseudo-reflection" for enums:

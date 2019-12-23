@@ -22,6 +22,7 @@ static constexpr bool g_cache_disabled = true;
 
 static void die() {
   if (g_m.loop != nullptr) {
+    write_logf("%s", "Terminating main loop...");
     g_m.loop->set_running(false);
   }
   else {
