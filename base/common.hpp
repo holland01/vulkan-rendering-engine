@@ -277,3 +277,30 @@ static inline bool reqeps(real_t a, real_t b) {
   real_t d = a - b;
   return -e <= d && d <= e;
 }
+
+template <class intType>
+static inline intType next_power_2(const intType& x) {
+  static_assert(std::is_integral<intType>::value, "type must be integral");
+
+  constexpr size_t max_bits = sizeof(x) * 8;
+  constexpr size_t term_bits = max_bits / 2;
+  
+  intType y{x};
+  y--;
+
+  intType iter{1};
+
+  while (iter <= term_bits) {
+    y = y | (y >> iter);
+    iter <<= 1;
+  }
+
+  y++;
+  
+  return y;
+}
+
+template <class intType>
+static inline bool is_power_2(const intType& x) {
+  return x == next_power_2(x);
+}
