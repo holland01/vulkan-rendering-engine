@@ -221,13 +221,14 @@ namespace vulkan {
     return api_ok();
   }
   
-  static VkImageCreateInfo default_image_create_info_texture2d(const device_resource_properties& properties) {
+  static
+  VkImageCreateInfo default_image_create_info_texture2d(const device_resource_properties& properties) {
     VkImageCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     create_info.pNext = nullptr;
 
-    create_info.flags = VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
-    create_info.imageType = VK_IMAGE_TYPE_3D;
+    create_info.flags = 0;
+    create_info.imageType = VK_IMAGE_TYPE_2D;
     create_info.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
 
     create_info.extent.width = 0;
@@ -246,7 +247,7 @@ namespace vulkan {
     create_info.queueFamilyIndexCount = properties.queue_family_indices.size();
     create_info.pQueueFamilyIndices = properties.queue_family_indices.data();
       
-    create_info.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+    create_info.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
 
     ASSERT(image_create_info_valid(properties.physical_device,
 				   create_info));
