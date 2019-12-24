@@ -8,11 +8,12 @@ namespace vulkan {
 
   VkResult vk_call(VkResult call, const char* expr, int line, const char* file) {
     if (call != VK_SUCCESS) {
-      write_logf("VULKAN ERROR: %s@%s:%i -> 0x%x\n", 
+      write_logf("VULKAN ERROR: %s@%s:%i -> 0x%x (%" PRId32 ")\n", 
                  expr, 
                  file, 
                  line, 
-                 call);
+                 call,
+		 call);
     }
     return call;
   }
