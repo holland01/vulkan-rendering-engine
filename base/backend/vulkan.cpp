@@ -395,8 +395,8 @@ namespace vulkan {
 	vkGetPhysicalDeviceMemoryProperties(properties.physical_device,
 					    &memory_properties);
 
+	// necessary for vkMapMemory()
 	constexpr VkMemoryPropertyFlags k_mem_flags =
-	  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
 	  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 	  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
