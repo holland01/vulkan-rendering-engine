@@ -59,6 +59,7 @@ namespace vulkan {
 				 uint32_t memory_type_bits_req,
 				 VkMemoryPropertyFlags req_properties);
 
+
   struct device_resource_properties {
     darray<uint32_t> queue_family_indices;
     VkPhysicalDevice physical_device{VK_NULL_HANDLE};
@@ -104,6 +105,8 @@ namespace vulkan {
 	ok_cmp;		    
     }
   };
+
+  
 
   struct texture2d_data {
     VkSampler sampler{VK_NULL_HANDLE};
@@ -161,6 +164,8 @@ namespace vulkan {
     darray<VkPresentModeKHR> present_modes;
   };
 
+  
+  
   class renderer {
     darray<VkPhysicalDevice> m_vk_physical_devs;
 
@@ -171,6 +176,8 @@ namespace vulkan {
     darray<VkFramebuffer> m_vk_swapchain_framebuffers;
 
     darray<VkCommandBuffer> m_vk_command_buffers;
+    
+    texture2d_data m_test_texture2d{};
 
     std::array<float, 9> m_vertex_buffer_vertices{
              0.0f, -0.5, 0.0f,
@@ -215,7 +222,7 @@ namespace vulkan {
     bool m_ok_command_pool{false};
     bool m_ok_command_buffers{false};
     bool m_ok_semaphores{false};
-    
+    bool m_ok_scene{false};
     
     struct vk_layer_info {
       const char* name{nullptr};
@@ -261,6 +268,24 @@ namespace vulkan {
       return ret;
     }
 
+    device_resource_properties make_device_resource_properties() const {
+      uint32_t num_indices = 0;
+      uint32_t* indices = query_graphics_buffer_indices(&num_indices);
+
+      darray<uint32_t> indices_copy(num_indices, 0);
+
+      for (uint32_t i = 0; i < num_indices; ++i) {
+	indices_copy[i] = indices[i];
+      }
+      
+      return {
+        std::move(indices_copy),
+        m_vk_curr_pdevice,
+        m_vk_curr_ldevice,
+        query_queue_sharing_mode()	      
+      };
+    }
+    
     queue_family_indices query_queue_families(VkPhysicalDevice device, VkSurfaceKHR surface) const {
       queue_family_indices indices {};
 
@@ -296,7 +321,7 @@ namespace vulkan {
       return indices;
     }
 
-        VkSharingMode query_queue_sharing_mode() const {
+    VkSharingMode query_queue_sharing_mode() const {
       queue_family_indices details =
 	query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
 
@@ -924,6 +949,12 @@ namespace vulkan {
       return r;
     }
 
+    bool ok_scene() const {
+      bool r = ok() && m_ok_scene;
+      ASSERT(r);
+      return r;
+    }
+
     uint32_t num_devices() const { return m_vk_physical_devs.size(); }
 
     bool is_device_suitable(VkPhysicalDevice device) {
@@ -961,6 +992,7 @@ namespace vulkan {
       if (ok()) {
         if (device < m_vk_physical_devs.size()) {
           VkPhysicalDeviceProperties props = {};
+	  
           vkGetPhysicalDeviceProperties(m_vk_physical_devs[device],
                                        &props);
 
@@ -1376,6 +1408,55 @@ namespace vulkan {
       }
     }
 
+    void setup_scene() {
+      if (ok_semaphores()) {
+	// generate image data
+	uint32_t image_w = 256;
+	uint32_t image_h = 256;
+
+	uint32_t y = 0;
+	uint32_t x = 0;
+	uint32_t bpp = 4;
+
+	darray<uint8_t> buffer(image_w * image_h * bpp, 0);
+
+	uint8_t rgb = 0;
+
+	uint32_t mask = 7;
+	
+	while (y < image_h) {
+	  while (x < image_w) {
+	    uint32_t offset = (y * image_w + x) * bpp;
+	    
+	    buffer[offset + 0] = 255 & rgb;
+	    buffer[offset + 1] = 255 & rgb;
+	    buffer[offset + 2] = 255 & rgb;
+	    buffer[offset + 3] = 255;
+	    
+	    x++;
+
+	    if (((x + 1) & mask) == 0) {
+	      rgb = ~rgb;
+	    }
+	  }
+
+	  y++;
+
+	  if (((y + 1) & mask) == 0) {
+	    rgb = ~rgb;
+	  }
+	}
+	
+	m_test_texture2d = make_texture2d(make_device_resource_properties(),
+					  image_w,
+					  image_h,
+					  bpp,
+					  buffer);
+					  					  	
+	m_ok_scene = m_test_texture2d.ok();
+      }
+    }
+
     void setup() {
       setup_presentation();
       setup_graphics_pipeline();
@@ -1384,10 +1465,11 @@ namespace vulkan {
       setup_command_pool();
       setup_command_buffers();
       setup_semaphores();
+      setup_scene();
     }
 
     void render() {
-      if (ok_semaphores()) {
+      if (ok_scene()) {
 	constexpr uint64_t k_timeout_ns = 10000000000; // 10 seconds
 	uint32_t image_index = UINT32_MAX;
 	
