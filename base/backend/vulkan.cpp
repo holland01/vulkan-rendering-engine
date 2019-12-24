@@ -201,6 +201,25 @@ namespace vulkan {
 
     return ret_val;
   }
+
+  // We will not call vkGetPhysicalDeviceImageFormatProperties()
+  // if g_vk_result is not equal to VK_SUCCESS beforehand. We may as well
+  // consider this a false result, given that at that point something
+  // else that's wrong has happened.
+  static
+  bool image_create_info_valid(VkPhysicalDevice physical_device, const VkImageCreateInfo& create_info) {
+    VkImageFormatProperties properties;
+
+    VK_FN(vkGetPhysicalDeviceImageFormatProperties(physical_device,
+						   create_info.format,
+						   create_info.imageType,
+						   create_info.tiling,
+						   create_info.usage,
+						   create_info.flags,
+						   &properties));
+
+    return api_ok();
+  }
   
   static VkImageCreateInfo default_image_create_info_texture2d(const device_resource_properties& properties) {
     VkImageCreateInfo create_info = {};
@@ -228,6 +247,9 @@ namespace vulkan {
     create_info.pQueueFamilyIndices = properties.queue_family_indices.data();
       
     create_info.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    ASSERT(image_create_info_valid(properties.physical_device,
+				   create_info));
     
     return create_info;
   }
