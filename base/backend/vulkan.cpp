@@ -283,10 +283,46 @@ namespace vulkan {
     return create_info;
   }
 
-  static VkExtent3D calc_minimum_dimensions_texture2d(uint32_t width,
-						      uint32_t height,
-						      uint32_t bytes_per_pixel,
-						      const VkMemoryRequirements& requirements) {
+  static
+  VkSamplerCreateInfo default_sampler_create_info_texture2d() {
+    VkSamplerCreateInfo create_info = {};
+
+    create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    create_info.pNext = nullptr;
+    
+    create_info.flags = 0;
+    
+    create_info.magFilter = VK_FILTER_LINEAR;
+    create_info.minFilter = VK_FILTER_LINEAR;
+
+    create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    
+    create_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    create_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    create_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    create_info.mipLodBias = 0.0f;
+    
+    create_info.anisotropyEnable = VK_FALSE;
+    create_info.maxAnisotropy = 0.0f;
+
+    create_info.compareEnable = VK_FALSE;
+    create_info.compareOp = VK_COMPARE_OP_ALWAYS;
+    create_info.minLod = 0.0f;
+    create_info.maxLod = 0.0f;
+    
+    create_info.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+
+    create_info.unnormalizedCoordinates = VK_FALSE;
+
+    return create_info;
+  }
+  
+  static
+  VkExtent3D calc_minimum_dimensions_texture2d(uint32_t width,
+					       uint32_t height,
+					       uint32_t bytes_per_pixel,
+					       const VkMemoryRequirements& requirements) {
     // If any of these are not a power of 2,
     // there is no guarantee that,
     // once the loop finishes,
@@ -506,7 +542,8 @@ namespace vulkan {
     }
       
     if (bound) {
-      VkImageViewCreateInfo create_info = default_image_view_create_info_texture2d();
+      VkImageViewCreateInfo create_info =
+	default_image_view_create_info_texture2d();
 
       create_info.image = ret.image;
 
@@ -514,11 +551,25 @@ namespace vulkan {
 			      &create_info,
 			      nullptr,
 			      &ret.image_view));
-
-
-      
     }
-    
+
+    if (api_ok() && ret.image_view != VK_NULL_HANDLE) {
+      VkSamplerCreateInfo create_info =
+	default_sampler_create_info_texture2d();
+
+      VK_FN(vkCreateSampler(properties.device,
+			    &create_info,
+			    nullptr,
+			    &ret.sampler));
+    }
+
+    if (api_ok() && ret.sampler != VK_NULL_HANDLE) {
+      ret.width = width;
+      ret.height = height;
+      ret.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
+    }
+
+    ASSERT(api_ok());
     ASSERT(ret.ok());
 
     return ret;
