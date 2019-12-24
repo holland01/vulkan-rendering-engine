@@ -424,6 +424,9 @@ namespace vulkan {
 				uint32_t height,
 				uint32_t bytes_per_pixel,
 				const darray<uint8_t>& pixels) {
+    
+    VK_FN(vkDeviceWaitIdle(properties.device));
+    
     texture2d_data ret{};
 
     image_requirements req = get_image_requirements_texture2d(properties,
@@ -446,8 +449,39 @@ namespace vulkan {
 			     &ret.memory));      
     }
 
+    bool mapped = false;
     if (api_ok() && ret.memory != VK_NULL_HANDLE) {
-      VkImageCreateInfo create_info = default_image_create_info_texture2d(properties);
+      // Note this method of setting the texture
+      // data only works because our device
+      // has capability for what's specified by
+      // k_mem_flags, within get_image_requirements_texture2d()
+      
+      void* mapped_memory = nullptr;
+
+      const size_t memlength =
+	pixels.size() * sizeof(pixels[0]);
+      
+      VK_FN(vkMapMemory(properties.device,
+			ret.memory,
+			0,
+			memlength,
+			0,
+			&mapped_memory));
+
+      if (api_ok() && mapped_memory != nullptr) {
+	memcpy(mapped_memory,
+	       pixels.data(),
+	       memlength);
+
+        vkUnmapMemory(properties.device, ret.memory);
+
+	mapped = true;
+      }
+    }
+
+    if (mapped) {
+      VkImageCreateInfo create_info =
+	default_image_create_info_texture2d(properties);
 
       create_info.extent.width = width;
       create_info.extent.height = height;
