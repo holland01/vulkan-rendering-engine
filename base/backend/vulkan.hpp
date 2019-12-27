@@ -291,7 +291,8 @@ namespace vulkan {
         std::move(indices_copy),
         m_vk_curr_pdevice,
         m_vk_curr_ldevice,
-        query_queue_sharing_mode()	      
+        query_queue_sharing_mode(),
+	m_vk_descriptor_pool
       };
     }
     
@@ -1159,6 +1160,56 @@ namespace vulkan {
       }
     }
 
+    void setup_texture_data() {
+      if (ok_descriptor_pool()) {
+	// generate image data
+	uint32_t image_w = 256;
+	uint32_t image_h = 256;
+
+	uint32_t y = 0;
+	uint32_t x = 0;
+	uint32_t bpp = 4;
+
+	darray<uint8_t> buffer(image_w * image_h * bpp, 0);
+
+	uint8_t rgb = 0;
+
+	uint32_t mask = 7;
+	
+	while (y < image_h) {
+	  while (x < image_w) {
+	    uint32_t offset = (y * image_w + x) * bpp;
+	    
+	    buffer[offset + 0] = 255 & rgb;
+	    buffer[offset + 1] = 255 & rgb;
+	    buffer[offset + 2] = 255 & rgb;
+	    buffer[offset + 3] = 255;
+	    
+	    x++;
+
+	    if (((x + 1) & mask) == 0) {
+	      rgb = ~rgb;
+	    }
+	  }
+
+	  y++;
+
+	  if (((y + 1) & mask) == 0) {
+	    rgb = ~rgb;
+	  }
+	}
+	
+	m_test_texture2d = make_texture2d(make_device_resource_properties(),
+					  image_w,
+					  image_h,
+					  bpp,
+					  buffer);
+
+	m_ok_texture_data = m_test_texture2d.ok();
+      }
+    }
+
+
     void setup_graphics_pipeline() {
       if (ok_texture_data()) {
 	//
@@ -1461,6 +1512,7 @@ namespace vulkan {
     void setup() {
       setup_presentation();
       setup_descriptor_pool();
+      setup_texture_data();
       setup_graphics_pipeline();
       setup_vertex_buffer();
       setup_framebuffers();
