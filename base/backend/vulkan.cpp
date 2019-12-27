@@ -509,7 +509,7 @@ namespace vulkan {
 	       pixels.data(),
 	       memlength);
 
-        vkUnmapMemory(properties.device, ret.memory);
+	vkUnmapMemory(properties.device, ret.memory);
 
 	mapped = true;
       }
