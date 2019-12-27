@@ -65,6 +65,7 @@ namespace vulkan {
     VkPhysicalDevice physical_device{VK_NULL_HANDLE};
     VkDevice device{VK_NULL_HANDLE};
     VkSharingMode queue_sharing_mode{VK_SHARING_MODE_EXCLUSIVE};
+    VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};
   };
 
   struct image_requirements {
@@ -113,6 +114,8 @@ namespace vulkan {
     VkImage image{VK_NULL_HANDLE};
     VkImageView image_view{VK_NULL_HANDLE};
     VkDeviceMemory memory{VK_NULL_HANDLE};
+    VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
+    VkDescriptorSet descriptor_set{VK_NULL_HANDLE}; // should be allocated from a pool
     VkFormat format{VK_FORMAT_UNDEFINED};
     
     uint32_t width{UINT32_MAX};
@@ -124,6 +127,8 @@ namespace vulkan {
 	image != VK_NULL_HANDLE &&
 	image_view != VK_NULL_HANDLE &&
 	memory != VK_NULL_HANDLE &&
+	descriptor_set_layout != VK_NULL_HANDLE &&
+	descriptor_set != VK_NULL_HANDLE &&
 	format != VK_FORMAT_UNDEFINED &&
 	width != UINT32_MAX &&
 	height != UINT32_MAX;

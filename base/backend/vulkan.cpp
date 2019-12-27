@@ -564,6 +564,43 @@ namespace vulkan {
     }
 
     if (api_ok() && ret.sampler != VK_NULL_HANDLE) {
+      VkDescriptorSetLayoutBinding ds_binding = {};
+      ds_binding.binding = 0;
+      ds_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      ds_binding.descriptorCount = 1;
+      ds_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+      VkDescriptorSetLayoutCreateInfo create_info = {};
+      create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+      create_info.pNext = nullptr;
+      create_info.flags = 0;                                                      
+      create_info.bindingCount = 1;
+      create_info.pBindings = &ds_binding;
+
+      VK_FN(vkCreateDescriptorSetLayout(properties.device,
+					&create_info,
+					nullptr,
+					&ret.descriptor_set_layout));
+
+      
+    }
+    
+    if (api_ok() && ret.descriptor_set_layout != VK_NULL_HANDLE) {
+      VkDescriptorSetAllocateInfo alloc_info = {};
+
+      alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+      alloc_info.pNext = nullptr;
+      alloc_info.descriptorPool = properties.descriptor_pool;
+      alloc_info.descriptorSetCount = 1;
+      alloc_info.pSetLayouts = &ret.descriptor_set_layout;
+
+      VK_FN(vkAllocateDescriptorSets(properties.device,
+				     &alloc_info,
+				     &ret.descriptor_set));
+				       
+    }
+
+    if (api_ok() && ret.descriptor_set != VK_NULL_HANDLE) {
       ret.width = width;
       ret.height = height;
       ret.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
