@@ -186,6 +186,8 @@ namespace vulkan {
     };
     
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
+
+    VkDescriptorPool m_vk_descriptor_pool{VK_NULL_HANDLE};
     
     VkPipelineLayout m_vk_pipeline_layout{VK_NULL_HANDLE};
 
@@ -216,6 +218,8 @@ namespace vulkan {
     VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
 
     bool m_ok_present{false};
+    bool m_ok_descriptor_pool{false};
+    bool m_ok_texture_data{false};
     bool m_ok_graphics_pipeline{false};
     bool m_ok_vertex_buffer{false};
     bool m_ok_framebuffers{false};
@@ -913,6 +917,18 @@ namespace vulkan {
       return r;
     }
 
+    bool ok_descriptor_pool() const {
+      bool r = ok() && m_ok_descriptor_pool;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_texture_data() const {
+      bool r = ok() && m_ok_texture_data;
+      ASSERT(r);
+      return r;
+    }
+
     bool ok_graphics_pipeline() const {
       bool r = ok() && m_ok_graphics_pipeline;
       ASSERT(r);
@@ -1115,8 +1131,31 @@ namespace vulkan {
       }
     }
 
-    void setup_graphics_pipeline() {
+    void setup_descriptor_pool() {
       if (ok_present()) {
+	VkDescriptorPoolSize pool_size = {};
+	pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	pool_size.descriptorCount = 1;
+
+	VkDescriptorPoolCreateInfo create_info = {};
+	create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	create_info.pNext = nullptr;
+	create_info.flags = 0;
+	create_info.maxSets = 1;
+	create_info.poolSizeCount = 1;
+	create_info.pPoolSizes = &pool_size;
+
+	VK_FN(vkCreateDescriptorPool(m_vk_curr_ldevice,
+				     &create_info,
+				     nullptr,
+				     &m_vk_descriptor_pool));
+	
+	m_ok_descriptor_pool = api_ok() && m_vk_descriptor_pool != VK_NULL_HANDLE;
+      }
+    }
+
+    void setup_graphics_pipeline() {
+      if (ok_texture_data()) {
 	//
 	// create shader programs
 	// 
@@ -1416,6 +1455,7 @@ namespace vulkan {
 
     void setup() {
       setup_presentation();
+      setup_descriptor_pool();
       setup_graphics_pipeline();
       setup_vertex_buffer();
       setup_framebuffers();
@@ -1552,6 +1592,7 @@ namespace vulkan {
       free_vk_ldevice_handle<VkPipeline, &vkDestroyPipeline>(m_vk_graphics_pipeline);
       free_vk_ldevice_handle<VkPipelineLayout, &vkDestroyPipelineLayout>(m_vk_pipeline_layout);
       free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
+      free_vk_ldevice_handle<VkDescriptorPool, &vkDestroyDescriptorPool>(m_vk_descriptor_pool);
       
       free_vk_ldevice_handles<VkImageView, &vkDestroyImageView>(m_vk_swapchain_image_views);
       
