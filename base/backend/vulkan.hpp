@@ -140,10 +140,11 @@ namespace vulkan {
       VK_FN(vkDeviceWaitIdle(device));
 
       if (api_ok()) {
-	vkFreeMemory(device, memory, nullptr);
+	vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);	
 	vkDestroySampler(device, sampler, nullptr);
 	vkDestroyImageView(device, image_view, nullptr);
-	vkDestroyImage(device, image, nullptr);
+	vkDestroyImage(device, image, nullptr);	
+	vkFreeMemory(device, memory, nullptr);
       }
     }
   };
@@ -1651,6 +1652,9 @@ namespace vulkan {
       free_vk_ldevice_handle<VkPipeline, &vkDestroyPipeline>(m_vk_graphics_pipeline);
       free_vk_ldevice_handle<VkPipelineLayout, &vkDestroyPipelineLayout>(m_vk_pipeline_layout);
       free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
+
+      m_test_texture2d.free_mem(m_vk_curr_ldevice);
+      
       free_vk_ldevice_handle<VkDescriptorPool, &vkDestroyDescriptorPool>(m_vk_descriptor_pool);
       
       free_vk_ldevice_handles<VkImageView, &vkDestroyImageView>(m_vk_swapchain_image_views);
