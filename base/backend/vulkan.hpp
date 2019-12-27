@@ -1409,51 +1409,8 @@ namespace vulkan {
     }
 
     void setup_scene() {
-      if (ok_semaphores()) {
-	// generate image data
-	uint32_t image_w = 256;
-	uint32_t image_h = 256;
-
-	uint32_t y = 0;
-	uint32_t x = 0;
-	uint32_t bpp = 4;
-
-	darray<uint8_t> buffer(image_w * image_h * bpp, 0);
-
-	uint8_t rgb = 0;
-
-	uint32_t mask = 7;
-	
-	while (y < image_h) {
-	  while (x < image_w) {
-	    uint32_t offset = (y * image_w + x) * bpp;
-	    
-	    buffer[offset + 0] = 255 & rgb;
-	    buffer[offset + 1] = 255 & rgb;
-	    buffer[offset + 2] = 255 & rgb;
-	    buffer[offset + 3] = 255;
-	    
-	    x++;
-
-	    if (((x + 1) & mask) == 0) {
-	      rgb = ~rgb;
-	    }
-	  }
-
-	  y++;
-
-	  if (((y + 1) & mask) == 0) {
-	    rgb = ~rgb;
-	  }
-	}
-	
-	m_test_texture2d = make_texture2d(make_device_resource_properties(),
-					  image_w,
-					  image_h,
-					  bpp,
-					  buffer);
-					  					  	
-	m_ok_scene = m_test_texture2d.ok();
+      if (ok_semaphores()) {					  					  	
+	m_ok_scene = true;
       }
     }
 
