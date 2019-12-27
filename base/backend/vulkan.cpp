@@ -247,7 +247,7 @@ namespace vulkan {
     create_info.queueFamilyIndexCount = properties.queue_family_indices.size();
     create_info.pQueueFamilyIndices = properties.queue_family_indices.data();
       
-    create_info.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+    create_info.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     ASSERT(image_create_info_valid(properties.physical_device,
 				   create_info));
