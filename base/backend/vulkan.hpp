@@ -1288,7 +1288,9 @@ namespace vulkan {
 	color_blend_state.pAttachments = &color_blend_attach_state;
 
 	auto pipeline_layout = default_pipeline_layout_settings();
-
+	pipeline_layout.setLayoutCount = 1;
+	pipeline_layout.pSetLayouts = &m_test_texture2d.descriptor_set_layout;
+	
 	VK_FN(vkCreatePipelineLayout(m_vk_curr_ldevice, &pipeline_layout, nullptr, &m_vk_pipeline_layout));
 
 	auto colorbuffer = default_colorbuffer_settings(m_vk_khr_swapchain_format.format);
