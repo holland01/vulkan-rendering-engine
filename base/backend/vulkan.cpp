@@ -460,153 +460,155 @@ namespace vulkan {
 				uint32_t height,
 				uint32_t bytes_per_pixel,
 				const darray<uint8_t>& pixels) {
-    
-    VK_FN(vkDeviceWaitIdle(properties.device));
-    
     texture2d_data ret{};
+    
+    if (properties.ok()) {
+      VK_FN(vkDeviceWaitIdle(properties.device));
 
-    image_requirements req = get_image_requirements_texture2d(properties,
-							      width,
-							      height,
-							      bytes_per_pixel,
-							      VK_IMAGE_LAYOUT_PREINITIALIZED);
-
-    if (api_ok() && req.ok()) {
-      VkMemoryAllocateInfo info = {};
+      image_requirements req = get_image_requirements_texture2d(properties,
+								width,
+								height,
+								bytes_per_pixel,
+								VK_IMAGE_LAYOUT_PREINITIALIZED);
       
-      info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-      info.pNext = nullptr;
-      info.allocationSize = req.memory_size();
-      info.memoryTypeIndex = req.memory_type_index;
-
-      VK_FN(vkAllocateMemory(properties.device,
-			     &info,
-			     nullptr,
-			     &ret.memory));      
-    }
-
-    bool mapped = false;
-    if (api_ok() && ret.memory != VK_NULL_HANDLE) {
-      // Note this method of setting the texture
-      // data only works because our device
-      // has capability for what's specified by
-      // k_mem_flags, within get_image_requirements_texture2d()
+      if (api_ok() && req.ok()) {
+	VkMemoryAllocateInfo info = {};
       
-      void* mapped_memory = nullptr;
+	info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	info.pNext = nullptr;
+	info.allocationSize = req.memory_size();
+	info.memoryTypeIndex = req.memory_type_index;
 
-      const size_t memlength =
-	pixels.size() * sizeof(pixels[0]);
-      
-      VK_FN(vkMapMemory(properties.device,
-			ret.memory,
-			0,
-			memlength,
-			0,
-			&mapped_memory));
-
-      if (api_ok() && mapped_memory != nullptr) {
-	memcpy(mapped_memory,
-	       pixels.data(),
-	       memlength);
-
-	vkUnmapMemory(properties.device, ret.memory);
-
-	mapped = true;
+	VK_FN(vkAllocateMemory(properties.device,
+			       &info,
+			       nullptr,
+			       &ret.memory));      
       }
-    }
 
-    if (mapped) {
-      VkImageCreateInfo create_info =
-	default_image_create_info_texture2d(properties);
-
-      create_info.extent.width = width;
-      create_info.extent.height = height;
-      create_info.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-
-      ret.format = create_info.format;
+      bool mapped = false;
+      if (api_ok() && ret.memory != VK_NULL_HANDLE) {
+	// Note this method of setting the texture
+	// data only works because our device
+	// has capability for what's specified by
+	// k_mem_flags, within get_image_requirements_texture2d()
       
-      VK_FN(vkCreateImage(properties.device,
-			  &create_info,
-			  nullptr,
-			  &ret.image));
-    }
+	void* mapped_memory = nullptr;
 
-    bool bound = false;
-    if (api_ok() && ret.image != VK_NULL_HANDLE) {
-      VK_FN(vkBindImageMemory(properties.device,
-			      ret.image,
-			      ret.memory,
-			      0));
-
-      bound = api_ok();
-    }
+	const size_t memlength =
+	  pixels.size() * sizeof(pixels[0]);
       
-    if (bound) {
-      VkImageViewCreateInfo create_info =
-	default_image_view_create_info_texture2d();
+	VK_FN(vkMapMemory(properties.device,
+			  ret.memory,
+			  0,
+			  memlength,
+			  0,
+			  &mapped_memory));
 
-      create_info.image = ret.image;
+	if (api_ok() && mapped_memory != nullptr) {
+	  memcpy(mapped_memory,
+		 pixels.data(),
+		 memlength);
 
-      VK_FN(vkCreateImageView(properties.device,
-			      &create_info,
-			      nullptr,
-			      &ret.image_view));
-    }
+	  vkUnmapMemory(properties.device, ret.memory);
 
-    if (api_ok() && ret.image_view != VK_NULL_HANDLE) {
-      VkSamplerCreateInfo create_info =
-	default_sampler_create_info_texture2d();
+	  mapped = true;
+	}
+      }
 
-      VK_FN(vkCreateSampler(properties.device,
+      if (mapped) {
+	VkImageCreateInfo create_info =
+	  default_image_create_info_texture2d(properties);
+
+	create_info.extent.width = width;
+	create_info.extent.height = height;
+	create_info.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+
+	ret.format = create_info.format;
+      
+	VK_FN(vkCreateImage(properties.device,
 			    &create_info,
 			    nullptr,
-			    &ret.sampler));
-    }
+			    &ret.image));
+      }
 
-    if (api_ok() && ret.sampler != VK_NULL_HANDLE) {
-      VkDescriptorSetLayoutBinding ds_binding = {};
-      ds_binding.binding = 0;
-      ds_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-      ds_binding.descriptorCount = 1;
-      ds_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+      bool bound = false;
+      if (api_ok() && ret.image != VK_NULL_HANDLE) {
+	VK_FN(vkBindImageMemory(properties.device,
+				ret.image,
+				ret.memory,
+				0));
 
-      VkDescriptorSetLayoutCreateInfo create_info = {};
-      create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-      create_info.pNext = nullptr;
-      create_info.flags = 0;                                                      
-      create_info.bindingCount = 1;
-      create_info.pBindings = &ds_binding;
+	bound = api_ok();
+      }
+      
+      if (bound) {
+	VkImageViewCreateInfo create_info =
+	  default_image_view_create_info_texture2d();
 
-      VK_FN(vkCreateDescriptorSetLayout(properties.device,
-					&create_info,
-					nullptr,
-					&ret.descriptor_set_layout));
+	create_info.image = ret.image;
+
+	VK_FN(vkCreateImageView(properties.device,
+				&create_info,
+				nullptr,
+				&ret.image_view));
+      }
+
+      if (api_ok() && ret.image_view != VK_NULL_HANDLE) {
+	VkSamplerCreateInfo create_info =
+	  default_sampler_create_info_texture2d();
+
+	VK_FN(vkCreateSampler(properties.device,
+			      &create_info,
+			      nullptr,
+			      &ret.sampler));
+      }
+
+      if (api_ok() && ret.sampler != VK_NULL_HANDLE) {
+	VkDescriptorSetLayoutBinding ds_binding = {};
+	ds_binding.binding = 0;
+	ds_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	ds_binding.descriptorCount = 1;
+	ds_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	VkDescriptorSetLayoutCreateInfo create_info = {};
+	create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	create_info.pNext = nullptr;
+	create_info.flags = 0;                                                      
+	create_info.bindingCount = 1;
+	create_info.pBindings = &ds_binding;
+
+	VK_FN(vkCreateDescriptorSetLayout(properties.device,
+					  &create_info,
+					  nullptr,
+					  &ret.descriptor_set_layout));
 
       
-    }
+      }
     
-    if (api_ok() && ret.descriptor_set_layout != VK_NULL_HANDLE) {
-      VkDescriptorSetAllocateInfo alloc_info = {};
+      if (api_ok() && ret.descriptor_set_layout != VK_NULL_HANDLE) {
+	VkDescriptorSetAllocateInfo alloc_info = {};
 
-      alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-      alloc_info.pNext = nullptr;
-      alloc_info.descriptorPool = properties.descriptor_pool;
-      alloc_info.descriptorSetCount = 1;
-      alloc_info.pSetLayouts = &ret.descriptor_set_layout;
+	alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	alloc_info.pNext = nullptr;
+	alloc_info.descriptorPool = properties.descriptor_pool;
+	alloc_info.descriptorSetCount = 1;
+	alloc_info.pSetLayouts = &ret.descriptor_set_layout;
 
-      VK_FN(vkAllocateDescriptorSets(properties.device,
-				     &alloc_info,
-				     &ret.descriptor_set));
+	VK_FN(vkAllocateDescriptorSets(properties.device,
+				       &alloc_info,
+				       &ret.descriptor_set));
 				       
+      }
+
+      if (api_ok() && ret.descriptor_set != VK_NULL_HANDLE) {
+	ret.width = width;
+	ret.height = height;
+	ret.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
+      }
+
+      ASSERT(api_ok());
     }
 
-    if (api_ok() && ret.descriptor_set != VK_NULL_HANDLE) {
-      ret.width = width;
-      ret.height = height;
-      ret.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
-    }
-
-    ASSERT(api_ok());
     ASSERT(ret.ok());
 
     return ret;
