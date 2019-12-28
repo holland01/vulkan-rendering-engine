@@ -122,6 +122,14 @@ namespace vulkan {
   
 
   struct texture2d_data {
+    static inline constexpr uint32_t k_binding = 0;
+    static inline constexpr uint32_t k_binding_count = 1;
+    static inline constexpr uint32_t k_array_elem = 0;
+    static inline constexpr uint32_t k_descriptor_count = 1;
+    static inline constexpr VkDescriptorType k_descriptor_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    static inline constexpr VkImageLayout k_initial_layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+    static inline constexpr VkImageLayout k_final_layout = VK_IMAGE_LAYOUT_GENERAL;
+    
     VkSampler sampler{VK_NULL_HANDLE};
     VkImage image{VK_NULL_HANDLE};
     VkImageView image_view{VK_NULL_HANDLE};
@@ -129,6 +137,7 @@ namespace vulkan {
     VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
     VkDescriptorSet descriptor_set{VK_NULL_HANDLE}; // should be allocated from a pool
     VkFormat format{VK_FORMAT_UNDEFINED};
+    VkImageLayout layout{texture2d_data::k_final_layout};
     
     uint32_t width{UINT32_MAX};
     uint32_t height{UINT32_MAX};    
@@ -1153,7 +1162,7 @@ namespace vulkan {
     void setup_descriptor_pool() {
       if (ok_present()) {
 	VkDescriptorPoolSize pool_size = {};
-	pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	pool_size.type = texture2d_data::k_descriptor_type;
 	pool_size.descriptorCount = 1;
 
 	VkDescriptorPoolCreateInfo create_info = {};

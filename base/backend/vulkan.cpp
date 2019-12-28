@@ -247,7 +247,7 @@ namespace vulkan {
     create_info.queueFamilyIndexCount = properties.queue_family_indices.size();
     create_info.pQueueFamilyIndices = properties.queue_family_indices.data();
       
-    create_info.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+    create_info.initialLayout = texture2d_data::k_initial_layout;
 
     ASSERT(image_create_info_valid(properties.physical_device,
 				   create_info));
@@ -469,7 +469,7 @@ namespace vulkan {
 								width,
 								height,
 								bytes_per_pixel,
-								VK_IMAGE_LAYOUT_PREINITIALIZED);
+							        texture2d_data::k_initial_layout);
       
       if (api_ok() && req.ok()) {
 	VkMemoryAllocateInfo info = {};
@@ -520,8 +520,7 @@ namespace vulkan {
 	  default_image_create_info_texture2d(properties);
 
 	create_info.extent.width = width;
-	create_info.extent.height = height;
-	create_info.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+	create_info.extent.height = height;	
 
 	ret.format = create_info.format;
       
@@ -566,7 +565,7 @@ namespace vulkan {
       if (api_ok() && ret.sampler != VK_NULL_HANDLE) {
 	VkDescriptorSetLayoutBinding ds_binding = {};
 	ds_binding.binding = 0;
-	ds_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	ds_binding.descriptorType = texture2d_data::k_descriptor_type;
 	ds_binding.descriptorCount = 1;
 	ds_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -574,7 +573,7 @@ namespace vulkan {
 	create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	create_info.pNext = nullptr;
 	create_info.flags = 0;                                                      
-	create_info.bindingCount = 1;
+	create_info.bindingCount = texture2d_data::k_binding_count;
 	create_info.pBindings = &ds_binding;
 
 	VK_FN(vkCreateDescriptorSetLayout(properties.device,
@@ -604,6 +603,7 @@ namespace vulkan {
 	ret.width = width;
 	ret.height = height;
 	ret.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
+	ret.layout = texture2d_data::k_final_layout;
       }
 
       ASSERT(api_ok());
