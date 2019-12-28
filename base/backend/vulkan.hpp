@@ -85,7 +85,7 @@ namespace vulkan {
       return r;
     }
   };
-
+  
   struct image_requirements {
     VkExtent3D desired{UINT32_MAX, UINT32_MAX, UINT32_MAX};
     VkExtent3D required{UINT32_MAX, UINT32_MAX, UINT32_MAX};
@@ -124,9 +124,7 @@ namespace vulkan {
 	ok_cmp;		    
     }
   };
-
   
-
   struct texture2d_data {
     static inline constexpr uint32_t k_binding = 0;
     static inline constexpr uint32_t k_binding_count = 1;
@@ -229,7 +227,122 @@ namespace vulkan {
     darray<VkPresentModeKHR> present_modes;
   };
 
-  
+  //
+  // The following struct defines a simple
+  // fluent interface for a VkImageMemoryBarrier/VkCommandBuffer
+  // operation.
+  //
+  // ---------------------
+  // WRT image layout transitions
+  // ---------------------
+  // Vulkan requires that images be created
+  // with a particular layout, and then
+  // sampled with a particular layout.
+  //
+  // In a nutshell, the same image must use
+  // different layouts for different tasks.
+  //
+  // In addition, we also must keep track
+  // of synchronization and memory dependencies
+  // that are associated with transitions between
+  // layouts at different pipeline stages.
+  //
+  // For this particular case, we use a pipeline barrier
+  // that is inserted between two stages. These stages
+  // may be different, or they may the same. To resolve
+  // ambiguity, we also expect a before and after
+  // state that is expressed in terms of overall usage of
+  // the memory that we plan to use.
+  //
+  // For example, the state of the image
+  // is not guaranteed unless we explicitly
+  // make it clear that at pipeline stage A
+  // we expect permission set (1) to hold for the image,
+  // and then once we've reached pipeline stage B,
+  // we expect permission set (2) to hold for the image.
+  //
+  // By permission set, we mean the actual accessibility
+  // constraints (read/write capabilities, usage that's associated
+  // with stages, etc.).
+  //
+  // It's also worth noting that pipeline stage B may or may not
+  // come directly after pipeline stage A. We simply know that
+  // it occurs at _some point after_ pipeline stage A. There may
+  // or may not be intermediate pipeline stages A0 -> A1 -> A2 -> ... -> An
+  // that occur before B is hit.
+  //
+  // That's a loose, general definition of the overal concept. In our case,
+  // we're inserting the pipeline barrier somewhere between the very beginning
+  // of the pipeline, and the fragment shader stage.
+  //
+  // At the time of insertion, we communicate to the driver that we do not
+  // expect any particular access capabilities for our image memory.
+  // _After_ the image memory barrier, once we've reached the fragment shader stage,
+  // we _do_, however, require that we can read the image memory within the shader.
+  //
+  // Note that, because we are recording an image layout transition inside of a
+  // command buffer via the memory barrier, we also require a subpass dependency
+  // that's created with the pipeline. This subpass dependency refers to itself,
+  // and is defined as follows:
+  // 
+  //	VkSubpassDependency self_dependency = {};
+  //	self_dependency.srcSubpass = 0;
+  //	self_dependency.dstSubpass = 0;
+  //	self_dependency.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+  //	self_dependency.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  //	self_dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+  //	self_dependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+  //
+  // Currently, our only subpass is the 0th subpass. If additional subpasses
+  // are used, that number is subject to change.
+  struct image_layout_transition {
+    VkImageMemoryBarrier barrier;
+
+    image_layout_transition() {
+      barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+      barrier.pNext = nullptr;
+      barrier.srcAccessMask = 0;
+      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	
+      barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+      barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      barrier.subresourceRange.baseMipLevel = 0;
+      barrier.subresourceRange.levelCount = 1;
+      barrier.subresourceRange.baseArrayLayer = 0;
+      barrier.subresourceRange.layerCount = 1;
+    }
+
+    image_layout_transition& from(VkImageLayout layout) {
+      barrier.oldLayout = layout; return *this;
+    }
+
+    image_layout_transition& to(VkImageLayout layout) {
+      barrier.newLayout = layout; return *this;
+    }
+
+    image_layout_transition& for_image(VkImage image) {
+      barrier.image = image; return *this;
+    }
+
+    image_layout_transition& via(VkCommandBuffer buffer) {       
+      if (api_ok()) {
+	vkCmdPipelineBarrier(buffer,
+			     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			     0,
+			     0,
+			     nullptr,
+			     0,
+			     nullptr,
+			     1,
+			     &barrier);
+			       
+      }
+      return *this;
+    }
+  };
   
   class renderer {
     darray<VkPhysicalDevice> m_vk_physical_devs;
@@ -1419,6 +1532,20 @@ namespace vulkan {
 
 	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+	VkSubpassDependency self_dependency = {};
+	self_dependency.srcSubpass = 0;
+	self_dependency.dstSubpass = 0;
+	self_dependency.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	self_dependency.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	self_dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	self_dependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	std::array<VkSubpassDependency, 2> dependencies =
+	  {
+	   dependency,
+	   self_dependency
+	  };
 	
 	VkRenderPassCreateInfo render_pass_info = {};
 	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1429,8 +1556,8 @@ namespace vulkan {
 	render_pass_info.subpassCount = 1;
 	render_pass_info.pSubpasses = &subpass;
 	
-	render_pass_info.dependencyCount = 1;
-	render_pass_info.pDependencies = &dependency;
+	render_pass_info.dependencyCount = dependencies.size();
+	render_pass_info.pDependencies = dependencies.data();
 
 	VK_FN(vkCreateRenderPass(m_vk_curr_ldevice,
 				 &render_pass_info,
@@ -1551,6 +1678,24 @@ namespace vulkan {
 
 	vkDeviceWaitIdle(m_vk_curr_ldevice);
 
+	run_cmds(
+		 [this](VkCommandBuffer cmd_buf) {
+		   puts("image_layout_transition");
+		   
+		   image_layout_transition().
+		     from(texture2d_data::k_initial_layout).
+		     to(texture2d_data::k_final_layout).
+		     for_image(m_test_texture2d.image).
+		     via(cmd_buf);
+
+		   m_ok_scene = true;
+		 },
+		 [this]() {
+		   puts("run_cmds ERROR");
+		   ASSERT(false);
+		   m_ok_scene = false;
+		 });
+	
 	m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
 	
 	VkCommandBufferAllocateInfo alloc_info = {};
