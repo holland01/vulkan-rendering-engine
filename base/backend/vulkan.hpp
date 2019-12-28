@@ -149,7 +149,7 @@ namespace vulkan {
     uint32_t height{UINT32_MAX};    
 
     bool ok() const {
-      return
+      bool r = 
 	sampler != VK_NULL_HANDLE &&
 	image != VK_NULL_HANDLE &&
 	image_view != VK_NULL_HANDLE &&
@@ -159,11 +159,12 @@ namespace vulkan {
 	format != VK_FORMAT_UNDEFINED &&
 	width != UINT32_MAX &&
 	height != UINT32_MAX;
+      ASSERT(r);
+      return r;
+    }
     }
 
     void free_mem(VkDevice device) {
-      ASSERT(ok());
-      
       VK_FN(vkDeviceWaitIdle(device));
 
       if (api_ok()) {
@@ -187,7 +188,11 @@ namespace vulkan {
     std::optional<uint32_t> present_family{};
 
     bool ok() const {
-      return graphics_family.has_value() && present_family.has_value();
+      bool r =
+	graphics_family.has_value() &&
+	present_family.has_value();
+      ASSERT(r);
+      return r;
     }
   };
 
