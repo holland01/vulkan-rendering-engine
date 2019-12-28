@@ -22,6 +22,24 @@ namespace vulkan {
     return g_vk_result == VK_SUCCESS;
   }
 
+  std::string to_string(VkExtent3D e) {
+    std::stringstream ss;
+    ss << "(" << e.width << ", " << e.height << ", " << e.depth << ")";
+    return ss.str();
+  }
+
+  std::string to_string(const image_requirements& r) {
+    std::stringstream ss;
+
+    ss << "image_requirements\n"
+       << "...desired = " << to_string(r.desired) << "\n"
+       << "...required = " << to_string(r.required) << "\n"
+       << "...bytes_per_pixel =" << r.bytes_per_pixel << "\n"
+       << "...memory_type_index = " << r.memory_type_index;
+    
+    return ss.str();  
+  }
+
   VkPipelineVertexInputStateCreateInfo default_vertex_input_state_settings() {
     VkPipelineVertexInputStateCreateInfo vinput_info = {};
     vinput_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;

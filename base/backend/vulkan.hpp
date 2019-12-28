@@ -35,6 +35,11 @@ namespace vulkan {
 
   bool api_ok();
 
+  struct image_requirements;
+  
+  std::string to_string(VkExtent3D e);
+  std::string to_string(const image_requirements& r);
+  
   VkPipelineVertexInputStateCreateInfo default_vertex_input_state_settings();
   VkPipelineInputAssemblyStateCreateInfo default_input_assembly_state_settings();
   VkPipelineViewportStateCreateInfo default_viewport_state_settings();
