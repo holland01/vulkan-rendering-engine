@@ -162,6 +162,33 @@ namespace vulkan {
       ASSERT(r);
       return r;
     }
+
+    VkDescriptorImageInfo make_descriptor_image_info() const {
+      VkDescriptorImageInfo ret = {};
+      if (ok()) {
+	ret.sampler = sampler;
+	ret.imageView = image_view;
+	ret.imageLayout = layout;
+      }
+      return ret;
+    }
+    
+    
+    VkWriteDescriptorSet make_write_descriptor_set(const VkDescriptorImageInfo* image_info) const {
+      VkWriteDescriptorSet ret = {};
+      if (ok()) {
+	ret.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	ret.pNext = nullptr;
+	ret.dstSet = descriptor_set;
+	ret.dstBinding = k_binding;
+	ret.dstArrayElement = k_array_elem;
+	ret.descriptorCount = k_descriptor_count;
+	ret.descriptorType = k_descriptor_type;
+	ret.pImageInfo = image_info;
+	ret.pBufferInfo = nullptr;
+	ret.pTexelBufferView = nullptr;
+      }
+      return ret;
     }
 
     void free_mem(VkDevice device) {
@@ -1489,8 +1516,41 @@ namespace vulkan {
       }      
     }
 
+    // ---------------------
+    // WRT descriptor sets
+    // ---------------------
+    // The descriptor set must be associated with an image for us
+    // to sample it in the fragment shader.
+    //
+    // The call to vkUpdateDescriptorSets() handles this portion,
+    // and we have to make this call before any command buffers
+    // that rely on the association itself are used.
+    //
+    // In the command buffer, it's necessary that we bind our
+    // graphics pipeline to the command buffer _before_ any other
+    // pipeline-specific commands are performed.
+    //
+    // The one pipeline specific command that matters here is
+    // the call to vkCmdBindDescriptorSets(), which
+    // associates the descriptor set with the descriptor
+    // set layout that was associated with the
+    // pipeline layout created earlier.
     void setup_command_buffers() {
       if (ok_command_pool()) {
+	VkDescriptorImageInfo image_info =
+	  m_test_texture2d.make_descriptor_image_info();
+
+	VkWriteDescriptorSet write_desc_set =
+	  m_test_texture2d.make_write_descriptor_set(&image_info);
+
+	vkUpdateDescriptorSets(m_vk_curr_ldevice,
+			       1,
+			       &write_desc_set,
+			       0,
+			       nullptr);
+
+	vkDeviceWaitIdle(m_vk_curr_ldevice);
+
 	m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
 	
 	VkCommandBufferAllocateInfo alloc_info = {};
@@ -1505,7 +1565,6 @@ namespace vulkan {
 
 	VkDeviceSize vertex_buffer_ofs = 0;
 	
-	
         while (i < m_vk_command_buffers.size() && ok()) {
 	  VkCommandBufferBeginInfo begin_info = {};
 	  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1515,6 +1574,10 @@ namespace vulkan {
 	  VK_FN(vkBeginCommandBuffer(m_vk_command_buffers[i], &begin_info));	  
 	  
 	  if (ok()) {
+	    vkCmdBindPipeline(m_vk_command_buffers[i],
+			      VK_PIPELINE_BIND_POINT_GRAPHICS,
+			      m_vk_graphics_pipeline);
+	    
 	    vkCmdBindVertexBuffers(m_vk_command_buffers[i],
 				   0,
 				   1,
@@ -1527,6 +1590,14 @@ namespace vulkan {
 			      sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
 			      m_vertex_buffer_vertices.data());
 
+	    vkCmdBindDescriptorSets(m_vk_command_buffers[i],
+				    VK_PIPELINE_BIND_POINT_GRAPHICS,
+				    m_vk_pipeline_layout,
+				    0,
+				    1,
+				    &m_test_texture2d.descriptor_set,
+				    0,
+				    nullptr);
 	    
 	    VkRenderPassBeginInfo render_pass_info = {};
 	    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1547,9 +1618,7 @@ namespace vulkan {
 				 &render_pass_info,
 				 VK_SUBPASS_CONTENTS_INLINE);
 
-	    vkCmdBindPipeline(m_vk_command_buffers[i],
-			      VK_PIPELINE_BIND_POINT_GRAPHICS,
-			      m_vk_graphics_pipeline);
+
 	    
 	    vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
 
