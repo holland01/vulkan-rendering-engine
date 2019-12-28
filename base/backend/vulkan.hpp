@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <iomanip>
 #include <iostream>
+#include <functional>
 
 #define VK_FN(expr)						\
   do {								\
@@ -906,6 +907,55 @@ namespace vulkan {
 	    m_ok_vertex_buffer = true;
 	  }
 	}
+      }
+    }
+
+    void run_cmds(std::function<void(VkCommandBuffer cmd_buffer)> f,
+		  std::function<void()> err_fn) {
+      
+      VkCommandBufferAllocateInfo alloc_info = {};
+      alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+      alloc_info.commandPool = m_vk_command_pool;
+      alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+      alloc_info.commandBufferCount = 1;
+
+      VkCommandBuffer cmd_buffer{VK_NULL_HANDLE};	
+      VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice,
+				     &alloc_info,
+				     &cmd_buffer));
+
+      
+
+      if (cmd_buffer != VK_NULL_HANDLE) {
+	if (ok()) {
+	  VkCommandBufferBeginInfo begin_info = {};
+	  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	  vkBeginCommandBuffer(cmd_buffer, &begin_info);
+
+	  f(cmd_buffer);
+	  
+	  vkEndCommandBuffer(cmd_buffer);
+
+	  VkSubmitInfo submit_info = {};
+	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	  submit_info.commandBufferCount = 1;
+	  submit_info.pCommandBuffers = &cmd_buffer;
+
+	  VK_FN(vkQueueSubmit(m_vk_graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+	  VK_FN(vkQueueWaitIdle(m_vk_graphics_queue));
+	}
+	else if (err_fn) {
+	  err_fn();
+	}
+
+        vkFreeCommandBuffers(m_vk_curr_ldevice,
+			     m_vk_command_pool,
+			     1,
+			     &cmd_buffer);
+      }
+      else if (err_fn) {
+	err_fn();
       }
     }
 
