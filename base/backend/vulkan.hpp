@@ -357,10 +357,10 @@ namespace vulkan {
     
     texture2d_data m_test_texture2d{};
 
-    std::array<float, 9> m_vertex_buffer_vertices{
-             0.0f, -0.5, 0.0f,
-	     0.5f, 0.5f, 0.0f,
-            -0.5f, 0.5f, 0.0f
+    std::array<float, 15> m_vertex_buffer_vertices{
+						   -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // top left position, top left texture
+						   0.5f, 0.5f, 0.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
+						   -0.5f, 0.5f, 0.0f, 0.0f, 1.0f
     };
     
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
@@ -1439,8 +1439,8 @@ namespace vulkan {
 	//
 	// create shader programs
 	// 
-	auto spv_vshader = read_file("resources/shaders/triangle2.vert.spv");
-	auto spv_fshader = read_file("resources/shaders/triangle.frag.spv");
+	auto spv_vshader = read_file("resources/shaders/tex_triangle.vert.spv");
+	auto spv_fshader = read_file("resources/shaders/tex_triangle.frag.spv");
 
 	ASSERT(!spv_vshader.empty());
 	ASSERT(!spv_fshader.empty());
@@ -1474,17 +1474,29 @@ namespace vulkan {
 	iad_position.format = VK_FORMAT_R32G32B32_SFLOAT;
 	iad_position.offset = 0;
 
+	VkVertexInputAttributeDescription iad_texture = {};
+	iad_texture.location = 1;
+	iad_texture.binding = 0;
+	iad_texture.format = VK_FORMAT_R32G32_SFLOAT;
+	iad_texture.offset = sizeof(float) * 3;
+
+	std::array<VkVertexInputAttributeDescription, 2> input_attrs =
+	  {
+	   iad_position,
+	   iad_texture
+	  };
+
+	vertex_input_state.vertexAttributeDescriptionCount = input_attrs.size();
+	vertex_input_state.pVertexAttributeDescriptions = input_attrs.data();
+	
 	VkVertexInputBindingDescription ibd = {};
 	ibd.binding = 0;
-	ibd.stride = sizeof(float) * 3;
+	ibd.stride = sizeof(float) * 3 + sizeof(float) * 2;
 	ibd.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 	vertex_input_state.vertexBindingDescriptionCount = 1;
 	vertex_input_state.pVertexBindingDescriptions = &ibd;
-	vertex_input_state.vertexAttributeDescriptionCount = 1;
-	vertex_input_state.pVertexAttributeDescriptions = &iad_position;
-
-	
+		
 	auto input_assembly_state = default_input_assembly_state_settings();
 
 	
