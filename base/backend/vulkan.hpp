@@ -405,6 +405,7 @@ namespace vulkan {
     bool m_ok_command_buffers{false};
     bool m_ok_semaphores{false};
     bool m_ok_scene{false};
+   
     
     struct vk_layer_info {
       const char* name{nullptr};
@@ -1388,8 +1389,7 @@ namespace vulkan {
 	uint32_t image_w = 256;
 	uint32_t image_h = 256;
 
-	uint32_t y = 0;
-	uint32_t x = 0;
+
 	uint32_t bpp = 4;
 
 	darray<uint8_t> buffer(image_w * image_h * bpp, 0);
@@ -1397,8 +1397,10 @@ namespace vulkan {
 	uint8_t rgb = 0;
 
 	uint32_t mask = 7;
-	
+
+	uint32_t y = 0;
 	while (y < image_h) {
+	  uint32_t x = 0;
 	  while (x < image_w) {
 	    uint32_t offset = (y * image_w + x) * bpp;
 	    
@@ -1426,7 +1428,7 @@ namespace vulkan {
 					  image_h,
 					  bpp,
 					  buffer);
-
+	
 	m_ok_texture_data = m_test_texture2d.ok();
       }
     }
@@ -1463,7 +1465,6 @@ namespace vulkan {
 	   vshader_create,
 	   fshader_create
 	  };
-
 
 	auto vertex_input_state = default_vertex_input_state_settings();
 
