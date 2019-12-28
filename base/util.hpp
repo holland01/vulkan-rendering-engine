@@ -31,6 +31,11 @@ enum {
 
 #define write_logf(...) logf_impl(__LINE__, __func__, __FILE__, __VA_ARGS__) 
 
+#define LOGFN puts(__func__)
+
+#define LOGI32(x) printf("%s = %" PRId32 "\n", #x, x)
+#define LOGP(x) printf("%s = %p\n", #x, static_cast<void*>(x))
+
 #define CLOG(flag, ...) do { if ((g_log_mask & (flag)) != 0) { write_logf("CLOG|" __VA_ARGS__); } } while (0)
 #define CLOG_CODE(code) code
 
