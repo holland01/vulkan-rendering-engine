@@ -7,10 +7,10 @@
 
 #pragma once
 
-#if defined(BASE_ENABLE_VULKAN)
-
 #include "common.hpp"
 #include "device_context.hpp"
+
+#include "vk_common.hpp"
 
 #include <optional>
 #include <set>
@@ -20,26 +20,8 @@
 #include <iostream>
 #include <functional>
 
-#define VK_FN(expr)						\
-  do {								\
-    if (api_ok()) {						\
-      g_vk_result = vk_call((expr), #expr, __LINE__, __FILE__);	\
-    }								\
-  } while (0)
-
-#define VK_ZERO_STRUCT(stack_variable) memset(&(stack_variable), 0, sizeof(stack_variable))
-
 namespace vulkan {
-  extern VkResult g_vk_result;
-  
-  VkResult vk_call(VkResult call, const char* expr, int line, const char* file);
-
-  bool api_ok();
-
   struct image_requirements;
-  
-  std::string to_string(VkExtent3D e);
-  std::string to_string(const image_requirements& r);
   
   VkPipelineVertexInputStateCreateInfo default_vertex_input_state_settings();
   VkPipelineInputAssemblyStateCreateInfo default_input_assembly_state_settings();
@@ -54,77 +36,10 @@ namespace vulkan {
 
   VkAttachmentReference default_colorbuffer_ref_settings();
   
-  VkViewport make_viewport(vec2_t origin, VkExtent2D dim, float depthmin, float depthmax);
-  
   VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code);
 
-  VkPipelineShaderStageCreateInfo make_shader_stage_settings(VkShaderModule module, VkShaderStageFlagBits type);
-
-    // Find _a_ memory in `memory_type_bits_req` that includes all of `req_properties`
-  int32_t find_memory_properties(const VkPhysicalDeviceMemoryProperties* memory_properties,
-				 uint32_t memory_type_bits_req,
-				 VkMemoryPropertyFlags req_properties);
-
-
-  struct device_resource_properties {
-    darray<uint32_t> queue_family_indices;
-    VkPhysicalDevice physical_device{VK_NULL_HANDLE};
-    VkDevice device{VK_NULL_HANDLE};
-    VkSharingMode queue_sharing_mode{VK_SHARING_MODE_EXCLUSIVE};
-    VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};
-
-    bool ok() const {
-      bool r =
-	!queue_family_indices.empty() &&
-	physical_device != VK_NULL_HANDLE &&
-	device != VK_NULL_HANDLE &&
-	descriptor_pool != VK_NULL_HANDLE;
-
-      ASSERT(r);
-      
-      return r;
-    }
-  };
-  
-  struct image_requirements {
-    VkExtent3D desired{UINT32_MAX, UINT32_MAX, UINT32_MAX};
-    VkExtent3D required{UINT32_MAX, UINT32_MAX, UINT32_MAX};
-    uint32_t bytes_per_pixel{UINT32_MAX};
-    uint32_t memory_type_index{UINT32_MAX};
-
-    VkDeviceSize memory_size() const {
-      ASSERT(ok());
-      
-      return
-	static_cast<VkDeviceSize>((bytes_per_pixel * required.width * required.height) *
-				  required.depth);
-    }
+  VkPipelineShaderStageCreateInfo make_shader_stage_settings(VkShaderModule module, VkShaderStageFlagBits type);  
     
-    bool ok() const {
-      const bool ok_desired =
-	desired.width != UINT32_MAX &&
-	desired.height != UINT32_MAX &&
-	desired.depth != UINT32_MAX;
-      
-      const bool ok_required =
-	required.width != UINT32_MAX &&
-	required.height != UINT32_MAX &&
-	required.depth != UINT32_MAX;
-
-      const bool ok_cmp =
-	desired.width <= required.width &&
-	desired.height <= required.height &&
-	desired.depth <= required.depth;
-
-      return
-	(bytes_per_pixel <= 4) &&
-	(memory_type_index < 32) &&
-	ok_desired &&
-	ok_required &&
-	ok_cmp;		    
-    }
-  };
-  
   struct texture2d_data {
     static inline constexpr uint32_t k_binding = 0;
     static inline constexpr uint32_t k_binding_count = 1;
@@ -170,7 +85,6 @@ namespace vulkan {
       }
       return ret;
     }
-    
     
     VkWriteDescriptorSet make_write_descriptor_set(const VkDescriptorImageInfo* image_info) const {
       VkWriteDescriptorSet ret = {};
@@ -405,8 +319,7 @@ namespace vulkan {
     bool m_ok_command_buffers{false};
     bool m_ok_semaphores{false};
     bool m_ok_scene{false};
-   
-    
+       
     struct vk_layer_info {
       const char* name{nullptr};
       bool enable{false};
@@ -1498,7 +1411,6 @@ namespace vulkan {
 	vertex_input_state.pVertexBindingDescriptions = &ibd;
 		
 	auto input_assembly_state = default_input_assembly_state_settings();
-
 	
 	auto viewport = make_viewport(R2(0), m_vk_swapchain_extent, 0.0f, 1.0f);
 	
@@ -1515,7 +1427,6 @@ namespace vulkan {
 	auto rasterization_state = default_rasterization_state_settings();
 
 	auto multisample_state = default_multisample_state_settings();
-
 	
 	auto color_blend_attach_state = default_color_blend_attach_state_settings();
 	auto color_blend_state = default_color_blend_state_settings();
@@ -1769,7 +1680,7 @@ namespace vulkan {
 	    // for the color attachment's VK_ATTACHMENT_LOAD_OP_CLEAR
 	    // operation
 	    render_pass_info.clearValueCount = 1;
-	    VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+	    VkClearValue clear_color = { 1.0f, 0.0f, 0.0f, 1.0f };
 	    render_pass_info.pClearValues = &clear_color;
 
 	    vkCmdBeginRenderPass(m_vk_command_buffers[i],
@@ -1781,6 +1692,7 @@ namespace vulkan {
 	    vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
 
 	    vkCmdEndRenderPass(m_vk_command_buffers[i]);
+
 	    VK_FN(vkEndCommandBuffer(m_vk_command_buffers[i]));
 	  }
 
@@ -1814,8 +1726,12 @@ namespace vulkan {
       }
     }
 
+
     void setup_scene() {
-      if (ok_semaphores()) {					  					  	
+      if (ok_semaphores()) {
+
+
+	
 	m_ok_scene = true;
       }
     }
@@ -1975,5 +1891,3 @@ namespace vulkan {
     }
   };
 }
-
-#endif // BASE_ENABLE_VULKAN

@@ -1,45 +1,10 @@
 #include "vulkan.hpp"
+#include "vk_pipeline.hpp"
+#include "vk_uniform_buffer.hpp"
 
 #define BASE_TEXTURE2D_DEFAULT_VK_FORMAT VK_FORMAT_R8G8B8A8_UNORM
 
 namespace vulkan {
-
-  VkResult g_vk_result = VK_SUCCESS;
-
-  VkResult vk_call(VkResult call, const char* expr, int line, const char* file) {
-    if (call != VK_SUCCESS) {
-      write_logf("VULKAN ERROR: %s@%s:%i -> 0x%x (%" PRId32 ")\n", 
-                 expr, 
-                 file, 
-                 line, 
-                 call,
-		 call);
-    }
-    return call;
-  }
-  
-  bool api_ok() {
-    return g_vk_result == VK_SUCCESS;
-  }
-
-  std::string to_string(VkExtent3D e) {
-    std::stringstream ss;
-    ss << "(" << e.width << ", " << e.height << ", " << e.depth << ")";
-    return ss.str();
-  }
-
-  std::string to_string(const image_requirements& r) {
-    std::stringstream ss;
-
-    ss << "image_requirements\n"
-       << "...desired = " << to_string(r.desired) << "\n"
-       << "...required = " << to_string(r.required) << "\n"
-       << "...bytes_per_pixel =" << r.bytes_per_pixel << "\n"
-       << "...memory_type_index = " << r.memory_type_index;
-    
-    return ss.str();  
-  }
-
   VkPipelineVertexInputStateCreateInfo default_vertex_input_state_settings() {
     VkPipelineVertexInputStateCreateInfo vinput_info = {};
     vinput_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -165,17 +130,6 @@ namespace vulkan {
     return attachment_ref;
   }
 
-  VkViewport make_viewport(vec2_t origin, VkExtent2D dim, float depthmin, float depthmax) {
-    VkViewport viewport = {};
-    viewport.x = origin.x;
-    viewport.y = origin.y;
-    viewport.width = dim.width;
-    viewport.height = dim.height;
-    viewport.minDepth = depthmin;
-    viewport.maxDepth = depthmax;
-    return viewport;
-  }
-
   VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code) {
     VkShaderModuleCreateInfo module_create_info = {};
     module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -194,31 +148,6 @@ namespace vulkan {
   }
 
   
-  // Find _a_ memory in `memory_type_bits_req` that includes all of `req_properties`
-  int32_t find_memory_properties(const VkPhysicalDeviceMemoryProperties* memory_properties,
-				 uint32_t memory_type_bits_req,
-				 VkMemoryPropertyFlags req_properties) {
-    const uint32_t memory_count = memory_properties->memoryTypeCount;
-    uint32_t memory_index = 0;
-    int32_t ret_val = -1;
-
-    while (memory_index < memory_count && ret_val == -1) {
-      const uint32_t type_bits = 1 << memory_index;
-
-      if ((type_bits & memory_type_bits_req) != 0) {
-	const VkMemoryPropertyFlags properties =
-	  memory_properties->memoryTypes[memory_index].propertyFlags;
-
-	if ((properties & req_properties) == req_properties) {
-	  ret_val = static_cast<int32_t>(memory_index);
-	}
-      }
-
-      memory_index++;
-    }
-
-    return ret_val;
-  }
 
   // We will not call vkGetPhysicalDeviceImageFormatProperties()
   // if g_vk_result is not equal to VK_SUCCESS beforehand. We may as well
@@ -387,6 +316,10 @@ namespace vulkan {
     return ext;
   }
 
+  // gets allocation requirements
+  // for a given width/height/bpp/image layout combination,
+  // while also verifying compatibility with these parameters,
+  // in addition to our chosen image format.
   static 
   image_requirements get_image_requirements_texture2d(const device_resource_properties& properties,
 						      uint32_t width,
@@ -478,6 +411,7 @@ namespace vulkan {
 				uint32_t height,
 				uint32_t bytes_per_pixel,
 				const darray<uint8_t>& pixels) {
+    
     texture2d_data ret{};
     
     if (properties.ok()) {
@@ -488,6 +422,9 @@ namespace vulkan {
 								height,
 								bytes_per_pixel,
 							        texture2d_data::k_initial_layout);
+
+      auto reqstr = to_string(req);
+      write_logf("%s", reqstr.c_str());
       
       if (api_ok() && req.ok()) {
 	VkMemoryAllocateInfo info = {};
@@ -613,8 +550,7 @@ namespace vulkan {
 
 	VK_FN(vkAllocateDescriptorSets(properties.device,
 				       &alloc_info,
-				       &ret.descriptor_set));
-				       
+				       &ret.descriptor_set));				       
       }
 
       if (api_ok() && ret.descriptor_set != VK_NULL_HANDLE) {
@@ -628,7 +564,7 @@ namespace vulkan {
     }
 
     ASSERT(ret.ok());
-
+    
     return ret;
   }
 
