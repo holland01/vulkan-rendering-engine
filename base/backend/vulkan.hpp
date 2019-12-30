@@ -258,6 +258,11 @@ namespace vulkan {
       return *this;
     }
   };
+
+  struct transform_data {
+    mat4_t view_to_clip{R(1.0)};
+    mat4_t world_to_view{R(1.0)};
+  };
   
   class renderer {
     std::unique_ptr<uniform_block_pool> m_uniform_block_pool{nullptr};
@@ -274,13 +279,13 @@ namespace vulkan {
     
     texture2d_data m_test_texture2d{};
 
-    uniform_block_data<mat4_t> m_vertex_uniform_block{};
+    uniform_block_data<transform_data> m_vertex_uniform_block{};
     
     std::array<float, 15> m_vertex_buffer_vertices
       {
-       -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // top left position, top left texture
-       0.5f, 0.5f, 0.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
-       -0.5f, 0.5f, 0.0f, 0.0f, 1.0f
+       -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, // top left position, top left texture
+       0.5f, -0.5f, 0.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
+       -0.5f, -0.5f, 0.0f, 0.0f, 1.0f
       };
     
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
@@ -1321,10 +1326,6 @@ namespace vulkan {
     void setup_uniform_block_data() {
       if (ok_descriptor_pool()) {
 	m_uniform_block_pool.reset(new uniform_block_pool{make_device_resource_properties()});
-
-	m_vertex_uniform_block.data = mat4_t(R(1));
-	m_vertex_uniform_block.data[0][0] = 0.5;
-	m_vertex_uniform_block.data[1][1] = 0.5;
 	
 	m_vertex_uniform_block.index =
 	  m_uniform_block_pool->add(&m_vertex_uniform_block.data,
@@ -1739,8 +1740,6 @@ namespace vulkan {
 	    vkCmdBeginRenderPass(m_vk_command_buffers[i],
 				 &render_pass_info,
 				 VK_SUBPASS_CONTENTS_INLINE);
-
-
 	    
 	    vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
 
@@ -1779,7 +1778,6 @@ namespace vulkan {
       }
     }
 
-
     void setup_scene() {
       if (ok_semaphores()) {
 
@@ -1803,8 +1801,19 @@ namespace vulkan {
       setup_scene();
     }
 
+    void set_world_to_view_transform(const mat4_t& w2v) {
+      m_vertex_uniform_block.data.world_to_view = w2v;
+    }
+
+    void set_view_to_clip_transform(const mat4_t& v2c) {
+      m_vertex_uniform_block.data.view_to_clip = v2c;
+    }
+
     void render() {
       if (ok_scene()) {
+	m_uniform_block_pool->update_block(m_vertex_uniform_block.index);
+	VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
+	
 	constexpr uint64_t k_timeout_ns = 10000000000; // 10 seconds
 	uint32_t image_index = UINT32_MAX;
 	

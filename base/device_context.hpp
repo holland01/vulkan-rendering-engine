@@ -109,6 +109,9 @@ public:
             printf("Glew ERROR: %s\n", glewGetErrorString(init_result));
           }
         }
+	else {
+	  success = true;
+	}
 
         if (success) {
           glfwSetKeyCallback(glfw_window, key_callback);

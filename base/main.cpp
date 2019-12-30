@@ -62,6 +62,8 @@ bool modules::init() {
   device_ctx = new device_context();
   
   if (device_ctx->init(SCREEN_WIDTH, SCREEN_HEIGHT)) {
+    view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
+    
     if (g_conf.api_backend == gapi::backend::opengl) {
       gpu = new gapi::device();
 
@@ -72,7 +74,7 @@ bool modules::init() {
       models = new module_models();
       geom = new module_geom();
 
-      view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
+
       graph = new scene_graph();
 
       uniform_store = new shader_uniform_storage();
@@ -107,6 +109,7 @@ void modules::free() {
     } break;
       
     case gapi::backend::vulkan:
+      delete view;
       break;
     }
   }
@@ -1242,12 +1245,18 @@ void render_loop_triangle::init() {
   }
     
   if (m_renderer.ok_semaphores()) {
+    g_m.view->reset_proj();
     post_init();
   }
 }
 
 void render_loop_triangle::update() {
   glfwPollEvents();
+  
+  g_m.view->update(g_cam_move_state);
+
+  m_renderer.set_world_to_view_transform(g_m.view->view());
+  m_renderer.set_view_to_clip_transform(g_m.view->proj);
 }
 
 void render_loop_triangle::render() {

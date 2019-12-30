@@ -19,6 +19,7 @@ namespace vulkan {
     darray<VkDescriptorSet> m_descriptor_sets{};
     darray<VkDeviceMemory> m_device_memories{};
     darray<VkBuffer> m_buffers{};
+    darray<void*> m_user_ptrs{};
 
     device_resource_properties m_resource_props;
     
@@ -34,6 +35,8 @@ namespace vulkan {
       m_descriptor_sets.push_back(VK_NULL_HANDLE);
       m_device_memories.push_back(VK_NULL_HANDLE);
       m_buffers.push_back(VK_NULL_HANDLE);
+
+      m_user_ptrs.push_back(nullptr);
 
       return i;
     }
@@ -104,10 +107,31 @@ namespace vulkan {
       return set;
     }
 
+    void write_device_memory(VkDeviceMemory memory, void* data, VkDeviceSize size) const {
+      void* mapped_memory = nullptr;
+
+      VK_FN(vkMapMemory(m_resource_props.device,
+			memory,
+			0,
+			size,
+			0,
+			&mapped_memory));
+
+      ASSERT(mapped_memory != nullptr);
+      ASSERT(api_ok());
+      
+      if (api_ok() && mapped_memory != nullptr) {
+	memcpy(mapped_memory, data, size);
+
+	vkUnmapMemory(m_resource_props.device,
+		      memory);
+      }
+    }
+    
     VkDeviceMemory make_device_memory(void* data,
 				      VkDeviceSize size,
 				      VkDeviceSize alloc_size,
-				      uint32_t index) {
+				      uint32_t index) const {
       VkDeviceMemory memory{VK_NULL_HANDLE};
       VkMemoryAllocateInfo info = {};
       
@@ -122,21 +146,7 @@ namespace vulkan {
 			     &memory));
 
       if (api_ok() && memory != VK_NULL_HANDLE) {
-	void* mapped_memory = nullptr;
-
-        VK_FN(vkMapMemory(m_resource_props.device,
-			  memory,
-			  0,
-			  size,
-			  0,
-			  &mapped_memory));
-
-	if (api_ok() && mapped_memory != nullptr) {
-	  memcpy(mapped_memory, data, size);
-
-	  vkUnmapMemory(m_resource_props.device,
-			memory);
-	}
+	write_device_memory(memory, data, size);
       }
 
       return memory;
@@ -257,7 +267,9 @@ namespace vulkan {
 	m_descriptor_set_layouts[which] = VK_NULL_HANDLE;
 	m_buffers[which] = VK_NULL_HANDLE;
 	m_descriptor_sets[which] = VK_NULL_HANDLE;
-
+	
+	m_user_ptrs[which] = nullptr;
+	
 	m_binding_indices[which] = num_max<uint32_t>();
 	m_dev_sizes[which] = num_max<VkDeviceSize>();
 	m_user_sizes[which] = num_max<uint32_t>();
@@ -349,6 +361,8 @@ namespace vulkan {
 	m_descriptor_sets[ret] = descset;
 	m_device_memories[ret] = device_memory;
 	m_buffers[ret] = buffer;
+
+	m_user_ptrs[ret] = block_data;
       }
       
       ASSERT(ret != k_unset);
@@ -374,6 +388,14 @@ namespace vulkan {
 	ret = m_descriptor_set_layouts.at(which);
       }
       return ret;
+    }
+
+    void update_block(index_type which) const {
+      if (ok_index(which)) {
+	write_device_memory(m_device_memories.at(which),
+			    m_user_ptrs.at(which),
+			    static_cast<VkDeviceSize>(m_user_sizes.at(which)));
+      }
     }
   };
 
