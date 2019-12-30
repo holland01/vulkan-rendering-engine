@@ -42,7 +42,7 @@
 #include <sstream>
 #include <iomanip>
 #include <array>
-
+#include <functional>
 #include <stdint.h>
 
 #include "util.hpp"
@@ -303,4 +303,18 @@ static inline intType next_power_2(const intType& x) {
 template <class intType>
 static inline bool is_power_2(const intType& x) {
   return x == next_power_2(x);
+}
+
+template <class numType>
+static constexpr inline numType num_max() {
+  return std::numeric_limits<numType>::max();
+}
+
+template <class intType, class structType, template <class T> class containerType>
+static intType sum(const containerType<structType>& v, std::function<intType (const structType&)> f) {
+  intType k = intType(0);
+  for (const auto& u: v) {
+    k += f(u);
+  }
+  return k;
 }

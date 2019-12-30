@@ -11,6 +11,7 @@
 #include "device_context.hpp"
 
 #include "vk_common.hpp"
+#include "vk_uniform_buffer.hpp"
 
 #include <optional>
 #include <set>
@@ -259,6 +260,8 @@ namespace vulkan {
   };
   
   class renderer {
+    std::unique_ptr<uniform_block_pool> m_uniform_block_pool{nullptr};
+    
     darray<VkPhysicalDevice> m_vk_physical_devs;
 
     darray<VkImage> m_vk_swapchain_images;
@@ -271,11 +274,14 @@ namespace vulkan {
     
     texture2d_data m_test_texture2d{};
 
-    std::array<float, 15> m_vertex_buffer_vertices{
-						   -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // top left position, top left texture
-						   0.5f, 0.5f, 0.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
-						   -0.5f, 0.5f, 0.0f, 0.0f, 1.0f
-    };
+    uniform_block_data<mat4_t> m_vertex_uniform_block{};
+    
+    std::array<float, 15> m_vertex_buffer_vertices
+      {
+       -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // top left position, top left texture
+       0.5f, 0.5f, 0.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
+       -0.5f, 0.5f, 0.0f, 0.0f, 1.0f
+      };
     
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
@@ -311,6 +317,7 @@ namespace vulkan {
 
     bool m_ok_present{false};
     bool m_ok_descriptor_pool{false};
+    bool m_ok_uniform_block_data{false};
     bool m_ok_texture_data{false};
     bool m_ok_graphics_pipeline{false};
     bool m_ok_vertex_buffer{false};
@@ -319,6 +326,7 @@ namespace vulkan {
     bool m_ok_command_buffers{false};
     bool m_ok_semaphores{false};
     bool m_ok_scene{false};
+    
        
     struct vk_layer_info {
       const char* name{nullptr};
@@ -1065,6 +1073,12 @@ namespace vulkan {
       return r;
     }
 
+    bool ok_uniform_block_data() const {
+      bool r = ok() && m_ok_uniform_block_data;
+      ASSERT(r);
+      return r;
+    }
+    
     bool ok_texture_data() const {
       bool r = ok() && m_ok_texture_data;
       ASSERT(r);
@@ -1272,20 +1286,28 @@ namespace vulkan {
 	m_ok_present = true;
       }
     }
-
+    
     void setup_descriptor_pool() {
-      if (ok_present()) {
-	VkDescriptorPoolSize pool_size = {};
-	pool_size.type = texture2d_data::k_descriptor_type;
-	pool_size.descriptorCount = 1;
+      if (ok_present()) {       
+	std::vector<VkDescriptorPoolSize> pool_sizes =
+	  {
+	   // type, descriptorCount
+	   { texture2d_data::k_descriptor_type, 1 },
+	   { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 }
+	  };
 
+	uint32_t max_sets = sum<uint32_t,
+				VkDescriptorPoolSize>(pool_sizes,
+						      [](const VkDescriptorPoolSize& x) -> uint32_t
+						      { return x.descriptorCount; });
+	
 	VkDescriptorPoolCreateInfo create_info = {};
 	create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	create_info.pNext = nullptr;
 	create_info.flags = 0;
-	create_info.maxSets = 1;
-	create_info.poolSizeCount = 1;
-	create_info.pPoolSizes = &pool_size;
+	create_info.maxSets = max_sets;
+	create_info.poolSizeCount = pool_sizes.size();
+	create_info.pPoolSizes = pool_sizes.data();
 
 	VK_FN(vkCreateDescriptorPool(m_vk_curr_ldevice,
 				     &create_info,
@@ -1296,8 +1318,27 @@ namespace vulkan {
       }
     }
 
-    void setup_texture_data() {
+    void setup_uniform_block_data() {
       if (ok_descriptor_pool()) {
+	m_uniform_block_pool.reset(new uniform_block_pool{make_device_resource_properties()});
+
+	m_vertex_uniform_block.data = mat4_t(R(1));
+	m_vertex_uniform_block.data[0][0] = 0.5;
+	m_vertex_uniform_block.data[1][1] = 0.5;
+	
+	m_vertex_uniform_block.index =
+	  m_uniform_block_pool->add(&m_vertex_uniform_block.data,
+				    sizeof(m_vertex_uniform_block.data),
+				    1,
+				    0,
+				    VK_SHADER_STAGE_VERTEX_BIT);
+       	
+	m_ok_uniform_block_data = m_vertex_uniform_block.ok();
+      }
+    }
+    
+    void setup_texture_data() {
+      if (ok_uniform_block_data()) {	       
 	// generate image data
 	uint32_t image_w = 256;
 	uint32_t image_h = 256;
@@ -1352,8 +1393,8 @@ namespace vulkan {
 	//
 	// create shader programs
 	// 
-	auto spv_vshader = read_file("resources/shaders/tex_triangle.vert.spv");
-	auto spv_fshader = read_file("resources/shaders/tex_triangle.frag.spv");
+	auto spv_vshader = read_file("resources/shaders/tri_ubo/tri_ubo.vert.spv");
+	auto spv_fshader = read_file("resources/shaders/tri_ubo/tri_ubo.frag.spv");
 
 	ASSERT(!spv_vshader.empty());
 	ASSERT(!spv_fshader.empty());
@@ -1433,9 +1474,15 @@ namespace vulkan {
 	color_blend_state.attachmentCount = 1;
 	color_blend_state.pAttachments = &color_blend_attach_state;
 
+	std::array<VkDescriptorSetLayout, 2> set_layouts =
+	  {
+	   m_test_texture2d.descriptor_set_layout,
+	   m_uniform_block_pool->descriptor_set_layout(m_vertex_uniform_block.index)
+	  };
+	
 	auto pipeline_layout = default_pipeline_layout_settings();
-	pipeline_layout.setLayoutCount = 1;
-	pipeline_layout.pSetLayouts = &m_test_texture2d.descriptor_set_layout;
+	pipeline_layout.setLayoutCount = set_layouts.size();
+	pipeline_layout.pSetLayouts = set_layouts.data();
 	
 	VK_FN(vkCreatePipelineLayout(m_vk_curr_ldevice, &pipeline_layout, nullptr, &m_vk_pipeline_layout));
 
@@ -1600,8 +1647,8 @@ namespace vulkan {
 			       0,
 			       nullptr);
 
-	vkDeviceWaitIdle(m_vk_curr_ldevice);
-
+	vkDeviceWaitIdle(m_vk_curr_ldevice);	
+	
 	run_cmds(
 		 [this](VkCommandBuffer cmd_buf) {
 		   puts("image_layout_transition");
@@ -1630,6 +1677,12 @@ namespace vulkan {
 
 	VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, m_vk_command_buffers.data()));
 
+	std::array<VkDescriptorSet, 2> descriptor_sets =
+	  {
+	   m_test_texture2d.descriptor_set,
+	   m_uniform_block_pool->descriptor_set(m_vertex_uniform_block.index)
+	  };
+	
 	size_t i = 0;
 
 	VkDeviceSize vertex_buffer_ofs = 0;
@@ -1663,8 +1716,8 @@ namespace vulkan {
 				    VK_PIPELINE_BIND_POINT_GRAPHICS,
 				    m_vk_pipeline_layout,
 				    0,
-				    1,
-				    &m_test_texture2d.descriptor_set,
+				    descriptor_sets.size(),
+				    descriptor_sets.data(),
 				    0,
 				    nullptr);
 	    
@@ -1739,6 +1792,7 @@ namespace vulkan {
     void setup() {
       setup_presentation();
       setup_descriptor_pool();
+      setup_uniform_block_data();
       setup_texture_data();
       setup_graphics_pipeline();
       setup_vertex_buffer();
@@ -1878,6 +1932,8 @@ namespace vulkan {
       free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
 
       m_test_texture2d.free_mem(m_vk_curr_ldevice);
+
+      m_uniform_block_pool->free_mem();
       
       free_vk_ldevice_handle<VkDescriptorPool, &vkDestroyDescriptorPool>(m_vk_descriptor_pool);
       

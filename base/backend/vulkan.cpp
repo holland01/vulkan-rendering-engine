@@ -1,6 +1,5 @@
 #include "vulkan.hpp"
 #include "vk_pipeline.hpp"
-#include "vk_uniform_buffer.hpp"
 
 #define BASE_TEXTURE2D_DEFAULT_VK_FORMAT VK_FORMAT_R8G8B8A8_UNORM
 
