@@ -64,7 +64,7 @@ namespace vulkan {
 
     bool ok() const {
       bool r =
-	!queue_family_indices.empty() &&
+ 	!queue_family_indices.empty() &&
 	physical_device != VK_NULL_HANDLE &&
 	device != VK_NULL_HANDLE &&
 	descriptor_pool != VK_NULL_HANDLE;
@@ -87,5 +87,56 @@ namespace vulkan {
 				 
 
   VkViewport make_viewport(vec2_t origin, VkExtent2D dim, float depthmin, float depthmax);
+
+  VkFormat find_supported_format(VkPhysicalDevice physical_device,
+				 const darray<VkFormat>& candidates,
+				 VkImageTiling tiling,
+				 VkFormatFeatureFlags features);
+
+  VkDescriptorSetLayoutBinding make_descriptor_set_layout_binding(uint32_t binding,
+								  VkShaderStageFlags stages,
+								  VkDescriptorType type);
+    
+  VkDescriptorSetLayout make_descriptor_set_layout(VkDevice device,
+						   const VkDescriptorSetLayoutBinding* bindings,
+						   uint32_t num_bindings);
+
+  VkDescriptorSet make_descriptor_set(VkDevice device,
+				      VkDescriptorPool descriptor_pool,
+				      const VkDescriptorSetLayout* layouts,
+				      uint32_t num_sets);
+
+  void write_device_memory(VkDevice device,
+			   VkDeviceMemory memory,
+			   void* data,
+			   VkDeviceSize size);
+  
+  VkDeviceMemory make_device_memory(VkDevice device,
+				    void* data,
+				    VkDeviceSize size,
+				    VkDeviceSize alloc_size,
+				    uint32_t index);
+
+  VkBuffer make_buffer(const device_resource_properties& resource_props,
+		       VkBufferCreateFlags create_flags,
+		       VkBufferUsageFlags usage_flags,
+		       VkDeviceSize sz);
+
+  VkDescriptorBufferInfo make_descriptor_buffer_info(VkBuffer buffer, VkDeviceSize size);
+
+  VkWriteDescriptorSet make_write_descriptor_buffer_set(VkDescriptorSet descset,
+							const VkDescriptorBufferInfo* buffer_info,
+							uint32_t binding_index,
+							uint32_t array_element,
+							VkDescriptorType descriptor_type);
+  
+  void write_descriptor_set(VkDevice device,
+			    VkBuffer buffer,
+			    VkDeviceSize size,
+			    VkDescriptorSet descset,
+			    uint32_t binding_index,
+			    uint32_t array_element,
+			    VkDescriptorType descriptor_type);
+
 }
 

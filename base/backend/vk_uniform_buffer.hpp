@@ -41,166 +41,18 @@ namespace vulkan {
       return i;
     }
 
-    VkBuffer make_buffer(VkDeviceSize sz) const {
-      VkBufferCreateInfo create_info = {};
-      create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-      create_info.pNext = nullptr;
-      create_info.flags = 0;
-      create_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-      create_info.sharingMode = m_resource_props.queue_sharing_mode;
-      create_info.queueFamilyIndexCount = m_resource_props.queue_family_indices.size();
-      create_info.pQueueFamilyIndices = m_resource_props.queue_family_indices.data();
-      create_info.size = sz;
+    VkBuffer make_uniform_buffer(VkDeviceSize sz) const {
+      return vulkan::make_buffer(m_resource_props,
+				 0,
+				 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				 sz);
 
-      VkBuffer buffer{VK_NULL_HANDLE};
-      
-      VK_FN(vkCreateBuffer(m_resource_props.device,
-			   &create_info,
-			   nullptr,
-			   &buffer));
-      
-      return buffer;
-    }
-
-
-    VkDescriptorSetLayoutBinding make_descriptor_set_layout_binding(uint32_t binding, VkShaderStageFlags stages) {
-      VkDescriptorSetLayoutBinding layout_binding = {};
-      layout_binding.binding = binding;
-      layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      layout_binding.descriptorCount = 1;
-      layout_binding.stageFlags = stages;
-      layout_binding.pImmutableSamplers = nullptr;
-      return layout_binding;
-    }
-    
-    VkDescriptorSetLayout make_descriptor_set_layout(const VkDescriptorSetLayoutBinding* bindings, uint32_t num_bindings) {
-      VkDescriptorSetLayoutCreateInfo create_info = {};
-      create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-      create_info.pNext = nullptr;
-      create_info.flags = 0;
-      create_info.pBindings = bindings;
-      create_info.bindingCount = num_bindings;
-
-      VkDescriptorSetLayout layout{VK_NULL_HANDLE};
-      
-      VK_FN(vkCreateDescriptorSetLayout(m_resource_props.device,
-					&create_info,
-					nullptr,
-					&layout));
-      return layout;
-    }
-
-    VkDescriptorSet make_descriptor_set(const VkDescriptorSetLayout* layouts, uint32_t num_sets) {
-      VkDescriptorSet set{VK_NULL_HANDLE};
-
-      VkDescriptorSetAllocateInfo alloc_info = {};
-      alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-      alloc_info.pNext = nullptr;
-      alloc_info.descriptorPool = m_resource_props.descriptor_pool;
-      alloc_info.descriptorSetCount = num_sets;
-      alloc_info.pSetLayouts = layouts;
-
-      VK_FN(vkAllocateDescriptorSets(m_resource_props.device,
-				     &alloc_info,
-				     &set));
-
-      return set;
-    }
-
-    void write_device_memory(VkDeviceMemory memory, void* data, VkDeviceSize size) const {
-      void* mapped_memory = nullptr;
-
-      VK_FN(vkMapMemory(m_resource_props.device,
-			memory,
-			0,
-			size,
-			0,
-			&mapped_memory));
-
-      ASSERT(mapped_memory != nullptr);
-      ASSERT(api_ok());
-      
-      if (api_ok() && mapped_memory != nullptr) {
-	memcpy(mapped_memory, data, size);
-
-	vkUnmapMemory(m_resource_props.device,
-		      memory);
-      }
-    }
-    
-    VkDeviceMemory make_device_memory(void* data,
-				      VkDeviceSize size,
-				      VkDeviceSize alloc_size,
-				      uint32_t index) const {
-      VkDeviceMemory memory{VK_NULL_HANDLE};
-      VkMemoryAllocateInfo info = {};
-      
-      info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-      info.pNext = nullptr;
-      info.allocationSize = alloc_size;
-      info.memoryTypeIndex = index;
-
-      VK_FN(vkAllocateMemory(m_resource_props.device,
-			     &info,
-			     nullptr,
-			     &memory));
-
-      if (api_ok() && memory != VK_NULL_HANDLE) {
-	write_device_memory(memory, data, size);
-      }
-
-      return memory;
-    }
-
-    VkDescriptorBufferInfo make_descriptor_buffer_info(VkBuffer buffer, VkDeviceSize ubo_size) const {
-      VkDescriptorBufferInfo info = {};
-      info.buffer =  buffer;
-      info.offset = 0;
-      info.range = ubo_size;
-      return info;
-    }
-
-    VkWriteDescriptorSet make_write_descriptor_set(VkDescriptorSet descset,
-						   const VkDescriptorBufferInfo* buffer_info,
-						   uint32_t binding_index,
-						   uint32_t array_element) const {
-      VkWriteDescriptorSet write = {};
-      write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      write.pNext = nullptr;
-      write.dstSet = descset;
-      write.dstBinding = binding_index;
-      write.dstArrayElement = array_element;
-      write.descriptorCount = 1;
-      write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      write.pImageInfo = nullptr;
-      write.pBufferInfo = buffer_info;
-      write.pTexelBufferView = nullptr;
-      return write;
-    }
-
-    void write_descriptor_set(VkBuffer buffer,
-			      VkDeviceSize ubo_size,
-			      VkDescriptorSet descset,
-			      uint32_t binding_index,
-			      uint32_t array_element) {
-      auto buffer_info = make_descriptor_buffer_info(buffer, ubo_size);
-      auto write_desc_set = make_write_descriptor_set(descset,
-						      &buffer_info,
-						      binding_index,
-						      array_element);
-      vkUpdateDescriptorSets(m_resource_props.device,
-			     1,
-			     &write_desc_set,
-			     0,
-			     nullptr);
-
-      vkDeviceWaitIdle(m_resource_props.device);
     }
     
     bool is_valid(VkDeviceSize desired_size, VkDeviceSize& out_required_size, int32_t& out_property_index) const {
       bool ret = false;
 
-      VkBuffer dummy = make_buffer(desired_size);
+      VkBuffer dummy = make_uniform_buffer(desired_size);
       
       if (api_ok() && dummy != VK_NULL_HANDLE) {
 	VkMemoryRequirements req = {};
@@ -224,7 +76,8 @@ namespace vulkan {
 	
 	ASSERT(out_property_index != -1);
 
-	ret = desired_size <= req.size &&
+	ret =
+	  desired_size <= req.size &&
 	  out_property_index != -1;
 
 	vkDestroyBuffer(m_resource_props.device, dummy, nullptr);
@@ -312,14 +165,15 @@ namespace vulkan {
       VkDeviceMemory device_memory{VK_NULL_HANDLE};
       
       if (api_ok() && valid) {
-	device_memory = make_device_memory(block_data,
+	device_memory = make_device_memory(m_resource_props.device,
+					   block_data,
 					   block_size,
 					   required_size,
 					   memory_property_index);
       }
 
       if (api_ok() && device_memory != VK_NULL_HANDLE) {
-	buffer = make_buffer(block_size);
+	buffer = make_uniform_buffer(block_size);
       }
       
       bool bound = false;
@@ -334,21 +188,28 @@ namespace vulkan {
       if (bound) {
 	auto binding =
 	  make_descriptor_set_layout_binding(binding_index,
-					     stage_flags);
+					     stage_flags,
+					     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	descriptor_set_layout =
-	  make_descriptor_set_layout(&binding, 1);
+	  make_descriptor_set_layout(m_resource_props.device, &binding, 1);
       }
 
       if (api_ok() && descriptor_set_layout != VK_NULL_HANDLE) {
-	descset = make_descriptor_set(&descriptor_set_layout, 1);
+	descset =
+	  make_descriptor_set(m_resource_props.device,
+			      m_resource_props.descriptor_pool,
+			      &descriptor_set_layout,
+			      1);
       }
 
       if (api_ok() && descset != VK_NULL_HANDLE) {	
-	write_descriptor_set(buffer,
+	write_descriptor_set(m_resource_props.device,
+			     buffer,
 			     static_cast<VkDeviceSize>(block_size),
 			     descset,
 			     binding_index,
-			     0);
+			     0,
+			     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	
 	ret = push_blank();
 
@@ -392,7 +253,8 @@ namespace vulkan {
 
     void update_block(index_type which) const {
       if (ok_index(which)) {
-	write_device_memory(m_device_memories.at(which),
+	write_device_memory(m_resource_props.device,
+			    m_device_memories.at(which),
 			    m_user_ptrs.at(which),
 			    static_cast<VkDeviceSize>(m_user_sizes.at(which)));
       }
