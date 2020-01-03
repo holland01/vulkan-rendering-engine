@@ -129,6 +129,31 @@ namespace vulkan {
     return attachment_ref;
   }
 
+  VkAttachmentDescription default_depthbuffer_settings() {
+    VkAttachmentDescription depth_attachment = {};
+
+    depth_attachment.format = depthbuffer_data::k_format;
+    
+    depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+    depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+    depth_attachment.initialLayout = depthbuffer_data::k_initial_layout;
+    depth_attachment.finalLayout = depthbuffer_data::k_final_layout;
+
+    return depth_attachment;
+  }
+
+  VkAttachmentReference default_depthbuffer_ref_settings() {
+    VkAttachmentReference attachment_ref = {};
+    attachment_ref.attachment = 1;
+    attachment_ref.layout = depthbuffer_data::k_final_layout;
+    return attachment_ref;
+  }
+
   VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code) {
     VkShaderModuleCreateInfo module_create_info = {};
     module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -264,6 +289,68 @@ namespace vulkan {
     return create_info;
   }
 
+  static
+  VkExtent3D calc_minimum_dimensions_texture2d(uint32_t width,
+					       uint32_t height,
+					       uint32_t bytes_per_pixel,
+					       const VkMemoryRequirements& requirements) {
+    // If any of these are not a power of 2,
+    // there is no guarantee that,
+    // once the loop finishes,
+    // calc_size() == requirements.size will be true.
+    //
+    // We want this to be true:
+    // any deviation from this format
+    // will require a different method
+    // of adjusting the width and height
+    // to meet the required size.
+    //    ASSERT(is_power_2(requirements.size));
+    //    ASSERT(is_power_2(width));
+    //    ASSERT(is_power_2(height));
+    ASSERT(is_power_2(bytes_per_pixel));
+
+    printf("width: %" PRIu32 "\n"
+	   "height: %" PRIu32 "\n"
+	   "requirements.size: %" PRIu64 "\n",
+	   width, height, requirements.size);
+
+    bool all_pot =
+      is_power_2(requirements.size) &&
+      is_power_2(width) &&
+      is_power_2(height);
+     
+    VkExtent3D ext;
+
+    ext.width = UINT32_MAX;
+    ext.height = UINT32_MAX;
+    ext.depth = 1;
+
+    auto calc_size =
+      [&width, &height, &bytes_per_pixel]() -> VkDeviceSize {
+	return static_cast<VkDeviceSize>(width * height * bytes_per_pixel);
+      };
+    
+    uint32_t flipflop = 0;
+    
+    while (calc_size() < requirements.size) {
+      if (flipflop == 0) {
+	width <<= 1;
+      }
+      else {
+	height <<= 1;
+      }
+      flipflop ^= 1;
+    }
+
+    ASSERT((calc_size() == requirements.size && all_pot) || calc_size() >= requirements.size);
+    
+    ext.width = width;
+    ext.height = height; 
+    
+    return ext;
+  }
+
+
   // gets allocation requirements
   // for a given width/height/bpp/image layout combination,
   // while also verifying compatibility with these parameters,
@@ -273,10 +360,10 @@ namespace vulkan {
 						      uint32_t width,
 						      uint32_t height,
 						      uint32_t bytes_per_pixel,
-						      VkImageLayout layout) {
+						      VkImageLayout layout,
+						      VkFormat format) {
 
-    // this is all that's supported currently
-    ASSERT(bytes_per_pixel == 4); 
+    ASSERT(bytes_per_pixel == bpp_from_format(format));
     
     image_requirements ret{};
 
@@ -292,14 +379,7 @@ namespace vulkan {
     create_info.extent.width = width;
     create_info.extent.height = height;
     create_info.initialLayout = layout;
-
-    // 4 bytes per pixel is compatible with this format,
-    // which is what we're defaulting to for now. This
-    // is here to ensure that, if that's ever changed in the future,
-    // we're forced to ensure that the format's represented size meets
-    // what we're passing to calc_minimum_dimensions_texture2d()
-    ASSERT(create_info.format == BASE_TEXTURE2D_DEFAULT_VK_FORMAT);
-
+    create_info.format = format;
 
     VkImage dummy_image{VK_NULL_HANDLE};
     
@@ -314,13 +394,12 @@ namespace vulkan {
       vkGetImageMemoryRequirements(properties.device,
 				   dummy_image,
 				   &req);
-
       
       ret.required = calc_minimum_dimensions_texture2d(width,
 						       height,
 						       bytes_per_pixel,
-						       req);	      
-
+						       req);
+      
       // find an appropriate memory type index
       // for our image that we can base the storage
       // off of
@@ -353,7 +432,6 @@ namespace vulkan {
 
     return ret;
   }
-
   
   texture2d_data make_texture2d(const device_resource_properties& properties,
 				uint32_t width,
@@ -370,7 +448,8 @@ namespace vulkan {
 								width,
 								height,
 								bytes_per_pixel,
-							        texture2d_data::k_initial_layout);
+							        texture2d_data::k_initial_layout,
+								texture2d_data::k_format);
             
       if (req.ok()) {
 	ret.memory = make_device_memory(properties.device,
@@ -459,6 +538,83 @@ namespace vulkan {
 
     ASSERT(ret.ok());
     
+    return ret;
+  }
+
+  depthbuffer_data make_depthbuffer(const device_resource_properties& properties,
+				    uint32_t width,
+				    uint32_t height) {
+    depthbuffer_data ret{};
+    
+    if (properties.ok()) {
+      VK_FN(vkDeviceWaitIdle(properties.device));
+      image_requirements req = get_image_requirements_texture2d(properties,
+								width,
+								height,
+							        depthbuffer_data::k_bpp,
+							        depthbuffer_data::k_initial_layout,
+								depthbuffer_data::k_format);            
+      if (req.ok()) {
+	darray<float> depthvalues(width * height);
+	for (size_t i = 0; i < depthvalues.size(); ++i) {
+	  depthvalues[i] = 1.0f;
+	}
+	ret.memory = make_device_memory(properties.device,
+					reinterpret_cast<void*>(depthvalues.data()),
+				        depthvalues.size() * sizeof(depthvalues[0]),
+					req.memory_size(),
+					req.memory_type_index);
+      }
+      
+      if (ret.memory != VK_NULL_HANDLE) {
+	VkImageCreateInfo create_info =
+	  default_image_create_info_texture2d(properties);
+
+	create_info.extent.width = width;
+	create_info.extent.height = height;	
+
+	create_info.format = depthbuffer_data::k_format;
+	create_info.initialLayout = depthbuffer_data::k_initial_layout;
+      
+	VK_FN(vkCreateImage(properties.device,
+			    &create_info,
+			    nullptr,
+			    &ret.image));
+      }
+      
+      bool bound = false;
+      if (api_ok() && ret.image != VK_NULL_HANDLE) {
+	VK_FN(vkBindImageMemory(properties.device,
+				ret.image,
+				ret.memory,
+				0));
+	
+	bound = api_ok();
+      }
+      
+      if (bound) {
+	VkImageViewCreateInfo create_info =
+	  default_image_view_create_info_texture2d();
+
+	create_info.image = ret.image;
+	create_info.format = depthbuffer_data::k_format;
+	create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	
+	VK_FN(vkCreateImageView(properties.device,
+				&create_info,
+				nullptr,
+				&ret.image_view));
+      }
+    
+      if (api_ok() && ret.image_view != VK_NULL_HANDLE) {
+	ret.width = width;
+	ret.height = height;
+      }
+
+      ASSERT(api_ok());
+    }
+
+    ASSERT(ret.ok());
     return ret;
   }
 

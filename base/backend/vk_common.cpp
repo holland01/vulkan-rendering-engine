@@ -267,54 +267,5 @@ namespace vulkan {
     vkDeviceWaitIdle(device);
   }
 
-  VkExtent3D calc_minimum_dimensions_texture2d(uint32_t width,
-					       uint32_t height,
-					       uint32_t bytes_per_pixel,
-					       const VkMemoryRequirements& requirements) {
-    // If any of these are not a power of 2,
-    // there is no guarantee that,
-    // once the loop finishes,
-    // calc_size() == requirements.size will be true.
-    //
-    // We want this to be true:
-    // any deviation from this format
-    // will require a different method
-    // of adjusting the width and height
-    // to meet the required size.
-    ASSERT(is_power_2(requirements.size));
-    ASSERT(is_power_2(width));
-    ASSERT(is_power_2(height));
-    ASSERT(is_power_2(bytes_per_pixel));
     
-    VkExtent3D ext;
-
-    ext.width = UINT32_MAX;
-    ext.height = UINT32_MAX;
-    ext.depth = 1;
-
-    uint32_t flipflop = 0;
-    
-    auto calc_size =
-      [&width, &height, &bytes_per_pixel]() -> VkDeviceSize {
-	return static_cast<VkDeviceSize>(width * height * bytes_per_pixel);
-      };
-    
-    while (calc_size() < requirements.size) {
-      if (flipflop == 0) {
-	width <<= 1;
-      }
-      else {
-	height <<= 1;
-      }
-      flipflop ^= 1;
-    }
-
-    ASSERT(calc_size() == requirements.size);
-    
-    ext.width = width;
-    ext.height = height; 
-    
-    return ext;
-  }
-  
 }

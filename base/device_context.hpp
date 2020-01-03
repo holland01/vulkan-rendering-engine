@@ -35,6 +35,12 @@ public:
   int width() const { return m_screen_width; }
   int height() const { return m_screen_height; }
 
+  template <typename T>
+  T width() const { return static_cast<T>(m_screen_width); }
+  
+  template <typename T>
+  T height() const { return static_cast<T>(m_screen_height); }
+  
   const GLFWwindow* window() const { 
     return glfw_window; 
   }

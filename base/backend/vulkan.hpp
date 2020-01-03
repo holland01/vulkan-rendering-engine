@@ -41,81 +41,9 @@ namespace vulkan {
 
   VkPipelineShaderStageCreateInfo make_shader_stage_settings(VkShaderModule module, VkShaderStageFlagBits type);  
     
-  struct texture2d_data {
-    static inline constexpr uint32_t k_binding = 0;
-    static inline constexpr uint32_t k_binding_count = 1;
-    static inline constexpr uint32_t k_array_elem = 0;
-    static inline constexpr uint32_t k_descriptor_count = 1;
-    static inline constexpr VkDescriptorType k_descriptor_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    static inline constexpr VkImageLayout k_initial_layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-    static inline constexpr VkImageLayout k_final_layout = VK_IMAGE_LAYOUT_GENERAL;
-    
-    VkSampler sampler{VK_NULL_HANDLE};
-    VkImage image{VK_NULL_HANDLE};
-    VkImageView image_view{VK_NULL_HANDLE};
-    VkDeviceMemory memory{VK_NULL_HANDLE};
-    VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
-    VkDescriptorSet descriptor_set{VK_NULL_HANDLE}; // should be allocated from a pool
-    VkFormat format{VK_FORMAT_UNDEFINED};
-    VkImageLayout layout{texture2d_data::k_final_layout};
-    
-    uint32_t width{UINT32_MAX};
-    uint32_t height{UINT32_MAX};    
-
-    bool ok() const {
-      bool r = 
-	sampler != VK_NULL_HANDLE &&
-	image != VK_NULL_HANDLE &&
-	image_view != VK_NULL_HANDLE &&
-	memory != VK_NULL_HANDLE &&
-	descriptor_set_layout != VK_NULL_HANDLE &&
-	descriptor_set != VK_NULL_HANDLE &&
-	format != VK_FORMAT_UNDEFINED &&
-	width != UINT32_MAX &&
-	height != UINT32_MAX;
-      ASSERT(r);
-      return r;
-    }
-
-    VkDescriptorImageInfo make_descriptor_image_info() const {
-      VkDescriptorImageInfo ret = {};
-      if (ok()) {
-	ret.sampler = sampler;
-	ret.imageView = image_view;
-	ret.imageLayout = layout;
-      }
-      return ret;
-    }
-    
-    VkWriteDescriptorSet make_write_descriptor_set(const VkDescriptorImageInfo* image_info) const {
-      VkWriteDescriptorSet ret = {};
-      if (ok()) {
-	ret.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	ret.pNext = nullptr;
-	ret.dstSet = descriptor_set;
-	ret.dstBinding = k_binding;
-	ret.dstArrayElement = k_array_elem;
-	ret.descriptorCount = k_descriptor_count;
-	ret.descriptorType = k_descriptor_type;
-	ret.pImageInfo = image_info;
-	ret.pBufferInfo = nullptr;
-	ret.pTexelBufferView = nullptr;
-      }
-      return ret;
-    }
-
-    void free_mem(VkDevice device) {
-      VK_FN(vkDeviceWaitIdle(device));
-
-      if (api_ok()) {
-	vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);	
-	vkDestroySampler(device, sampler, nullptr);
-	vkDestroyImageView(device, image_view, nullptr);
-	vkDestroyImage(device, image, nullptr);	
-	vkFreeMemory(device, memory, nullptr);
-      }
-    }
-  };
+  depthbuffer_data make_depthbuffer(const device_resource_properties& properties,
+				    uint32_t width,
+				    uint32_t height);
 
   texture2d_data make_texture2d(const device_resource_properties& properties,
 				uint32_t width,
@@ -282,6 +210,8 @@ namespace vulkan {
     
     texture2d_data m_test_texture2d{};
 
+    depthbuffer_data m_depthbuffer{};
+    
     uniform_block_data<transform_data> m_vertex_uniform_block{};
     
     std::array<float, 15> m_vertex_buffer_vertices
@@ -323,16 +253,11 @@ namespace vulkan {
     VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
     VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
 
-    struct {
-      VkImage image{VK_NULL_HANDLE};
-      VkImageView image_view{VK_NULL_HANDLE};
-      VkDeviceMemory device_memory{VK_NULL_HANDLE};
-    } m_depth_buffer{};
-
     bool m_ok_present{false};
     bool m_ok_descriptor_pool{false};
     bool m_ok_uniform_block_data{false};
     bool m_ok_texture_data{false};
+    bool m_ok_depthbuffer_data{false};
     bool m_ok_graphics_pipeline{false};
     bool m_ok_vertex_buffer{false};
     bool m_ok_framebuffers{false};
@@ -341,7 +266,6 @@ namespace vulkan {
     bool m_ok_semaphores{false};
     bool m_ok_scene{false};
     
-       
     struct vk_layer_info {
       const char* name{nullptr};
       bool enable{false};
@@ -1050,7 +974,7 @@ namespace vulkan {
       ASSERT(r);
       return r; 
     }
-
+    
     bool ok_surface() const {
       bool r = ok() && m_vk_khr_surface != VK_NULL_HANDLE;
       ASSERT(r);
@@ -1095,6 +1019,12 @@ namespace vulkan {
     
     bool ok_texture_data() const {
       bool r = ok() && m_ok_texture_data;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_depthbuffer_data() const {
+      bool r = ok() && m_ok_depthbuffer_data;
       ASSERT(r);
       return r;
     }
@@ -1397,9 +1327,17 @@ namespace vulkan {
       }
     }
 
+    void setup_depthbuffer_data() {
+      if (ok_texture_data()) {
+	m_depthbuffer = m_depthbuffer = make_depthbuffer(make_device_resource_properties(),
+							 g_m.device_ctx->width(),
+							 g_m.device_ctx->height());
+	m_ok_depthbuffer_data = m_depthbuffer.ok();
+      }
+    }
 
     void setup_graphics_pipeline() {
-      if (ok_texture_data()) {
+      if (ok_depthbuffer_data()) {
 	//
 	// create shader programs
 	// 
@@ -1504,15 +1442,21 @@ namespace vulkan {
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorbuffer_ref;
 
-	VkSubpassDependency dependency = {};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependency.dstSubpass = 0;
+	VkSubpassDependency color_dependency = {};
+	color_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	color_dependency.dstSubpass = 0;
 
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcAccessMask = 0;
+	color_dependency.srcStageMask =
+	  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	color_dependency.srcAccessMask = 0;
+
+	color_dependency.dstStageMask =
+	  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+	color_dependency.dstAccessMask =
+	  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+	  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
 	VkSubpassDependency self_dependency = {};
 	self_dependency.srcSubpass = 0;
@@ -1524,7 +1468,7 @@ namespace vulkan {
 
 	std::array<VkSubpassDependency, 2> dependencies =
 	  {
-	   dependency,
+	   color_dependency,
 	   self_dependency
 	  };
 	
@@ -1545,6 +1489,19 @@ namespace vulkan {
 				 nullptr,
 				 &m_vk_render_pass));
 
+	VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
+	depth_stencil_state.stype = VK_STRUCTURE_TYPE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depth_stencil_state.pNext = nullptr;
+	depth_stencil_state.flags = 0;
+	depth_stencil_state.depthTestEnable = VK_TRUE;
+	depth_stencil_state.depthWriteEnable = VK_TRUE;
+	depth_stencil_state.depthCompareOp = VK_COMPARE_OP_LESS;
+	depth_stencil_state.depthBoundsTestEnable = VK_FALSE;
+	depth_stencil_state.stencilTestEnable = VK_FALSE;
+	depth_stencil_state.minDepthBounds = 0.0f;
+	depth_stencil_state.maxDepthBounds = 1.0f;
+	
+	
 	VkGraphicsPipelineCreateInfo pipeline_info = {};
 	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipeline_info.stageCount = 2;
@@ -1554,7 +1511,7 @@ namespace vulkan {
 	pipeline_info.pViewportState = &viewport_state;
 	pipeline_info.pRasterizationState = &rasterization_state;
 	pipeline_info.pMultisampleState = &multisample_state;
-	pipeline_info.pDepthStencilState = nullptr;
+	pipeline_info.pDepthStencilState = &depth_stencil_state;
 	pipeline_info.pColorBlendState = &color_blend_state;
 	pipeline_info.pDynamicState = nullptr;
 	pipeline_info.layout = m_vk_pipeline_layout;
@@ -1789,9 +1746,7 @@ namespace vulkan {
 
     void setup_scene() {
       if (ok_semaphores()) {
-
-
-	
+						 
 	m_ok_scene = true;
       }
     }
@@ -1950,6 +1905,8 @@ namespace vulkan {
       free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
 
       m_test_texture2d.free_mem(m_vk_curr_ldevice);
+
+      m_depthbuffer.free_mem(m_vk_curr_ldevice);
 
       m_uniform_block_pool->free_mem();
       
