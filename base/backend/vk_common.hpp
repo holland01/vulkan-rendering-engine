@@ -108,11 +108,11 @@ namespace vulkan {
 
   void write_device_memory(VkDevice device,
 			   VkDeviceMemory memory,
-			   void* data,
+			   const void* data,
 			   VkDeviceSize size);
   
   VkDeviceMemory make_device_memory(VkDevice device,
-				    void* data,
+				    const void* data,
 				    VkDeviceSize size,
 				    VkDeviceSize alloc_size,
 				    uint32_t index);
@@ -138,5 +138,11 @@ namespace vulkan {
 			    uint32_t array_element,
 			    VkDescriptorType descriptor_type);
 
+  
+  
+  VkExtent3D calc_minimum_dimensions_texture2d(uint32_t width,
+					       uint32_t height,
+					       uint32_t bytes_per_pixel,
+					       const VkMemoryRequirements& requirements);
 }
 

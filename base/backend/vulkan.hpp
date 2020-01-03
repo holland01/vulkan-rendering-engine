@@ -210,6 +210,7 @@ namespace vulkan {
   //
   // Currently, our only subpass is the 0th subpass. If additional subpasses
   // are used, that number is subject to change.
+  //
   struct image_layout_transition {
     VkImageMemoryBarrier barrier;
 
@@ -271,6 +272,8 @@ namespace vulkan {
 
     darray<VkImage> m_vk_swapchain_images;
 
+    darray<VkImage> m_vk_depth_buffers;
+    
     darray<VkImageView> m_vk_swapchain_image_views;
 
     darray<VkFramebuffer> m_vk_swapchain_framebuffers;
@@ -319,6 +322,12 @@ namespace vulkan {
 
     VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
     VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
+
+    struct {
+      VkImage image{VK_NULL_HANDLE};
+      VkImageView image_view{VK_NULL_HANDLE};
+      VkDeviceMemory device_memory{VK_NULL_HANDLE};
+    } m_depth_buffer{};
 
     bool m_ok_present{false};
     bool m_ok_descriptor_pool{false};

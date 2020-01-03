@@ -263,63 +263,12 @@ namespace vulkan {
 
     return create_info;
   }
-  
-  static
-  VkExtent3D calc_minimum_dimensions_texture2d(uint32_t width,
-					       uint32_t height,
-					       uint32_t bytes_per_pixel,
-					       const VkMemoryRequirements& requirements) {
-    // If any of these are not a power of 2,
-    // there is no guarantee that,
-    // once the loop finishes,
-    // calc_size() == requirements.size will be true.
-    //
-    // We want this to be true:
-    // any deviation from this format
-    // will require a different method
-    // of adjusting the width and height
-    // to meet the required size.
-    ASSERT(is_power_2(requirements.size));
-    ASSERT(is_power_2(width));
-    ASSERT(is_power_2(height));
-    ASSERT(is_power_2(bytes_per_pixel));
-    
-    VkExtent3D ext;
-
-    ext.width = UINT32_MAX;
-    ext.height = UINT32_MAX;
-    ext.depth = 1;
-
-    uint32_t flipflop = 0;
-    
-    auto calc_size =
-      [&width, &height, &bytes_per_pixel]() -> VkDeviceSize {
-	return static_cast<VkDeviceSize>(width * height * bytes_per_pixel);
-      };
-    
-    while (calc_size() < requirements.size) {
-      if (flipflop == 0) {
-	width <<= 1;
-      }
-      else {
-	height <<= 1;
-      }
-      flipflop ^= 1;
-    }
-
-    ASSERT(calc_size() == requirements.size);
-    
-    ext.width = width;
-    ext.height = height; 
-    
-    return ext;
-  }
 
   // gets allocation requirements
   // for a given width/height/bpp/image layout combination,
   // while also verifying compatibility with these parameters,
   // in addition to our chosen image format.
-  static 
+  static
   image_requirements get_image_requirements_texture2d(const device_resource_properties& properties,
 						      uint32_t width,
 						      uint32_t height,
@@ -405,6 +354,7 @@ namespace vulkan {
     return ret;
   }
 
+  
   texture2d_data make_texture2d(const device_resource_properties& properties,
 				uint32_t width,
 				uint32_t height,
@@ -421,55 +371,16 @@ namespace vulkan {
 								height,
 								bytes_per_pixel,
 							        texture2d_data::k_initial_layout);
-
-      auto reqstr = to_string(req);
-      write_logf("%s", reqstr.c_str());
-      
-      if (api_ok() && req.ok()) {
-	VkMemoryAllocateInfo info = {};
-      
-	info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	info.pNext = nullptr;
-	info.allocationSize = req.memory_size();
-	info.memoryTypeIndex = req.memory_type_index;
-
-	VK_FN(vkAllocateMemory(properties.device,
-			       &info,
-			       nullptr,
-			       &ret.memory));      
+            
+      if (req.ok()) {
+	ret.memory = make_device_memory(properties.device,
+					pixels.data(),
+					pixels.size() * sizeof(pixels[0]),
+					req.memory_size(),
+					req.memory_type_index);
       }
 
-      bool mapped = false;
-      if (api_ok() && ret.memory != VK_NULL_HANDLE) {
-	// Note this method of setting the texture
-	// data only works because our device
-	// has capability for what's specified by
-	// k_mem_flags, within get_image_requirements_texture2d()
-      
-	void* mapped_memory = nullptr;
-
-	const size_t memlength =
-	  pixels.size() * sizeof(pixels[0]);
-      
-	VK_FN(vkMapMemory(properties.device,
-			  ret.memory,
-			  0,
-			  memlength,
-			  0,
-			  &mapped_memory));
-
-	if (api_ok() && mapped_memory != nullptr) {
-	  memcpy(mapped_memory,
-		 pixels.data(),
-		 memlength);
-
-	  vkUnmapMemory(properties.device, ret.memory);
-
-	  mapped = true;
-	}
-      }
-
-      if (mapped) {
+      if (ret.memory != VK_NULL_HANDLE) {
 	VkImageCreateInfo create_info =
 	  default_image_create_info_texture2d(properties);
 
@@ -490,7 +401,7 @@ namespace vulkan {
 				ret.image,
 				ret.memory,
 				0));
-
+	
 	bound = api_ok();
       }
       
@@ -509,7 +420,7 @@ namespace vulkan {
       if (api_ok() && ret.image_view != VK_NULL_HANDLE) {
 	VkSamplerCreateInfo create_info =
 	  default_sampler_create_info_texture2d();
-
+	
 	VK_FN(vkCreateSampler(properties.device,
 			      &create_info,
 			      nullptr,
@@ -517,39 +428,23 @@ namespace vulkan {
       }
 
       if (api_ok() && ret.sampler != VK_NULL_HANDLE) {
-	VkDescriptorSetLayoutBinding ds_binding = {};
-	ds_binding.binding = 0;
-	ds_binding.descriptorType = texture2d_data::k_descriptor_type;
-	ds_binding.descriptorCount = 1;
-	ds_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	VkDescriptorSetLayoutCreateInfo create_info = {};
-	create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	create_info.pNext = nullptr;
-	create_info.flags = 0;                                                      
-	create_info.bindingCount = texture2d_data::k_binding_count;
-	create_info.pBindings = &ds_binding;
-
-	VK_FN(vkCreateDescriptorSetLayout(properties.device,
-					  &create_info,
-					  nullptr,
-					  &ret.descriptor_set_layout));
-
-      
+	VkDescriptorSetLayoutBinding ds_binding =
+	  make_descriptor_set_layout_binding(0,
+					     VK_SHADER_STAGE_FRAGMENT_BIT,
+					     texture2d_data::k_descriptor_type);
+	
+	ret.descriptor_set_layout =
+	  make_descriptor_set_layout(properties.device,
+				     &ds_binding,
+				     1);             
       }
     
       if (api_ok() && ret.descriptor_set_layout != VK_NULL_HANDLE) {
-	VkDescriptorSetAllocateInfo alloc_info = {};
-
-	alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	alloc_info.pNext = nullptr;
-	alloc_info.descriptorPool = properties.descriptor_pool;
-	alloc_info.descriptorSetCount = 1;
-	alloc_info.pSetLayouts = &ret.descriptor_set_layout;
-
-	VK_FN(vkAllocateDescriptorSets(properties.device,
-				       &alloc_info,
-				       &ret.descriptor_set));				       
+	ret.descriptor_set =
+	  make_descriptor_set(properties.device,
+			      properties.descriptor_pool,
+			      &ret.descriptor_set_layout,
+			      1);
       }
 
       if (api_ok() && ret.descriptor_set != VK_NULL_HANDLE) {
