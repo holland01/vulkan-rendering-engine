@@ -154,6 +154,19 @@ namespace vulkan {
     return attachment_ref;
   }
 
+  VkStencilOpState default_stencilop_state() {
+    VkStencilOpState op_state = {};
+    op_state.failOp = VK_STENCIL_OP_KEEP;
+    op_state.passOp = VK_STENCIL_OP_KEEP;
+    op_state.depthFailOp = VK_STENCIL_OP_KEEP;
+    op_state.compareOp = VK_COMPARE_OP_NEVER;
+    op_state.compareMask = 0;
+    op_state.writeMask = 0;
+    op_state.reference = 0;
+    return op_state;
+  }
+
+
   VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code) {
     VkShaderModuleCreateInfo module_create_info = {};
     module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -598,7 +611,7 @@ namespace vulkan {
 
 	create_info.image = ret.image;
 	create_info.format = depthbuffer_data::k_format;
-	create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	create_info.subresourceRange.aspectMask = depthbuffer_data::k_image_aspect_flags;
 	
 	VK_FN(vkCreateImageView(properties.device,
 				&create_info,
@@ -613,6 +626,8 @@ namespace vulkan {
 
       ASSERT(api_ok());
     }
+
+    std::cout << "before - " << ret.to_string() << std::endl;
 
     ASSERT(ret.ok());
     return ret;

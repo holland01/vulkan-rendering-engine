@@ -34,8 +34,12 @@ namespace vulkan {
   VkPipelineLayoutCreateInfo default_pipeline_layout_settings();
 
   VkAttachmentDescription default_colorbuffer_settings(VkFormat swapchain_format);
-
   VkAttachmentReference default_colorbuffer_ref_settings();
+
+  VkAttachmentDescription default_depthbuffer_settings();
+  VkAttachmentReference default_depthbuffer_ref_settings();
+
+  VkStencilOpState default_stencilop_state();
   
   VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code);
 
@@ -146,7 +150,7 @@ namespace vulkan {
       barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
       barrier.pNext = nullptr;
       barrier.srcAccessMask = 0;
-      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+      barrier.dstAccessMask = 0;
 	
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -156,6 +160,18 @@ namespace vulkan {
       barrier.subresourceRange.levelCount = 1;
       barrier.subresourceRange.baseArrayLayer = 0;
       barrier.subresourceRange.layerCount = 1;
+    }
+
+    image_layout_transition& for_aspect(VkImageAspectFlags aspect_mask) {
+      barrier.subresourceRange.aspectMask = aspect_mask; return *this;
+    }
+
+    image_layout_transition& from_access(VkAccessFlags src_mask) {
+      barrier.srcAccessMask = src_mask; return *this;
+    }
+
+    image_layout_transition& to_access(VkAccessFlags dst_mask) {
+      barrier.dstAccessMask = dst_mask; return *this;
     }
 
     image_layout_transition& from(VkImageLayout layout) {
@@ -1329,9 +1345,10 @@ namespace vulkan {
 
     void setup_depthbuffer_data() {
       if (ok_texture_data()) {
-	m_depthbuffer = m_depthbuffer = make_depthbuffer(make_device_resource_properties(),
-							 g_m.device_ctx->width(),
-							 g_m.device_ctx->height());
+	m_depthbuffer = make_depthbuffer(make_device_resource_properties(),
+					 g_m.device_ctx->width(),
+					 g_m.device_ctx->height());
+	
 	m_ok_depthbuffer_data = m_depthbuffer.ok();
       }
     }
@@ -1414,7 +1431,6 @@ namespace vulkan {
 	viewport_state.pScissors = &scissor;
 
 	auto rasterization_state = default_rasterization_state_settings();
-
 	auto multisample_state = default_multisample_state_settings();
 	
 	auto color_blend_attach_state = default_color_blend_attach_state_settings();
@@ -1432,22 +1448,59 @@ namespace vulkan {
 	pipeline_layout.setLayoutCount = set_layouts.size();
 	pipeline_layout.pSetLayouts = set_layouts.data();
 	
-	VK_FN(vkCreatePipelineLayout(m_vk_curr_ldevice, &pipeline_layout, nullptr, &m_vk_pipeline_layout));
+	VK_FN(vkCreatePipelineLayout(m_vk_curr_ldevice,
+				     &pipeline_layout,
+				     nullptr,
+				     &m_vk_pipeline_layout));
 
 	auto colorbuffer = default_colorbuffer_settings(m_vk_khr_swapchain_format.format);
 	auto colorbuffer_ref = default_colorbuffer_ref_settings();
 
-	VkSubpassDescription subpass = {};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &colorbuffer_ref;
+	auto depthbuffer = default_depthbuffer_settings();
+	auto depthbuffer_ref = default_depthbuffer_ref_settings();
+	
+	VkSubpassDescription color_subpass = {};
+	color_subpass.inputAttachmentCount = 0;
+	color_subpass.pInputAttachments = nullptr;
+	color_subpass.pResolveAttachments = nullptr;
+	color_subpass.preserveAttachmentCount = 0;
+	color_subpass.pPreserveAttachments = nullptr;
+	color_subpass.flags = 0;
+	color_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	color_subpass.colorAttachmentCount = 1;
+	color_subpass.pColorAttachments = &colorbuffer_ref;
+	color_subpass.pDepthStencilAttachment = &depthbuffer_ref;
 
+	std::array<VkSubpassDescription, 1> subpasses =
+	  {
+	   color_subpass
+	  };
+	
+	constexpr uint32_t k_depth_subpass_index = 0;
+	constexpr uint32_t k_color_subpass_index = 0;
+
+	VkSubpassDependency depth_dependency = {};
+	depth_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	depth_dependency.dstSubpass = k_depth_subpass_index;
+
+	depth_dependency.srcStageMask =
+	  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+
+	depth_dependency.srcAccessMask = 0;
+
+	depth_dependency.dstStageMask =
+	  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	
+	depth_dependency.dstAccessMask =
+	  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+	  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	
 	VkSubpassDependency color_dependency = {};
-	color_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	color_dependency.dstSubpass = 0;
+	color_dependency.srcSubpass = k_depth_subpass_index;
+	color_dependency.dstSubpass = k_color_subpass_index;
 
 	color_dependency.srcStageMask =
-	  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 
 	color_dependency.srcAccessMask = 0;
 
@@ -1458,28 +1511,37 @@ namespace vulkan {
 	  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
 	  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-	VkSubpassDependency self_dependency = {};
-	self_dependency.srcSubpass = 0;
-	self_dependency.dstSubpass = 0;
+	VkSubpassDependency self_dependency = {};	
+	self_dependency.srcSubpass = k_color_subpass_index;
+	self_dependency.dstSubpass = k_color_subpass_index;
+	
 	self_dependency.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	self_dependency.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	
 	self_dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	self_dependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-	std::array<VkSubpassDependency, 2> dependencies =
+	
+	std::array<VkSubpassDependency, 3> dependencies =
 	  {
+	   depth_dependency,
 	   color_dependency,
 	   self_dependency
+	  };
+
+	std::array<VkAttachmentDescription, 2> attachments =
+	  {
+	   colorbuffer,
+	   depthbuffer	   
 	  };
 	
 	VkRenderPassCreateInfo render_pass_info = {};
 	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	render_pass_info.flags = 0;
+	render_pass_info.attachmentCount = attachments.size();
+	render_pass_info.pAttachments = attachments.data();
 
-	render_pass_info.attachmentCount = 1;
-	render_pass_info.pAttachments = &colorbuffer;
-
-	render_pass_info.subpassCount = 1;
-	render_pass_info.pSubpasses = &subpass;
+	render_pass_info.subpassCount = subpasses.size();
+	render_pass_info.pSubpasses = subpasses.data();
 	
 	render_pass_info.dependencyCount = dependencies.size();
 	render_pass_info.pDependencies = dependencies.data();
@@ -1490,7 +1552,7 @@ namespace vulkan {
 				 &m_vk_render_pass));
 
 	VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
-	depth_stencil_state.stype = VK_STRUCTURE_TYPE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depth_stencil_state.pNext = nullptr;
 	depth_stencil_state.flags = 0;
 	depth_stencil_state.depthTestEnable = VK_TRUE;
@@ -1500,7 +1562,8 @@ namespace vulkan {
 	depth_stencil_state.stencilTestEnable = VK_FALSE;
 	depth_stencil_state.minDepthBounds = 0.0f;
 	depth_stencil_state.maxDepthBounds = 1.0f;
-	
+	depth_stencil_state.front = default_stencilop_state();
+	depth_stencil_state.back = default_stencilop_state();
 	
 	VkGraphicsPipelineCreateInfo pipeline_info = {};
 	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1543,15 +1606,19 @@ namespace vulkan {
 	m_vk_swapchain_framebuffers.resize(m_vk_swapchain_image_views.size());
 
 	for (size_t i = 0; i < m_vk_swapchain_image_views.size(); ++i) {
-	  VkImageView attachments[] = {
-	    m_vk_swapchain_image_views[i] 
-	  };
+	  std::array<VkImageView, 2> attachments =
+	    {
+	     m_vk_swapchain_image_views[i],
+	     m_depthbuffer.image_view
+	    };
 
 	  VkFramebufferCreateInfo framebuffer_info = {};
 	  framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	  framebuffer_info.pNext = nullptr;
+	  framebuffer_info.flags = 0;
 	  framebuffer_info.renderPass = m_vk_render_pass;
-	  framebuffer_info.attachmentCount = 1;
-	  framebuffer_info.pAttachments = attachments;
+	  framebuffer_info.attachmentCount = attachments.size();
+	  framebuffer_info.pAttachments = attachments.data();
 	  framebuffer_info.width = m_vk_swapchain_extent.width;
 	  framebuffer_info.height = m_vk_swapchain_extent.height;
 	  framebuffer_info.layers = 1;
@@ -1621,6 +1688,9 @@ namespace vulkan {
 		   puts("image_layout_transition");
 		   
 		   image_layout_transition().
+		     for_aspect(VK_IMAGE_ASPECT_COLOR_BIT).
+		     from_access(0).
+		     to_access(VK_ACCESS_SHADER_READ_BIT).
 		     from(texture2d_data::k_initial_layout).
 		     to(texture2d_data::k_final_layout).
 		     for_image(m_test_texture2d.image).
@@ -1706,9 +1776,17 @@ namespace vulkan {
 	    vkCmdBeginRenderPass(m_vk_command_buffers[i],
 				 &render_pass_info,
 				 VK_SUBPASS_CONTENTS_INLINE);
+
+	    image_layout_transition().
+	      for_aspect(depthbuffer_data::k_image_aspect_flags).
+	      from_access(0).
+	      to_access(depthbuffer_data::k_access_flags).
+	      from(depthbuffer_data::k_initial_layout).
+	      to(depthbuffer_data::k_final_layout).
+	      for_image(m_depthbuffer.image).
+	      via(m_vk_command_buffers[i]);
 	    
 	    vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
-
 	    vkCmdEndRenderPass(m_vk_command_buffers[i]);
 
 	    VK_FN(vkEndCommandBuffer(m_vk_command_buffers[i]));
@@ -1756,6 +1834,7 @@ namespace vulkan {
       setup_descriptor_pool();
       setup_uniform_block_data();
       setup_texture_data();
+      setup_depthbuffer_data();
       setup_graphics_pipeline();
       setup_vertex_buffer();
       setup_framebuffers();

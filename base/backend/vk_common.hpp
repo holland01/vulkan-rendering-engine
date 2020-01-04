@@ -184,6 +184,10 @@ namespace vulkan {
     static inline constexpr VkFormat k_format = VK_FORMAT_D32_SFLOAT;
     static inline constexpr VkImageLayout k_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     static inline constexpr VkImageLayout k_final_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    static inline constexpr VkImageAspectFlags k_image_aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    static inline constexpr VkAccessFlags k_access_flags =
+      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     
     uint32_t width{UINT32_MAX};
     uint32_t height{UINT32_MAX};
@@ -203,6 +207,17 @@ namespace vulkan {
       return r;
     }
 
+    std::string to_string() const {
+      std::stringstream ss;
+      ss << "depthbuffer_data:\n"
+	 << "..." << AS_STRING_SS(width) << "\n"
+	 << "..." << AS_STRING_SS(height) << "\n"
+	 << "..." << SS_HEX_NAME(image) << "\n"
+	 << "..." << SS_HEX_NAME(image_view) << "\n"
+	 << "..." << SS_HEX_NAME(memory) << "\n";
+      return ss.str();
+    }
+    
     void free_mem(VkDevice device) {
       VK_FN(vkDeviceWaitIdle(device));
       

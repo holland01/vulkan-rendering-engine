@@ -72,6 +72,8 @@ namespace fs = std::experimental::filesystem;
 
 #define SS_HEX(value) "0x" << std::uppercase << std::setfill('0') << std::setw((sizeof(value)) << 1) << std::hex << (value) << std::dec
 
+#define SS_HEX_NAME(value) #value << ":" << SS_HEX(value)
+
 #define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
 
 #define DEBUGLINE write_logf("FILE:%s,LINE:%i\n", __FILE__, __LINE__)
