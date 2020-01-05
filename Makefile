@@ -24,7 +24,8 @@ CXXFLAGS=-std=c++17 -Wall -Wpedantic -Werror -Wno-unused-function -Wno-unused-va
 CFLAGS=
 
 ifdef DEBUG
-	CXXFLAGS += -g -ggdb -O0 -DBASE_DEBUG=1 -DBASE_ON_DIE_TRIGGER_SEGFAULT
+	CPPFLAGS += -DBASE_DEBUG=1 -DBASE_ON_DIE_TRIGGER_SEGFAULT
+	CXXFLAGS += -g -ggdb -O0 
 	CFLAGS += -g -ggdb -O0
 else
 	CXXFLAGS += -O2

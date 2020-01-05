@@ -44,7 +44,7 @@ namespace vulkan {
     VkBuffer make_uniform_buffer(VkDeviceSize sz) const {
       return vulkan::make_buffer(m_resource_props,
 				 0,
-				 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				 sz);
 
     }
@@ -159,7 +159,7 @@ namespace vulkan {
 			    memory_property_index);
       ASSERT(valid);
 
-      VkBuffer buffer{VK_NULL_HANDLE};
+      VkBuffer ubuffer{VK_NULL_HANDLE};
       VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
       VkDescriptorSet descset{VK_NULL_HANDLE};
       VkDeviceMemory device_memory{VK_NULL_HANDLE};
@@ -173,13 +173,13 @@ namespace vulkan {
       }
 
       if (api_ok() && device_memory != VK_NULL_HANDLE) {
-	buffer = make_uniform_buffer(block_size);
+	ubuffer = make_uniform_buffer(block_size);
       }
       
       bool bound = false;
-      if (api_ok() && buffer != VK_NULL_HANDLE) {	
+      if (api_ok() && ubuffer != VK_NULL_HANDLE) {	
 	VK_FN(vkBindBufferMemory(m_resource_props.device,
-				 buffer,
+				 ubuffer,
 				 device_memory,
 				 0));
 	bound = api_ok();
@@ -204,7 +204,7 @@ namespace vulkan {
 
       if (api_ok() && descset != VK_NULL_HANDLE) {	
 	write_descriptor_set(m_resource_props.device,
-			     buffer,
+			     ubuffer,
 			     static_cast<VkDeviceSize>(block_size),
 			     descset,
 			     binding_index,
@@ -221,7 +221,7 @@ namespace vulkan {
 	m_descriptor_set_layouts[ret] = descriptor_set_layout;
 	m_descriptor_sets[ret] = descset;
 	m_device_memories[ret] = device_memory;
-	m_buffers[ret] = buffer;
+	m_buffers[ret] = ubuffer;
 
 	m_user_ptrs[ret] = block_data;
       }
@@ -251,6 +251,14 @@ namespace vulkan {
       return ret;
     }
 
+    VkBuffer buffer(index_type which) const {
+      VkBuffer ret{VK_NULL_HANDLE};
+      if (ok_index(which)) {
+	ret = m_buffers.at(which);
+      }
+      return ret;
+    }
+
     void update_block(index_type which) const {
       if (ok_index(which)) {
 	write_device_memory(m_resource_props.device,
@@ -264,10 +272,27 @@ namespace vulkan {
   template <class dataType>
   struct uniform_block_data {
     dataType data{};
+    uniform_block_pool* pool{nullptr};
     uniform_block_pool::index_type index{uniform_block_pool::k_unset};
 
     bool ok() const {
-      return index != uniform_block_pool::k_unset;
+      bool r =
+	index != uniform_block_pool::k_unset &&
+	pool != nullptr;
+      ASSERT(r);
+      return r;
+    }
+
+    void cmd_buffer_update(VkCommandBuffer cmd_buffer) {
+      if (ok()) {
+	VkBuffer ubuffer = pool->buffer(index);
+
+	vkCmdUpdateBuffer(cmd_buffer,
+			  ubuffer,
+			  0,
+			  sizeof(data),
+			  reinterpret_cast<void*>(&data));
+      }
     }
   };
 }

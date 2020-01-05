@@ -78,6 +78,7 @@ namespace vulkan {
   static inline uint32_t bpp_from_format(VkFormat in) {
     uint32_t ret = 0;
     switch (in) {
+    case VK_FORMAT_D24_UNORM_S8_UINT:
     case VK_FORMAT_D32_SFLOAT:
     case VK_FORMAT_R8G8B8A8_UNORM:
       ret = 4;
@@ -108,10 +109,33 @@ namespace vulkan {
     static inline constexpr uint32_t k_array_elem = 0;
     static inline constexpr uint32_t k_descriptor_count = 1;
     static inline constexpr VkDescriptorType k_descriptor_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    static inline constexpr VkImageLayout k_initial_layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-    static inline constexpr VkImageLayout k_final_layout = VK_IMAGE_LAYOUT_GENERAL;
-    static inline constexpr VkFormat k_format = VK_FORMAT_R8G8B8A8_UNORM;
-      
+
+    static inline constexpr uint32_t k_bpp = 4;
+    static inline constexpr VkFormat k_format =
+      VK_FORMAT_R8G8B8A8_UNORM;
+
+    static inline constexpr VkImageLayout k_initial_layout =
+      VK_IMAGE_LAYOUT_PREINITIALIZED;
+
+    static inline constexpr VkImageLayout k_final_layout =
+      VK_IMAGE_LAYOUT_GENERAL;
+
+    static inline constexpr VkImageAspectFlags k_image_aspect_flags =
+      VK_IMAGE_ASPECT_COLOR_BIT;
+
+    static inline constexpr VkImageUsageFlags k_image_usage_flags =
+      VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    static inline constexpr VkImageTiling k_image_tiling =
+      VK_IMAGE_TILING_LINEAR;
+
+    static inline constexpr VkAccessFlags k_access_flags =
+      VK_ACCESS_SHADER_READ_BIT;
+
+    static inline constexpr VkMemoryPropertyFlags k_memory_property_flags =
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    
     VkSampler sampler{VK_NULL_HANDLE};
     VkImage image{VK_NULL_HANDLE};
     VkImageView image_view{VK_NULL_HANDLE};
@@ -181,13 +205,17 @@ namespace vulkan {
 
   struct depthbuffer_data {
     static inline constexpr uint32_t k_bpp = 4;
-    static inline constexpr VkFormat k_format = VK_FORMAT_D32_SFLOAT;
+    static inline constexpr VkFormat k_format = VK_FORMAT_D24_UNORM_S8_UINT;
     static inline constexpr VkImageLayout k_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     static inline constexpr VkImageLayout k_final_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    static inline constexpr VkImageAspectFlags k_image_aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    static inline constexpr VkImageAspectFlags k_image_aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    static inline constexpr VkImageUsageFlags k_image_usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    static inline constexpr VkImageTiling k_image_tiling = VK_IMAGE_TILING_OPTIMAL;
     static inline constexpr VkAccessFlags k_access_flags =
       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    static inline constexpr VkMemoryPropertyFlags k_memory_property_flags =      
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     
     uint32_t width{UINT32_MAX};
     uint32_t height{UINT32_MAX};

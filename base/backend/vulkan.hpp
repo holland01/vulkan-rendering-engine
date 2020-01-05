@@ -21,6 +21,8 @@
 #include <iostream>
 #include <functional>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 namespace vulkan {
   struct image_requirements;
   
@@ -146,6 +148,9 @@ namespace vulkan {
   struct image_layout_transition {
     VkImageMemoryBarrier barrier;
 
+    VkPipelineStageFlags src_stage_mask;
+    VkPipelineStageFlags dst_stage_mask;
+    
     image_layout_transition() {
       barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
       barrier.pNext = nullptr;
@@ -160,6 +165,14 @@ namespace vulkan {
       barrier.subresourceRange.levelCount = 1;
       barrier.subresourceRange.baseArrayLayer = 0;
       barrier.subresourceRange.layerCount = 1;
+    }
+
+    image_layout_transition& from_stage(VkPipelineStageFlags flags) {
+      src_stage_mask = flags; return *this;
+    }
+
+    image_layout_transition& to_stage(VkPipelineStageFlags flags) {
+      dst_stage_mask = flags; return *this;
     }
 
     image_layout_transition& for_aspect(VkImageAspectFlags aspect_mask) {
@@ -189,8 +202,8 @@ namespace vulkan {
     image_layout_transition& via(VkCommandBuffer buffer) {       
       if (api_ok()) {
 	vkCmdPipelineBarrier(buffer,
-			     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			     src_stage_mask,
+			     dst_stage_mask,
 			     0,
 			     0,
 			     nullptr,
@@ -1288,8 +1301,10 @@ namespace vulkan {
 				    1,
 				    0,
 				    VK_SHADER_STAGE_VERTEX_BIT);
-       	
-	m_ok_uniform_block_data = m_vertex_uniform_block.ok();
+
+	m_vertex_uniform_block.pool = m_uniform_block_pool.get();
+	
+	m_ok_uniform_block_data = m_vertex_uniform_block.ok();	
       }
     }
     
@@ -1491,15 +1506,14 @@ namespace vulkan {
 	depth_dependency.dstStageMask =
 	  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 	
-	depth_dependency.dstAccessMask =
-	  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-	  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	
+	depth_dependency.dstAccessMask = depthbuffer_data::k_access_flags;
+	  	
 	VkSubpassDependency color_dependency = {};
 	color_dependency.srcSubpass = k_depth_subpass_index;
 	color_dependency.dstSubpass = k_color_subpass_index;
 
 	color_dependency.srcStageMask =
+	  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
 	  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 
 	color_dependency.srcAccessMask = 0;
@@ -1515,10 +1529,16 @@ namespace vulkan {
 	self_dependency.srcSubpass = k_color_subpass_index;
 	self_dependency.dstSubpass = k_color_subpass_index;
 	
-	self_dependency.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	self_dependency.srcStageMask =
+	  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+	  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+
 	self_dependency.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
 	
-	self_dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	self_dependency.dstStageMask =
+	  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+	  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+
 	self_dependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 	
 	std::array<VkSubpassDependency, 3> dependencies =
@@ -1688,6 +1708,8 @@ namespace vulkan {
 		   puts("image_layout_transition");
 		   
 		   image_layout_transition().
+		     from_stage(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT).
+		     to_stage(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT).
 		     for_aspect(VK_IMAGE_ASPECT_COLOR_BIT).
 		     from_access(0).
 		     to_access(VK_ACCESS_SHADER_READ_BIT).
@@ -1757,6 +1779,17 @@ namespace vulkan {
 				    descriptor_sets.data(),
 				    0,
 				    nullptr);
+
+	    image_layout_transition().
+	      from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+	      to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+	      for_aspect(depthbuffer_data::k_image_aspect_flags).
+	      from_access(0).
+	      to_access(depthbuffer_data::k_access_flags).
+	      from(depthbuffer_data::k_initial_layout).
+	      to(depthbuffer_data::k_final_layout).
+	      for_image(m_depthbuffer.image).
+	      via(m_vk_command_buffers[i]);
 	    
 	    VkRenderPassBeginInfo render_pass_info = {};
 	    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1767,27 +1800,48 @@ namespace vulkan {
 	    render_pass_info.renderArea.offset = {0, 0};
 	    render_pass_info.renderArea.extent = m_vk_swapchain_extent;
 
+	    std::array<VkClearValue, 2> clear_values;
+	    
+	    clear_values[0].color.float32[0] = 1.0f;
+	    clear_values[0].color.float32[1] = 0.0f;
+	    clear_values[0].color.float32[2] = 0.0f;
+	    clear_values[0].color.float32[3] = 1.0f;
+
+	    clear_values[1].depthStencil.depth = 1.0f;
+	    clear_values[1].depthStencil.stencil = 0;
+	    
 	    // for the color attachment's VK_ATTACHMENT_LOAD_OP_CLEAR
 	    // operation
-	    render_pass_info.clearValueCount = 1;
-	    VkClearValue clear_color = { 1.0f, 0.0f, 0.0f, 1.0f };
-	    render_pass_info.pClearValues = &clear_color;
+	    render_pass_info.clearValueCount = clear_values.size();
+	    render_pass_info.pClearValues = clear_values.data();
 
-	    vkCmdBeginRenderPass(m_vk_command_buffers[i],
-				 &render_pass_info,
-				 VK_SUBPASS_CONTENTS_INLINE);
+	    {
+	      m_vertex_uniform_block.data.world_to_view = glm::translate(mat4_t{R(1)},
+									 R3v(0, -5, 0));
 
-	    image_layout_transition().
-	      for_aspect(depthbuffer_data::k_image_aspect_flags).
-	      from_access(0).
-	      to_access(depthbuffer_data::k_access_flags).
-	      from(depthbuffer_data::k_initial_layout).
-	      to(depthbuffer_data::k_final_layout).
-	      for_image(m_depthbuffer.image).
-	      via(m_vk_command_buffers[i]);
+	      m_vertex_uniform_block.cmd_buffer_update(m_vk_command_buffers[i]);
 	    
-	    vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
-	    vkCmdEndRenderPass(m_vk_command_buffers[i]);
+	      vkCmdBeginRenderPass(m_vk_command_buffers[i],
+				   &render_pass_info,
+				   VK_SUBPASS_CONTENTS_INLINE);
+	    
+	      vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
+	      vkCmdEndRenderPass(m_vk_command_buffers[i]);
+	    }
+
+	    {
+	      m_vertex_uniform_block.data.world_to_view = glm::translate(mat4_t{R(1)},
+									 R3v(0, -1, 0));
+	      
+	      m_vertex_uniform_block.cmd_buffer_update(m_vk_command_buffers[i]);
+	    
+	      vkCmdBeginRenderPass(m_vk_command_buffers[i],
+				   &render_pass_info,
+				   VK_SUBPASS_CONTENTS_INLINE);
+	    
+	      vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
+	      vkCmdEndRenderPass(m_vk_command_buffers[i]);
+	    }
 
 	    VK_FN(vkEndCommandBuffer(m_vk_command_buffers[i]));
 	  }

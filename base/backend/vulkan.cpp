@@ -204,8 +204,8 @@ namespace vulkan {
 
     return api_ok();
   }
-  
-  static
+
+  template <typename imageContainerType>
   VkImageCreateInfo default_image_create_info_texture2d(const device_resource_properties& properties) {
     VkImageCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -213,8 +213,12 @@ namespace vulkan {
 
     create_info.flags = 0;
     create_info.imageType = VK_IMAGE_TYPE_2D;
-    create_info.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
-
+    
+    create_info.format = imageContainerType::k_format;
+    create_info.initialLayout = imageContainerType::k_initial_layout;
+    create_info.tiling = imageContainerType::k_image_tiling;
+    create_info.usage = imageContainerType::k_image_usage_flags;
+    
     create_info.extent.width = 0;
     create_info.extent.height = 0;
     create_info.extent.depth = 1;
@@ -223,15 +227,11 @@ namespace vulkan {
     create_info.arrayLayers = 1;
 
     create_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    create_info.tiling = VK_IMAGE_TILING_LINEAR;
-    create_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
-      
+
     create_info.sharingMode = properties.queue_sharing_mode;
 
     create_info.queueFamilyIndexCount = properties.queue_family_indices.size();
-    create_info.pQueueFamilyIndices = properties.queue_family_indices.data();
-      
-    create_info.initialLayout = texture2d_data::k_initial_layout;
+    create_info.pQueueFamilyIndices = properties.queue_family_indices.data();     
 
     ASSERT(image_create_info_valid(properties.physical_device,
 				   create_info));
@@ -239,7 +239,7 @@ namespace vulkan {
     return create_info;
   }
 
-  static
+  template <typename imageContainerType>
   VkImageViewCreateInfo default_image_view_create_info_texture2d() {
     VkImageViewCreateInfo create_info = {};
     
@@ -249,14 +249,14 @@ namespace vulkan {
     create_info.image = VK_NULL_HANDLE;
 
     create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    create_info.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
+    create_info.format = imageContainerType::k_format;
     
     create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
     create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
     create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
     create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 
-    create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    create_info.subresourceRange.aspectMask = imageContainerType::k_image_aspect_flags;
 
     create_info.subresourceRange.baseMipLevel = 0;
     create_info.subresourceRange.levelCount = 1;
@@ -266,9 +266,8 @@ namespace vulkan {
 
     return create_info;
   }
-
-  static
-  VkSamplerCreateInfo default_sampler_create_info_texture2d() {
+  
+  static VkSamplerCreateInfo default_sampler_create_info_texture2d() {
     VkSamplerCreateInfo create_info = {};
 
     create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -368,15 +367,12 @@ namespace vulkan {
   // for a given width/height/bpp/image layout combination,
   // while also verifying compatibility with these parameters,
   // in addition to our chosen image format.
-  static
+  template <class imageContainerType>
   image_requirements get_image_requirements_texture2d(const device_resource_properties& properties,
 						      uint32_t width,
-						      uint32_t height,
-						      uint32_t bytes_per_pixel,
-						      VkImageLayout layout,
-						      VkFormat format) {
-
-    ASSERT(bytes_per_pixel == bpp_from_format(format));
+						      uint32_t height) {
+    ASSERT(imageContainerType::k_bpp ==
+	   bpp_from_format(imageContainerType::k_format));
     
     image_requirements ret{};
 
@@ -384,15 +380,13 @@ namespace vulkan {
     ret.desired.height = height;
     ret.desired.depth = 1;
 
-    ret.bytes_per_pixel = bytes_per_pixel;
+    ret.bytes_per_pixel = imageContainerType::k_bpp;
     
     VkImageCreateInfo create_info =
-      default_image_create_info_texture2d(properties);
+      default_image_create_info_texture2d<imageContainerType>(properties);
 
     create_info.extent.width = width;
     create_info.extent.height = height;
-    create_info.initialLayout = layout;
-    create_info.format = format;
 
     VkImage dummy_image{VK_NULL_HANDLE};
     
@@ -410,7 +404,7 @@ namespace vulkan {
       
       ret.required = calc_minimum_dimensions_texture2d(width,
 						       height,
-						       bytes_per_pixel,
+						       imageContainerType::k_bpp,
 						       req);
       
       // find an appropriate memory type index
@@ -422,15 +416,11 @@ namespace vulkan {
 	vkGetPhysicalDeviceMemoryProperties(properties.physical_device,
 					    &memory_properties);
 
-	// necessary for vkMapMemory()
-	constexpr VkMemoryPropertyFlags k_mem_flags =
-	  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-	  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
+	
 	int32_t memory_type_index =
 	  find_memory_properties(&memory_properties,
 				 req.memoryTypeBits,
-				 k_mem_flags);
+				 imageContainerType::k_memory_property_flags);
       
 	ASSERT(memory_type_index != -1);
 
@@ -457,13 +447,10 @@ namespace vulkan {
     if (properties.ok()) {
       VK_FN(vkDeviceWaitIdle(properties.device));
 
-      image_requirements req = get_image_requirements_texture2d(properties,
-								width,
-								height,
-								bytes_per_pixel,
-							        texture2d_data::k_initial_layout,
-								texture2d_data::k_format);
-            
+      image_requirements req = get_image_requirements_texture2d<texture2d_data>(properties,
+										width,
+										height);
+							                    
       if (req.ok()) {
 	ret.memory = make_device_memory(properties.device,
 					pixels.data(),
@@ -474,7 +461,7 @@ namespace vulkan {
 
       if (ret.memory != VK_NULL_HANDLE) {
 	VkImageCreateInfo create_info =
-	  default_image_create_info_texture2d(properties);
+	  default_image_create_info_texture2d<texture2d_data>(properties);
 
 	create_info.extent.width = width;
 	create_info.extent.height = height;	
@@ -499,7 +486,7 @@ namespace vulkan {
       
       if (bound) {
 	VkImageViewCreateInfo create_info =
-	  default_image_view_create_info_texture2d();
+	  default_image_view_create_info_texture2d<texture2d_data>();
 
 	create_info.image = ret.image;
 
@@ -542,7 +529,7 @@ namespace vulkan {
       if (api_ok() && ret.descriptor_set != VK_NULL_HANDLE) {
 	ret.width = width;
 	ret.height = height;
-	ret.format = BASE_TEXTURE2D_DEFAULT_VK_FORMAT;
+	ret.format = texture2d_data::k_format;
 	ret.layout = texture2d_data::k_final_layout;
       }
 
@@ -561,33 +548,38 @@ namespace vulkan {
     
     if (properties.ok()) {
       VK_FN(vkDeviceWaitIdle(properties.device));
-      image_requirements req = get_image_requirements_texture2d(properties,
-								width,
-								height,
-							        depthbuffer_data::k_bpp,
-							        depthbuffer_data::k_initial_layout,
-								depthbuffer_data::k_format);            
+      image_requirements req = get_image_requirements_texture2d<depthbuffer_data>(properties,
+										  width,
+										  height);
       if (req.ok()) {
-	darray<float> depthvalues(width * height);
-	for (size_t i = 0; i < depthvalues.size(); ++i) {
-	  depthvalues[i] = 1.0f;
-	}
-	ret.memory = make_device_memory(properties.device,
-					reinterpret_cast<void*>(depthvalues.data()),
-				        depthvalues.size() * sizeof(depthvalues[0]),
-					req.memory_size(),
-					req.memory_type_index);
+	//	darray<uint8_t> depthvalues(width * height * depthbuffer_data::k_bpp, 0);
+	//	ret.memory = make_device_memory(properties.device,
+	//				reinterpret_cast<void*>(depthvalues.data()),
+	//			        depthvalues.size() * sizeof(depthvalues[0]),
+	//				req.memory_size(),
+	//				req.memory_type_index);
+
+	    VkDeviceMemory memory{VK_NULL_HANDLE};
+	    VkMemoryAllocateInfo info = {};
+      
+	    info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	    info.pNext = nullptr;
+	    info.allocationSize = req.memory_size();
+	    info.memoryTypeIndex = req.memory_type_index;
+
+	    VK_FN(vkAllocateMemory(properties.device,
+				   &info,
+				   nullptr,
+				   &ret.memory));
+
       }
       
       if (ret.memory != VK_NULL_HANDLE) {
 	VkImageCreateInfo create_info =
-	  default_image_create_info_texture2d(properties);
+	  default_image_create_info_texture2d<depthbuffer_data>(properties);
 
 	create_info.extent.width = width;
-	create_info.extent.height = height;	
-
-	create_info.format = depthbuffer_data::k_format;
-	create_info.initialLayout = depthbuffer_data::k_initial_layout;
+	create_info.extent.height = height;
       
 	VK_FN(vkCreateImage(properties.device,
 			    &create_info,
@@ -607,11 +599,9 @@ namespace vulkan {
       
       if (bound) {
 	VkImageViewCreateInfo create_info =
-	  default_image_view_create_info_texture2d();
+	  default_image_view_create_info_texture2d<depthbuffer_data>();
 
 	create_info.image = ret.image;
-	create_info.format = depthbuffer_data::k_format;
-	create_info.subresourceRange.aspectMask = depthbuffer_data::k_image_aspect_flags;
 	
 	VK_FN(vkCreateImageView(properties.device,
 				&create_info,
