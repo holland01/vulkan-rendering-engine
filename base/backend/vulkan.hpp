@@ -228,9 +228,16 @@ namespace vulkan {
     vec3_t color;
   };
 
+  struct rot_cmd {
+    vec3_t axes;
+    real_t rad;
+  };
+  
   using vertex_list_t = darray<vertex_data>;
   
   class renderer {
+    uint32_t m_instance_count{0};
+    
     std::unique_ptr<uniform_block_pool> m_uniform_block_pool{nullptr};
     
     darray<VkPhysicalDevice> m_vk_physical_devs;
@@ -250,11 +257,81 @@ namespace vulkan {
     depthbuffer_data m_depthbuffer{};
     
     uniform_block_data<transform_data> m_vertex_uniform_block{};
+
+    static inline constexpr vec3_t k_cube_center = R3v(0, 0, 0);
+    static inline constexpr vec3_t k_cube_size = R3(20);
     
+    static inline constexpr vec3_t k_color_green = R3v(0, 1, 0);
+    static inline constexpr vec3_t k_color_red = R3v(1, 0, 0);
+    static inline constexpr vec3_t k_color_blue = R3v(0, 0, 1);
+
+    // NOTE:
+    // right handed system,
+    // so positive rotation about a given axis
+    // is counter-clockwise
     vertex_list_t m_vertex_buffer_vertices =
-      model_triangle() +
-      model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8));
-    
+      model_triangle(R3v(-2.25, 0, 0)) +
+
+      model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) +
+
+      // left face
+      model_quad(k_cube_center + R3v(-1, 0, 0),
+		 k_color_red,
+		 k_cube_size,
+		 {
+		  {
+		   R3v(0, 1, 0),
+		   glm::half_pi<real_t>()
+		  }
+		 }) +
+
+      // right face
+      model_quad(k_cube_center + R3v(1, 0, 0),
+		 k_color_green,
+		 k_cube_size,
+		 {
+		  {
+		   R3v(0, 1, 0),
+		   glm::half_pi<real_t>()
+		  }
+		 }) +
+
+      // up face
+      model_quad(k_cube_center + R3v(0, 1, 0),
+		 k_color_blue,
+		 k_cube_size,
+		 {
+		  {
+		   R3v(1, 0, 0),
+		   -glm::half_pi<real_t>()
+		  }
+		 }) +
+
+      // down face
+      model_quad(k_cube_center + R3v(0, -1, 0),
+		 k_color_red,
+		 k_cube_size,
+		 {
+		  {
+		   R3v(1, 0, 0),
+		   glm::half_pi<real_t>()
+		  }
+		 }) +
+      
+      // front face
+      model_quad(k_cube_center + R3v(0, 0, 1),
+		 k_color_green,
+		 k_cube_size,
+		 {}) +
+
+      // back face
+      model_quad(k_cube_center + R3v(0, 0, -1),
+		 k_color_blue,
+		 k_cube_size,
+		 {});
+
+
+      
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
     VkDescriptorPool m_vk_descriptor_pool{VK_NULL_HANDLE};
@@ -315,13 +392,43 @@ namespace vulkan {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
+    static constexpr inline real_t k_tri_ps = R(1);
+    
     vertex_list_t model_triangle(vec3_t offset = R3(0), vec3_t color = R3(1)) {
+      m_instance_count++;
       return
 	{
-	 { R3v(-0.5, 0.5, 0.0) + offset, R2v(0.0, 0.0), color }, // top left position, top left texture
-	 { R3v(0.5, -0.5, 0.0) + offset, R2v(1.0, 1.0), color }, // bottom right position, bottom right texture
-	 { R3v(-0.5, -0.5, 0.0) + offset, R2v(0.0, 1.0), color }
+	 { R3v(-k_tri_ps, k_tri_ps, 0.0) + offset, R2v(0.0, 0.0), color }, // top left position, top left texture
+	 { R3v(k_tri_ps, -k_tri_ps, 0.0) + offset, R2v(1.0, 1.0), color }, // bottom right position, bottom right texture
+	 { R3v(-k_tri_ps, -k_tri_ps, 0.0) + offset, R2v(0.0, 1.0), color }
 	};
+    }
+    
+    vertex_list_t model_quad(vec3_t translate = R3(1),
+			     vec3_t color = R3(1),
+			     vec3_t scale = R3(1),
+			     darray<rot_cmd> rot = darray<rot_cmd>()) {
+      auto a = model_triangle(R3(0), color);
+      auto b = model_triangle(R3(0), color);
+
+      a[1].position.y = R(k_tri_ps); // flip to top
+      a[1].st.y = R(0);
+      
+      a[2].position.x = R(k_tri_ps); 
+      a[2].st.x = R(1);
+
+      auto combined = a + b;
+      
+      for (vertex_data& vertex: combined) {
+	vertex.position *= scale;
+	for (const auto& cmd: rot) {
+	  mat4_t R = glm::rotate(mat4_t(R(1)), cmd.rad, cmd.axes);
+	  vertex.position = MAT4V3(R, vertex.position);
+	}
+	vertex.position += translate * scale;
+      }
+
+      return combined;
     }
 
     void print_physical_device_memory_types() {
@@ -1840,9 +1947,11 @@ namespace vulkan {
 	      vkCmdBeginRenderPass(m_vk_command_buffers[i],
 				   &render_pass_info,
 				   VK_SUBPASS_CONTENTS_INLINE);
-	    
-	      vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
-	      vkCmdDraw(m_vk_command_buffers[i], 3, 1, 3, 1);
+	      
+	      for (uint32_t j = 0; j < m_instance_count; ++j) {
+		vkCmdDraw(m_vk_command_buffers[i], 3, 1, j * 3, j);
+	      }
+
 	      vkCmdEndRenderPass(m_vk_command_buffers[i]);
 	    }
 
