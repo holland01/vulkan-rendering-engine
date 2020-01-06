@@ -109,6 +109,7 @@ using darray = std::vector<T>;
 
 #define R4v(x,y,z,w) vec4_t{R(x), R(y), R(z), R(w)}
 #define R3v(x,y,z) vec3_t{R(x), R(y), R(z)}
+#define R2v(x,y) vec2_t{R(x), R(y)}
 
 #define PI_OVER_2 glm::half_pi<real_t>()
 #define PI glm::pi<real_t>()

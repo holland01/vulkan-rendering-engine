@@ -2,9 +2,10 @@
 
 layout(location = 0) in vec3 in_Position;
 layout(location = 1) in vec2 in_TexCoord;
+layout(location = 2) in vec3 in_Color;
 
 layout(location = 0) out vec2 frag_TexCoord;
-layout(location = 1) out vec3 frag_TexColor;
+layout(location = 1) out vec3 frag_Color;
 
 layout(set = 1, binding = 0) uniform the_uniform_buffer {
   mat4 viewToClip;
@@ -13,14 +14,9 @@ layout(set = 1, binding = 0) uniform the_uniform_buffer {
 
 void main() {
   gl_Position = viewToClip * worldToView * vec4(in_Position, 1.0);
-  gl_Position.y = -gl_Position.y;
-  gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
-  frag_TexCoord = in_TexCoord;
+  gl_Position.y = -gl_Position.y; // invert y axis since vulkan's coordinate system is inverted on Y
+  gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0; // map NDC [-1,1] to NDC [0, 1]
 
-  if (gl_InstanceIndex == 0) {
-    frag_TexColor = vec3(1.0);
-  }
-  else {
-    frag_TexColor = vec3(0.0, 0.5, 0.8);
-  }
+  frag_TexCoord = in_TexCoord;
+  frag_Color = in_Color;
 }

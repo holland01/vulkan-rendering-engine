@@ -221,6 +221,14 @@ namespace vulkan {
     mat4_t view_to_clip{R(1.0)};
     mat4_t world_to_view{R(1.0)};
   };
+
+  struct vertex_data {
+    vec3_t position;
+    vec2_t st;
+    vec3_t color;
+  };
+
+  using vertex_list_t = darray<vertex_data>;
   
   class renderer {
     std::unique_ptr<uniform_block_pool> m_uniform_block_pool{nullptr};
@@ -243,16 +251,9 @@ namespace vulkan {
     
     uniform_block_data<transform_data> m_vertex_uniform_block{};
     
-    std::array<float, 30> m_vertex_buffer_vertices
-      {
-       -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, // top left position, top left texture
-       0.5f, -0.5f, 0.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
-       -0.5f, -0.5f, 0.0f, 0.0f, 1.0f,
-       
-       -0.5f + 2.25f, 0.5f, 1.0f, 0.0f, 0.0f, // top left position, top left texture
-       0.5f + 2.25f, -0.5f, 1.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
-       -0.5f + 2.25f, -0.5f, 1.0f, 0.0f, 1.0f
-      };
+    vertex_list_t m_vertex_buffer_vertices =
+      model_triangle() +
+      model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8));
     
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
@@ -313,6 +314,15 @@ namespace vulkan {
     static inline darray<const char*> s_device_extensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
+
+    vertex_list_t model_triangle(vec3_t offset = R3(0), vec3_t color = R3(1)) {
+      return
+	{
+	 { R3v(-0.5, 0.5, 0.0) + offset, R2v(0.0, 0.0), color }, // top left position, top left texture
+	 { R3v(0.5, -0.5, 0.0) + offset, R2v(1.0, 1.0), color }, // bottom right position, bottom right texture
+	 { R3v(-0.5, -0.5, 0.0) + offset, R2v(0.0, 1.0), color }
+	};
+    }
 
     void print_physical_device_memory_types() {
       darray<VkMemoryType> mem_types = get_physical_device_memory_types(m_vk_curr_pdevice);
@@ -1410,18 +1420,25 @@ namespace vulkan {
         iad_position.location = 0;
 	iad_position.binding = 0;
 	iad_position.format = VK_FORMAT_R32G32B32_SFLOAT;
-	iad_position.offset = 0;
+	iad_position.offset = offsetof(vertex_data, position);
 
 	VkVertexInputAttributeDescription iad_texture = {};
 	iad_texture.location = 1;
 	iad_texture.binding = 0;
 	iad_texture.format = VK_FORMAT_R32G32_SFLOAT;
-	iad_texture.offset = sizeof(float) * 3;
+	iad_texture.offset = offsetof(vertex_data, st);
 
-	std::array<VkVertexInputAttributeDescription, 2> input_attrs =
+	VkVertexInputAttributeDescription iad_color = {};
+	iad_color.location = 2;
+	iad_color.binding = 0;
+	iad_color.format = VK_FORMAT_R32G32B32_SFLOAT;
+	iad_color.offset = offsetof(vertex_data, color);
+
+        darray<VkVertexInputAttributeDescription> input_attrs =
 	  {
 	   iad_position,
-	   iad_texture
+	   iad_texture,
+	   iad_color
 	  };
 
 	vertex_input_state.vertexAttributeDescriptionCount = input_attrs.size();
@@ -1429,7 +1446,7 @@ namespace vulkan {
 	
 	VkVertexInputBindingDescription ibd = {};
 	ibd.binding = 0;
-	ibd.stride = sizeof(float) * 3 + sizeof(float) * 2;
+	ibd.stride = sizeof(vertex_data);
 	ibd.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 	vertex_input_state.vertexBindingDescriptionCount = 1;
