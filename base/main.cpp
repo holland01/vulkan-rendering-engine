@@ -1245,6 +1245,8 @@ void render_loop_triangle::init() {
   }
     
   if (m_renderer.ok_semaphores()) {
+    // moves the camera backward 5 units on the z axis - right handed system
+    g_m.view->position = R3v(0, 0, 5);
     g_m.view->reset_proj();
     post_init();
   }

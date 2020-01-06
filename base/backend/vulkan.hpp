@@ -243,11 +243,15 @@ namespace vulkan {
     
     uniform_block_data<transform_data> m_vertex_uniform_block{};
     
-    std::array<float, 15> m_vertex_buffer_vertices
+    std::array<float, 30> m_vertex_buffer_vertices
       {
        -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, // top left position, top left texture
        0.5f, -0.5f, 0.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
-       -0.5f, -0.5f, 0.0f, 0.0f, 1.0f
+       -0.5f, -0.5f, 0.0f, 0.0f, 1.0f,
+       
+       -0.5f + 2.25f, 0.5f, 1.0f, 0.0f, 0.0f, // top left position, top left texture
+       0.5f + 2.25f, -0.5f, 1.0f, 1.0f, 1.0f, // bottom right position, bottom right texture
+       -0.5f + 2.25f, -0.5f, 1.0f, 0.0f, 1.0f
       };
     
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
@@ -1815,31 +1819,13 @@ namespace vulkan {
 	    render_pass_info.clearValueCount = clear_values.size();
 	    render_pass_info.pClearValues = clear_values.data();
 
-	    {
-	      m_vertex_uniform_block.data.world_to_view = glm::translate(mat4_t{R(1)},
-									 R3v(0, -5, 0));
-
-	      m_vertex_uniform_block.cmd_buffer_update(m_vk_command_buffers[i]);
-	    
+	    {	    
 	      vkCmdBeginRenderPass(m_vk_command_buffers[i],
 				   &render_pass_info,
 				   VK_SUBPASS_CONTENTS_INLINE);
 	    
 	      vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
-	      vkCmdEndRenderPass(m_vk_command_buffers[i]);
-	    }
-
-	    {
-	      m_vertex_uniform_block.data.world_to_view = glm::translate(mat4_t{R(1)},
-									 R3v(0, -1, 0));
-	      
-	      m_vertex_uniform_block.cmd_buffer_update(m_vk_command_buffers[i]);
-	    
-	      vkCmdBeginRenderPass(m_vk_command_buffers[i],
-				   &render_pass_info,
-				   VK_SUBPASS_CONTENTS_INLINE);
-	    
-	      vkCmdDraw(m_vk_command_buffers[i], 3, 1, 0, 0);
+	      vkCmdDraw(m_vk_command_buffers[i], 3, 1, 3, 1);
 	      vkCmdEndRenderPass(m_vk_command_buffers[i]);
 	    }
 
