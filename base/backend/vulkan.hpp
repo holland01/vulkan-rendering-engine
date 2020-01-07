@@ -121,7 +121,8 @@ namespace vulkan {
   // that occur before B is hit.
   //
   // That's a loose, general definition of the overal concept. In our case,
-  // we're inserting the pipeline barrier somewhere between the very beginning
+  // for basic texturing in the shader, we're inserting
+  // the pipeline barrier somewhere between the very beginning
   // of the pipeline, and the fragment shader stage.
   //
   // At the time of insertion, we communicate to the driver that we do not
@@ -258,79 +259,27 @@ namespace vulkan {
     
     uniform_block_data<transform_data> m_vertex_uniform_block{};
 
-    static inline constexpr vec3_t k_cube_center = R3v(0, 0, 0);
-    static inline constexpr vec3_t k_cube_size = R3(20);
+    static inline constexpr vec3_t k_room_cube_center = R3v(0, 0, 0);
+    static inline constexpr vec3_t k_room_cube_size = R3(20);
+    static inline constexpr vec3_t k_mirror_cube_center = R3v(0, 0, 0);
+    static inline constexpr vec3_t k_mirror_cube_size = R3(1);
+    
     
     static inline constexpr vec3_t k_color_green = R3v(0, 1, 0);
     static inline constexpr vec3_t k_color_red = R3v(1, 0, 0);
     static inline constexpr vec3_t k_color_blue = R3v(0, 0, 1);
 
+    
+    
     // NOTE:
     // right handed system,
     // so positive rotation about a given axis
     // is counter-clockwise
     vertex_list_t m_vertex_buffer_vertices =
       model_triangle(R3v(-2.25, 0, 0)) +
-
       model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) +
-
-      // left face
-      model_quad(k_cube_center + R3v(-1, 0, 0),
-		 k_color_red,
-		 k_cube_size,
-		 {
-		  {
-		   R3v(0, 1, 0),
-		   glm::half_pi<real_t>()
-		  }
-		 }) +
-
-      // right face
-      model_quad(k_cube_center + R3v(1, 0, 0),
-		 k_color_green,
-		 k_cube_size,
-		 {
-		  {
-		   R3v(0, 1, 0),
-		   glm::half_pi<real_t>()
-		  }
-		 }) +
-
-      // up face
-      model_quad(k_cube_center + R3v(0, 1, 0),
-		 k_color_blue,
-		 k_cube_size,
-		 {
-		  {
-		   R3v(1, 0, 0),
-		   -glm::half_pi<real_t>()
-		  }
-		 }) +
-
-      // down face
-      model_quad(k_cube_center + R3v(0, -1, 0),
-		 k_color_red,
-		 k_cube_size,
-		 {
-		  {
-		   R3v(1, 0, 0),
-		   glm::half_pi<real_t>()
-		  }
-		 }) +
-      
-      // front face
-      model_quad(k_cube_center + R3v(0, 0, 1),
-		 k_color_green,
-		 k_cube_size,
-		 {}) +
-
-      // back face
-      model_quad(k_cube_center + R3v(0, 0, -1),
-		 k_color_blue,
-		 k_cube_size,
-		 {});
-
-
+      model_cube(k_room_cube_center, R3(1), k_room_cube_size) +
+      model_cube(k_mirror_cube_center, R3(1), k_mirror_cube_size);
       
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
@@ -404,7 +353,7 @@ namespace vulkan {
 	};
     }
     
-    vertex_list_t model_quad(vec3_t translate = R3(1),
+    vertex_list_t model_quad(vec3_t translate = R3(0),
 			     vec3_t color = R3(1),
 			     vec3_t scale = R3(1),
 			     darray<rot_cmd> rot = darray<rot_cmd>()) {
@@ -429,6 +378,67 @@ namespace vulkan {
       }
 
       return combined;
+    }
+
+    vertex_list_t model_cube(vec3_t translate = R3(0),
+			     vec3_t color = R3(1),
+			     vec3_t scale = R3(1)) {
+      return
+	// left face
+	model_quad(translate + R3v(-1, 0, 0),
+		   k_color_red * color,
+		   scale,
+		   {
+		    {
+		     R3v(0, 1, 0),
+		     glm::half_pi<real_t>()
+		    }
+		   }) +
+
+	// right face
+	model_quad(translate + R3v(1, 0, 0),
+		   k_color_green * color,
+		   scale,
+		   {
+		    {
+		     R3v(0, 1, 0),
+		     glm::half_pi<real_t>()
+		    }
+		   }) +
+
+	// up face
+	model_quad(translate + R3v(0, 1, 0),
+		   k_color_blue * color,
+		   scale,
+		   {
+		    {
+		     R3v(1, 0, 0),
+		     -glm::half_pi<real_t>()
+		    }
+		   }) +
+
+	// down face
+	model_quad(translate + R3v(0, -1, 0),
+		   k_color_red * color,
+		   scale,
+		   {
+		    {
+		     R3v(1, 0, 0),
+		     glm::half_pi<real_t>()
+		    }
+		   }) +
+      
+	// front face
+	model_quad(translate + R3v(0, 0, 1),
+		   k_color_green * color,
+		   scale,
+		   {}) +
+
+	// back face
+	model_quad(translate + R3v(0, 0, -1),
+		   k_color_blue * color,
+		   scale,
+		   {});
     }
 
     void print_physical_device_memory_types() {
@@ -1947,10 +1957,12 @@ namespace vulkan {
 	      vkCmdBeginRenderPass(m_vk_command_buffers[i],
 				   &render_pass_info,
 				   VK_SUBPASS_CONTENTS_INLINE);
-	      
-	      for (uint32_t j = 0; j < m_instance_count; ++j) {
-		vkCmdDraw(m_vk_command_buffers[i], 3, 1, j * 3, j);
-	      }
+
+	      vkCmdDraw(m_vk_command_buffers[i],
+			m_instance_count * 3,
+			m_instance_count,
+			0,
+			0);
 
 	      vkCmdEndRenderPass(m_vk_command_buffers[i]);
 	    }
