@@ -12,6 +12,7 @@
 
 #include "vk_common.hpp"
 #include "vk_uniform_buffer.hpp"
+#include "vk_image.hpp"
 
 #include <optional>
 #include <set>
@@ -251,9 +252,11 @@ namespace vulkan {
 
     darray<VkFramebuffer> m_vk_swapchain_framebuffers;
 
-    darray<VkCommandBuffer> m_vk_command_buffers;
-    
-    texture2d_data m_test_texture2d{};
+    darray<VkCommandBuffer> m_vk_command_buffers;   
+
+    image_pool m_image_pool{};
+
+    texture_pool m_texture_pool{};
 
     depthbuffer_data m_depthbuffer{};
     
@@ -264,13 +267,10 @@ namespace vulkan {
     static inline constexpr vec3_t k_mirror_cube_center = R3v(0, 0, 0);
     static inline constexpr vec3_t k_mirror_cube_size = R3(1);
     
-    
     static inline constexpr vec3_t k_color_green = R3v(0, 1, 0);
     static inline constexpr vec3_t k_color_red = R3v(1, 0, 0);
     static inline constexpr vec3_t k_color_blue = R3v(0, 0, 1);
 
-    
-    
     // NOTE:
     // right handed system,
     // so positive rotation about a given axis
@@ -313,6 +313,8 @@ namespace vulkan {
     VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
     VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
 
+    texture_pool::index_type m_test_texture_index{texture_pool::k_unset};
+    
     bool m_ok_present{false};
     bool m_ok_descriptor_pool{false};
     bool m_ok_uniform_block_data{false};
@@ -1478,14 +1480,57 @@ namespace vulkan {
 	    rgb = ~rgb;
 	  }
 	}
+
+	texture_gen_params texture_params =
+	  {
+	   // image_params
+	   {
+	    // data
+	    static_cast<void*>(buffer.data()), 
+	    // memory property flags
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	    // format
+	    VK_FORMAT_R8G8B8A8_UNORM,
+	    // initial layout
+	    VK_IMAGE_LAYOUT_PREINITIALIZED,
+	    // final layout
+	    VK_IMAGE_LAYOUT_GENERAL,
+	    // tiling
+	    VK_IMAGE_TILING_LINEAR,
+	    // usage flags
+	    VK_IMAGE_USAGE_SAMPLED_BIT,
+	    // type
+	    VK_IMAGE_TYPE_2D,
+	    // view type
+	    VK_IMAGE_VIEW_TYPE_2D,
+	    // aspect flags
+	    VK_IMAGE_ASPECT_COLOR_BIT,
+	    // width
+	    image_w,
+	    // height
+	    image_h,
+	    // depth
+	    1
+	   },
+	   // end image params
+
+	   
+	   // descriptor array element
+	   0,
+	   // binding index
+	   0,
+	   // descriptor type
+	   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	   // shader stage flags
+	   VK_SHADER_STAGE_FRAGMENT_BIT
+	  };
+
+	m_texture_pool.set_image_pool(&m_image_pool);
+
+	m_test_texture_index = m_texture_pool.make_texture(make_device_resource_properties(),
+							   texture_params);       
 	
-	m_test_texture2d = make_texture2d(make_device_resource_properties(),
-					  image_w,
-					  image_h,
-					  bpp,
-					  buffer);
-	
-	m_ok_texture_data = m_test_texture2d.ok();
+	m_ok_texture_data = m_texture_pool.ok_texture(m_test_texture_index);
       }
     }
 
@@ -1593,7 +1638,7 @@ namespace vulkan {
 
 	std::array<VkDescriptorSetLayout, 2> set_layouts =
 	  {
-	   m_test_texture2d.descriptor_set_layout,
+	   m_texture_pool.descriptor_set_layout(m_test_texture_index),
 	   m_uniform_block_pool->descriptor_set_layout(m_vertex_uniform_block.index)
 	  };
 	
@@ -1828,10 +1873,9 @@ namespace vulkan {
     void setup_command_buffers() {
       if (ok_command_pool()) {
 	VkDescriptorImageInfo image_info =
-	  m_test_texture2d.make_descriptor_image_info();
-
+	  m_texture_pool.make_descriptor_image_info(m_test_texture_index);
 	VkWriteDescriptorSet write_desc_set =
-	  m_test_texture2d.make_write_descriptor_set(&image_info);
+	  m_texture_pool.make_write_descriptor_set(m_test_texture_index, &image_info);
 
 	vkUpdateDescriptorSets(m_vk_curr_ldevice,
 			       1,
@@ -1853,7 +1897,7 @@ namespace vulkan {
 		     to_access(VK_ACCESS_SHADER_READ_BIT).
 		     from(texture2d_data::k_initial_layout).
 		     to(texture2d_data::k_final_layout).
-		     for_image(m_test_texture2d.image).
+		     for_image(m_image_pool.image(m_texture_pool.image_index(m_test_texture_index))).
 		     via(cmd_buf);
 
 		   m_ok_scene = true;
@@ -1876,7 +1920,7 @@ namespace vulkan {
 
 	std::array<VkDescriptorSet, 2> descriptor_sets =
 	  {
-	   m_test_texture2d.descriptor_set,
+	   m_texture_pool.descriptor_set(m_test_texture_index),
 	   m_uniform_block_pool->descriptor_set(m_vertex_uniform_block.index)
 	  };
 	
@@ -2161,8 +2205,8 @@ namespace vulkan {
       free_vk_ldevice_handle<VkPipelineLayout, &vkDestroyPipelineLayout>(m_vk_pipeline_layout);
       free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
 
-      m_test_texture2d.free_mem(m_vk_curr_ldevice);
-
+      m_texture_pool.free_mem(m_vk_curr_ldevice);
+      
       m_depthbuffer.free_mem(m_vk_curr_ldevice);
 
       m_uniform_block_pool->free_mem();
