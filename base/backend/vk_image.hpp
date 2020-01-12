@@ -22,7 +22,11 @@ namespace vulkan {
     VkImageType type{VK_IMAGE_TYPE_2D};
     VkImageViewType view_type{VK_IMAGE_VIEW_TYPE_2D};
     VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-    
+    VkPipelineStageFlags source_pipeline_stage{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
+    VkPipelineStageFlags dest_pipeline_stage{VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT};
+    VkAccessFlags source_access_flags{0};
+    VkAccessFlags dest_access_flags{VK_ACCESS_SHADER_READ_BIT};
+        
     uint32_t width{UINT32_MAX};
     uint32_t height{UINT32_MAX};
     uint32_t depth{UINT32_MAX};
@@ -74,6 +78,14 @@ namespace vulkan {
     darray<uint32_t> m_depths; // bpp is derived from format
     darray<VkImageType> m_types;
     darray<VkImageTiling> m_tiling;
+    // layout transition info
+    darray<VkImageAspectFlags> m_aspect_flags;
+
+    darray<VkPipelineStageFlags> m_src_pipeline_stages;
+    darray<VkPipelineStageFlags> m_dst_pipeline_stages;
+
+    darray<VkAccessFlags> m_src_access_flags;
+    darray<VkAccessFlags> m_dst_access_flags;
 
     bool image_create_info_valid(VkPhysicalDevice physical_device, const VkImageCreateInfo& create_info) const {
       VkImageFormatProperties properties;
@@ -256,7 +268,6 @@ namespace vulkan {
       ASSERT(ret.ok());
       return ret;
     }
-   
     
     index_type new_image() {
       index_type index = this->length();
@@ -279,6 +290,14 @@ namespace vulkan {
 
       m_types.push_back(VK_IMAGE_TYPE_2D);
       m_tiling.push_back(VK_IMAGE_TILING_OPTIMAL);
+
+      m_aspect_flags.push_back(VK_IMAGE_ASPECT_COLOR_BIT);
+
+      m_src_pipeline_stages.push_back(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+      m_dst_pipeline_stages.push_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+      
+      m_src_access_flags.push_back(0);
+      m_dst_access_flags.push_back(VK_ACCESS_SHADER_READ_BIT);
             
       return index;
     }
@@ -362,16 +381,25 @@ namespace vulkan {
 	  m_images[img_index] = img_handle;
 	  m_image_views[img_index] = img_view_handle;
 
-	  m_formats[img_index] = params.format;
 	  m_layouts_initial[img_index] = params.initial_layout;
 	  m_layouts_final[img_index] = params.final_layout;
+
+	  m_formats[img_index] = params.format;
+	  
+	  m_widths[img_index] = params.width;
+	  m_heights[img_index] = params.height;
+	  m_depths[img_index] = params.depth;
 	  
 	  m_types[img_index] = params.type;
 	  m_tiling[img_index] = params.tiling;
 
-	  m_widths[img_index] = params.width;
-	  m_heights[img_index] = params.height;
-	  m_depths[img_index] = params.depth;
+	  m_aspect_flags[img_index] = params.aspect_flags;
+
+	  m_src_pipeline_stages[img_index] = params.source_pipeline_stage;
+	  m_dst_pipeline_stages[img_index] = params.dest_pipeline_stage;
+      
+	  m_src_access_flags[img_index] = params.source_access_flags;
+	  m_dst_access_flags[img_index] = params.dest_access_flags;
 	}
       }
       ASSERT(ok_image(img_index));
@@ -399,6 +427,14 @@ namespace vulkan {
       m_depths.clear();
       m_types.clear();
       m_tiling.clear();
+
+      m_aspect_flags.clear();
+
+      m_src_pipeline_stages.clear();
+      m_dst_pipeline_stages.clear();
+      
+      m_src_access_flags.clear();
+      m_dst_access_flags.clear();
     }
 
     VkImage image(index_type index) const {
@@ -421,6 +457,25 @@ namespace vulkan {
 			    ok_image,
 			    m_image_views,
 			    VkImageView);
+    }
+
+    image_layout_transition make_layout_transition(index_type index) const {
+      auto ret = image_layout_transition(false);
+
+      if (ok_image(index)) {
+	ret.
+	  from_stage(m_src_pipeline_stages.at(index)).
+	  to_stage(m_dst_pipeline_stages.at(index)).
+	  for_aspect(m_aspect_flags.at(index)).
+	  from_access(m_src_access_flags.at(index)).
+	  to_access(m_dst_access_flags.at(index)).
+	  from(m_layouts_initial.at(index)).
+	  to(m_layouts_final.at(index)).
+	  for_image(m_images.at(index)).
+	  ready();
+      }
+
+      return ret;
     }
     
   };
