@@ -185,7 +185,9 @@ namespace vulkan {
 			   nullptr,
 			   &memory));
 
-    if (api_ok() && memory != VK_NULL_HANDLE) {
+    if (api_ok() &&
+	memory != VK_NULL_HANDLE &&
+	data != nullptr) {
       write_device_memory(device, memory, data, size);
     }
 

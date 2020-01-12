@@ -321,3 +321,38 @@ static intType sum(const containerType<structType>& v, std::function<intType (co
   }
   return k;
 }
+
+template <class intType, class sizeDriverType>
+class index_traits {
+private:
+  const sizeDriverType& m_size_driver;
+  
+public:
+  typedef intType index_type;
+  typedef index_traits<intType, sizeDriverType> index_traits_this_type;
+
+  index_traits(const sizeDriverType& driver)
+    : m_size_driver{driver}
+  {}
+  
+  static_assert(std::is_integral<index_type>::value, "indices must be an integer type.");
+  static constexpr inline index_type k_unset = static_cast<index_type>(-1);
+
+  template <class T>
+  T length() const {
+    static_assert(std::is_integral<T>::value, "T must be an integer.");
+    return static_cast<T>(m_size_driver.size());
+  }
+
+  index_type length() const {
+    return length<index_type>();
+  }
+
+  bool ok_index(index_type index) const {
+    bool b =
+      index != k_unset &&
+      index < length();
+    ASSERT(b);
+    return b;
+  }
+};

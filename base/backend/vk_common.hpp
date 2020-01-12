@@ -16,6 +16,18 @@ namespace vulkan {
   
   bool api_ok();
 
+#define H_OK(h) api_ok() && ((h) != VK_NULL_HANDLE)
+
+#define HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, handle_type, null_value) \
+  handle_type ret{null_value};						\
+  if (ok_fn_name(index_name)) {						\
+    ret = vector_member.at(index_name);					\
+  }									\
+  return ret
+  
+#define VK_HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, vk_handle_type) \
+  HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, vk_handle_type, VK_NULL_HANDLE)
+  
   struct image_requirements {
     VkExtent3D desired{UINT32_MAX, UINT32_MAX, UINT32_MAX};
     VkExtent3D required{UINT32_MAX, UINT32_MAX, UINT32_MAX};
@@ -274,6 +286,8 @@ namespace vulkan {
   VkDescriptorSetLayoutBinding make_descriptor_set_layout_binding(uint32_t binding,
 								  VkShaderStageFlags stages,
 								  VkDescriptorType type);
+
+
     
   VkDescriptorSetLayout make_descriptor_set_layout(VkDevice device,
 						   const VkDescriptorSetLayoutBinding* bindings,
