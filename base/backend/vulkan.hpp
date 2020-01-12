@@ -51,12 +51,6 @@ namespace vulkan {
   depthbuffer_data make_depthbuffer(const device_resource_properties& properties,
 				    uint32_t width,
 				    uint32_t height);
-
-  texture2d_data make_texture2d(const device_resource_properties& properties,
-				uint32_t width,
-				uint32_t height,
-				uint32_t bytes_per_pixel,
-				const darray<uint8_t>& pixels);
     
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};

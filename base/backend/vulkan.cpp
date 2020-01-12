@@ -1,7 +1,4 @@
 #include "vulkan.hpp"
-#include "vk_pipeline.hpp"
-
-#define BASE_TEXTURE2D_DEFAULT_VK_FORMAT VK_FORMAT_R8G8B8A8_UNORM
 
 namespace vulkan {
   VkPipelineVertexInputStateCreateInfo default_vertex_input_state_settings() {
@@ -301,6 +298,7 @@ namespace vulkan {
     return create_info;
   }
 
+  
   static
   VkExtent3D calc_minimum_dimensions_texture2d(uint32_t width,
 					       uint32_t height,
@@ -435,111 +433,6 @@ namespace vulkan {
 
     return ret;
   }
-  
-  texture2d_data make_texture2d(const device_resource_properties& properties,
-				uint32_t width,
-				uint32_t height,
-				uint32_t bytes_per_pixel,
-				const darray<uint8_t>& pixels) {
-    
-    texture2d_data ret{};
-    
-    if (properties.ok()) {
-      VK_FN(vkDeviceWaitIdle(properties.device));
-
-      image_requirements req = get_image_requirements_texture2d<texture2d_data>(properties,
-										width,
-										height);
-							                    
-      if (req.ok()) {
-	ret.memory = make_device_memory(properties.device,
-					pixels.data(),
-					pixels.size() * sizeof(pixels[0]),
-					req.memory_size(),
-					req.memory_type_index);
-      }
-
-      if (ret.memory != VK_NULL_HANDLE) {
-	VkImageCreateInfo create_info =
-	  default_image_create_info_texture2d<texture2d_data>(properties);
-
-	create_info.extent.width = width;
-	create_info.extent.height = height;	
-
-	ret.format = create_info.format;
-      
-	VK_FN(vkCreateImage(properties.device,
-			    &create_info,
-			    nullptr,
-			    &ret.image));
-      }
-
-      bool bound = false;
-      if (api_ok() && ret.image != VK_NULL_HANDLE) {
-	VK_FN(vkBindImageMemory(properties.device,
-				ret.image,
-				ret.memory,
-				0));
-	
-	bound = api_ok();
-      }
-      
-      if (bound) {
-	VkImageViewCreateInfo create_info =
-	  default_image_view_create_info_texture2d<texture2d_data>();
-
-	create_info.image = ret.image;
-
-	VK_FN(vkCreateImageView(properties.device,
-				&create_info,
-				nullptr,
-				&ret.image_view));
-      }
-
-      if (api_ok() && ret.image_view != VK_NULL_HANDLE) {
-	VkSamplerCreateInfo create_info =
-	  default_sampler_create_info_texture2d();
-	
-	VK_FN(vkCreateSampler(properties.device,
-			      &create_info,
-			      nullptr,
-			      &ret.sampler));
-      }
-
-      if (api_ok() && ret.sampler != VK_NULL_HANDLE) {
-	VkDescriptorSetLayoutBinding ds_binding =
-	  make_descriptor_set_layout_binding(0,
-					     VK_SHADER_STAGE_FRAGMENT_BIT,
-					     texture2d_data::k_descriptor_type);
-	
-	ret.descriptor_set_layout =
-	  make_descriptor_set_layout(properties.device,
-				     &ds_binding,
-				     1);             
-      }
-    
-      if (api_ok() && ret.descriptor_set_layout != VK_NULL_HANDLE) {
-	ret.descriptor_set =
-	  make_descriptor_set(properties.device,
-			      properties.descriptor_pool,
-			      &ret.descriptor_set_layout,
-			      1);
-      }
-
-      if (api_ok() && ret.descriptor_set != VK_NULL_HANDLE) {
-	ret.width = width;
-	ret.height = height;
-	ret.format = texture2d_data::k_format;
-	ret.layout = texture2d_data::k_final_layout;
-      }
-
-      ASSERT(api_ok());
-    }
-
-    ASSERT(ret.ok());
-    
-    return ret;
-  }
 
   depthbuffer_data make_depthbuffer(const device_resource_properties& properties,
 				    uint32_t width,
@@ -552,13 +445,6 @@ namespace vulkan {
 										  width,
 										  height);
       if (req.ok()) {
-	//	darray<uint8_t> depthvalues(width * height * depthbuffer_data::k_bpp, 0);
-	//	ret.memory = make_device_memory(properties.device,
-	//				reinterpret_cast<void*>(depthvalues.data()),
-	//			        depthvalues.size() * sizeof(depthvalues[0]),
-	//				req.memory_size(),
-	//				req.memory_type_index);
-
 	    VkDeviceMemory memory{VK_NULL_HANDLE};
 	    VkMemoryAllocateInfo info = {};
       
