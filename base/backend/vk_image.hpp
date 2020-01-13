@@ -33,7 +33,7 @@ namespace vulkan {
 
     bool ok() const {
       bool r =	
-	(width <= k_max_dim[0]) &&	
+	(width <= k_max_dim[0]) &&
 	(height <= k_max_dim[1]) &&
 	(depth <= k_max_dim[2]);
 	
@@ -483,10 +483,14 @@ namespace vulkan {
   
   struct descriptor_set_gen_params {    
     darray<VkShaderStageFlags> stages;
+    darray<uint32_t> descriptor_counts;
     VkDescriptorType type{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
     
     bool ok() const {      
-      bool r = !stages.empty();
+      bool r =
+	(!stages.empty()) &&
+	(descriptor_counts.size() == stages.size());
+      
       ASSERT(r);
       return r;
     }
@@ -497,6 +501,7 @@ namespace vulkan {
       for (size_t i = 0; i < stages.size(); ++i) {
 	bindings.push_back(make_descriptor_set_layout_binding(static_cast<uint32_t>(i),
 							      stages.at(i),
+							      descriptor_counts.at(i),
 							      type));
       }
       
@@ -677,6 +682,8 @@ namespace vulkan {
     VkDescriptorImageInfo make_descriptor_image_info(index_type index) const;
 
     VkWriteDescriptorSet make_write_descriptor_set(index_type index, const VkDescriptorImageInfo* image_info) const;
+
+    bool update_descriptor_sets(VkDevice device, darray<index_type> indices) const;
   };
 
   struct texture_gen_params {

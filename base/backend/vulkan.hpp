@@ -138,10 +138,10 @@ namespace vulkan {
     // so positive rotation about a given axis
     // is counter-clockwise
     vertex_list_t m_vertex_buffer_vertices =
-      model_triangle(R3v(-2.25, 0, 0)) +
-      model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) +
-      model_cube(k_room_cube_center, R3(1), k_room_cube_size) +
-      model_cube(k_mirror_cube_center, R3(1), k_mirror_cube_size);
+      model_triangle(R3v(-2.25, 0, 0)) + // offset: 0, length: 3
+      model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) + // offset: 3, length: 3
+      model_cube(k_mirror_cube_center, R3(1), k_mirror_cube_size) + // offset: 6, length: 36
+      model_cube(k_room_cube_center, R3(1), k_room_cube_size); // offset: 42, length: 36
       
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
@@ -270,7 +270,7 @@ namespace vulkan {
       return
 	// left face
 	model_quad(translate + R3v(-1, 0, 0),
-		   k_color_red * color,
+		   color,
 		   scale,
 		   {
 		    {
@@ -281,7 +281,7 @@ namespace vulkan {
 
 	// right face
 	model_quad(translate + R3v(1, 0, 0),
-		   k_color_green * color,
+		   color,
 		   scale,
 		   {
 		    {
@@ -292,7 +292,7 @@ namespace vulkan {
 
 	// up face
 	model_quad(translate + R3v(0, 1, 0),
-		   k_color_blue * color,
+		   color,
 		   scale,
 		   {
 		    {
@@ -303,7 +303,7 @@ namespace vulkan {
 
 	// down face
 	model_quad(translate + R3v(0, -1, 0),
-		   k_color_red * color,
+		   color,
 		   scale,
 		   {
 		    {
@@ -314,13 +314,13 @@ namespace vulkan {
       
 	// front face
 	model_quad(translate + R3v(0, 0, 1),
-		   k_color_green * color,
+		   color,
 		   scale,
 		   {}) +
 
 	// back face
 	model_quad(translate + R3v(0, 0, -1),
-		   k_color_blue * color,
+		   color,
 		   scale,
 		   {});
     }
@@ -1313,10 +1313,12 @@ namespace vulkan {
 	  descriptor_set_gen_params uniform_block_desc_set_params =
 	    {
 	     {
-	      VK_SHADER_STAGE_VERTEX_BIT, // binding 0: transform block
-	      VK_SHADER_STAGE_VERTEX_BIT // binding 1: sampler block
+	      VK_SHADER_STAGE_VERTEX_BIT // binding 0: transform block
 	     },
-	     
+	     // separate descriptors
+	     {
+	      1
+	     },
 	     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
 	    };
 
@@ -1325,6 +1327,8 @@ namespace vulkan {
 						      uniform_block_desc_set_params);
 	}
 
+	m_uniform_block_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
+	
 	{
 	  uniform_block_gen_params transform_block_params =
 	    {
@@ -1337,18 +1341,40 @@ namespace vulkan {
 	     // binding index
 	     0
 	    };
-
-	  m_uniform_block_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
 	
 	  m_transform_uniform_block.index =
 	    m_uniform_block_pool.make_uniform_block(make_device_resource_properties(),
 						    transform_block_params);
+
+	  m_transform_uniform_block.pool = &m_uniform_block_pool;
 	}
+
+	#if 0
+	{
+	  uniform_block_gen_params sampler_block_params =
+	    {
+	     m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks],
+	     static_cast<void*>(&m_sampler_uniform_block.data),
+	     sizeof(m_sampler_uniform_block.data),
+	     // array element index
+	     0,
+	     // binding index
+	     1
+	    };
 	  
-	m_transform_uniform_block.pool = &m_uniform_block_pool;
+	  m_sampler_uniform_block.index =
+	    m_uniform_block_pool.make_uniform_block(make_device_resource_properties(),
+						    sampler_block_params);
+
+	  m_sampler_uniform_block.pool = &m_uniform_block_pool;
+	}	 
 	
 	m_ok_uniform_block_data =
-	  m_transform_uniform_block.ok();	
+	  m_transform_uniform_block.ok() &&
+	  m_sampler_uniform_block.ok();
+	#else
+	m_ok_uniform_block_data = m_transform_uniform_block.ok();
+	#endif
       }
     }
     
@@ -1356,7 +1382,34 @@ namespace vulkan {
       if (ok_uniform_block_data()) {
 	m_texture_pool.set_image_pool(&m_image_pool);
 	m_texture_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
+
+	//
+	// create our descriptor set that's used
+	// for the 2d samplers
+	//
 	
+	descriptor_set_gen_params descriptor_set_params =
+	  {
+	   // darray<VkShaderStageFlags> stages
+	   {
+	    VK_SHADER_STAGE_FRAGMENT_BIT
+	   },
+	   {
+	    2
+	   },
+	   // VkDescriptorType type
+	   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+	  };
+
+	m_test_descriptor_set_indices[k_descriptor_set_samplers] =
+	  m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
+						    descriptor_set_params);
+
+	//
+	// make first image/texture
+	//
+
+	// reuse these 4 variables for both images
 	uint32_t image_w = 256;
 	uint32_t image_h = 256;
 
@@ -1397,19 +1450,6 @@ namespace vulkan {
 	}
 
 	
-	descriptor_set_gen_params descriptor_set_params =
-	  {
-	   // darray<VkShaderStageFlags> stages
-	   {
-	    VK_SHADER_STAGE_FRAGMENT_BIT
-	   },
-	   // VkDescriptorType type
-	   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-	  };
-
-	m_test_descriptor_set_indices[k_descriptor_set_samplers] = m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
-									    descriptor_set_params);
-
 	image_gen_params image_params =
 	  {
 	   // data
@@ -1465,9 +1505,54 @@ namespace vulkan {
 	  };
 	
 	m_test_texture_indices[0] = m_texture_pool.make_texture(make_device_resource_properties(),
-								texture_params);      
+								texture_params);
+
+	//
+	// make second image/texture
+	//
+
+	darray<uint8_t> buffer2(image_w * image_h * bpp, 255);
 	
-	m_ok_texture_data = m_texture_pool.ok_texture(m_test_texture_indices[0]);
+	// this creates a simple aqua image
+	{
+	  uint32_t y = 0;
+	  while (y < image_h) {
+	    uint32_t x = 0;
+	    while (x < image_w) {
+	      uint32_t offset = (y * image_w + x) * bpp;
+	    
+	      buffer2[offset + 0] = 0;
+	      buffer2[offset + 1] = 200;
+	      buffer2[offset + 2] = 255;
+	      buffer2[offset + 3] = 255;
+	    
+	      x++;
+	    }
+
+	    y++;
+	  }
+	}
+
+	image_params.data = static_cast<void*>(buffer2.data());
+
+	m_test_image_indices[1] =
+	  m_image_pool.make_image(make_device_resource_properties(),
+				  image_params);
+
+	texture_params.image_index = m_test_image_indices[1];
+	texture_params.descriptor_array_element = 1;
+
+	m_test_texture_indices[1] =
+	  m_texture_pool.make_texture(make_device_resource_properties(),
+				      texture_params);
+
+	//
+	// validate
+	//
+	
+	m_ok_texture_data =
+	  m_texture_pool.ok_texture(m_test_texture_indices[0]) &&
+	  m_texture_pool.ok_texture(m_test_texture_indices[1]);
       }
     }
 
@@ -1580,8 +1665,21 @@ namespace vulkan {
 	  };
 	
 	auto pipeline_layout = default_pipeline_layout_settings();
+
 	pipeline_layout.setLayoutCount = set_layouts.size();
 	pipeline_layout.pSetLayouts = set_layouts.data();
+
+	std::array<VkPushConstantRange, 1> push_constant_ranges =
+	  {
+	   {
+	    VK_SHADER_STAGE_FRAGMENT_BIT,
+	    0,
+	    sizeof(int)
+	   }
+	  };
+
+	pipeline_layout.pushConstantRangeCount = push_constant_ranges.size();
+	pipeline_layout.pPushConstantRanges = push_constant_ranges.data();
 	
 	VK_FN(vkCreatePipelineLayout(m_vk_curr_ldevice,
 				     &pipeline_layout,
@@ -1788,131 +1886,75 @@ namespace vulkan {
       }      
     }
 
-    // ---------------------
-    // WRT descriptor sets
-    // ---------------------
-    // The descriptor set must be associated with an image for us
-    // to sample it in the fragment shader.
-    //
-    // The call to vkUpdateDescriptorSets() handles this portion,
-    // and we have to make this call before any command buffers
-    // that rely on the association itself are used.
-    //
-    // In the command buffer, it's necessary that we bind our
-    // graphics pipeline to the command buffer _before_ any other
-    // pipeline-specific commands are performed.
-    //
-    // The one pipeline specific command that matters here is
-    // the call to vkCmdBindDescriptorSets(), which
-    // associates the descriptor set with the descriptor
-    // set layout that was associated with the
-    // pipeline layout created earlier.
-    void setup_command_buffers() {
-      if (ok_command_pool()) {
-	// bind sampler[i] to test_texture_indices[i] via
-	// test_texture_index's array element index (should be i)
-	for (texture_pool::index_type texture_index: m_test_texture_indices) {
-	  
-	  VkDescriptorImageInfo image_info =
-	    m_texture_pool.make_descriptor_image_info(texture_index);
-	  
-	  VkWriteDescriptorSet write_desc_set =
-	    m_texture_pool.make_write_descriptor_set(texture_index, &image_info);
+    void setup_render_commands() {
+      m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
+	
+      VkCommandBufferAllocateInfo alloc_info = {};
+      alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+      alloc_info.commandPool = m_vk_command_pool;
+      alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+      alloc_info.commandBufferCount = static_cast<uint32_t>(m_vk_command_buffers.size());
 
-	  vkUpdateDescriptorSets(m_vk_curr_ldevice,
-				 1,
-				 &write_desc_set,
+      VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, m_vk_command_buffers.data()));
+
+      std::array<VkDescriptorSet, 2> descriptor_sets =
+	{
+	 m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_samplers]),
+	 m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks])
+	};
+	
+      size_t i = 0;
+
+      VkDeviceSize vertex_buffer_ofs = 0;
+	
+      while (i < m_vk_command_buffers.size() && ok()) {
+	VkCommandBufferBeginInfo begin_info = {};
+	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	begin_info.flags = 0;
+	begin_info.pInheritanceInfo = nullptr;
+
+	VK_FN(vkBeginCommandBuffer(m_vk_command_buffers[i], &begin_info));	  
+	  
+	if (ok()) {
+	  vkCmdBindPipeline(m_vk_command_buffers[i],
+			    VK_PIPELINE_BIND_POINT_GRAPHICS,
+			    m_vk_graphics_pipeline);
+	    
+	  vkCmdBindVertexBuffers(m_vk_command_buffers[i],
 				 0,
-				 nullptr);
+				 1,
+				 &m_vk_vertex_buffer,
+				 &vertex_buffer_ofs);
 
-	  break;
-	}
+	  vkCmdUpdateBuffer(m_vk_command_buffers[i],
+			    m_vk_vertex_buffer,
+			    0,
+			    sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
+			    m_vertex_buffer_vertices.data());
 
-	vkDeviceWaitIdle(m_vk_curr_ldevice);	
+	  vkCmdBindDescriptorSets(m_vk_command_buffers[i],
+				  VK_PIPELINE_BIND_POINT_GRAPHICS,
+				  m_vk_pipeline_layout,
+				  0,
+				  descriptor_sets.size(),
+				  descriptor_sets.data(),
+				  0,
+				  nullptr);
 
-	// perform the image layout transition for
-	// test_image_indices[i]
-	run_cmds(
-		 [this](VkCommandBuffer cmd_buf) {
-		   puts("image_layout_transition");
-
-		   m_image_pool.
-		     make_layout_transition(m_test_image_indices[0]).
-		     via(cmd_buf);
-
-		   m_ok_scene = true;
-		 },
-		 [this]() {
-		   puts("run_cmds ERROR");
-		   ASSERT(false);
-		   m_ok_scene = false;
-		 });
-	
-	m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
-	
-	VkCommandBufferAllocateInfo alloc_info = {};
-	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	alloc_info.commandPool = m_vk_command_pool;
-	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	alloc_info.commandBufferCount = static_cast<uint32_t>(m_vk_command_buffers.size());
-
-	VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, m_vk_command_buffers.data()));
-
-	std::array<VkDescriptorSet, 2> descriptor_sets =
+	  image_layout_transition().
+	    from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+	    to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+	    for_aspect(depthbuffer_data::k_image_aspect_flags).
+	    from_access(0).
+	    to_access(depthbuffer_data::k_access_flags).
+	    from(depthbuffer_data::k_initial_layout).
+	    to(depthbuffer_data::k_final_layout).
+	    for_image(m_depthbuffer.image).
+	    via(m_vk_command_buffers[i]);
+	    
+	    
+	  // note that instances are per-triangle
 	  {
-	   m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_samplers]),
-	   m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks])
-	  };
-	
-	size_t i = 0;
-
-	VkDeviceSize vertex_buffer_ofs = 0;
-	
-        while (i < m_vk_command_buffers.size() && ok()) {
-	  VkCommandBufferBeginInfo begin_info = {};
-	  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	  begin_info.flags = 0;
-	  begin_info.pInheritanceInfo = nullptr;
-
-	  VK_FN(vkBeginCommandBuffer(m_vk_command_buffers[i], &begin_info));	  
-	  
-	  if (ok()) {
-	    vkCmdBindPipeline(m_vk_command_buffers[i],
-			      VK_PIPELINE_BIND_POINT_GRAPHICS,
-			      m_vk_graphics_pipeline);
-	    
-	    vkCmdBindVertexBuffers(m_vk_command_buffers[i],
-				   0,
-				   1,
-				   &m_vk_vertex_buffer,
-				   &vertex_buffer_ofs);
-
-	    vkCmdUpdateBuffer(m_vk_command_buffers[i],
-			      m_vk_vertex_buffer,
-			      0,
-			      sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
-			      m_vertex_buffer_vertices.data());
-
-	    vkCmdBindDescriptorSets(m_vk_command_buffers[i],
-				    VK_PIPELINE_BIND_POINT_GRAPHICS,
-				    m_vk_pipeline_layout,
-				    0,
-				    descriptor_sets.size(),
-				    descriptor_sets.data(),
-				    0,
-				    nullptr);
-
-	    image_layout_transition().
-	      from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-	      to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-	      for_aspect(depthbuffer_data::k_image_aspect_flags).
-	      from_access(0).
-	      to_access(depthbuffer_data::k_access_flags).
-	      from(depthbuffer_data::k_initial_layout).
-	      to(depthbuffer_data::k_final_layout).
-	      for_image(m_depthbuffer.image).
-	      via(m_vk_command_buffers[i]);
-	    
 	    VkRenderPassBeginInfo render_pass_info = {};
 	    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	    render_pass_info.renderPass = m_vk_render_pass;
@@ -1936,29 +1978,119 @@ namespace vulkan {
 	    // operation
 	    render_pass_info.clearValueCount = clear_values.size();
 	    render_pass_info.pClearValues = clear_values.data();
+	    	    
+	    vkCmdBeginRenderPass(m_vk_command_buffers[i],
+				 &render_pass_info,
+				 VK_SUBPASS_CONTENTS_INLINE);
 
-	    {	    
-	      vkCmdBeginRenderPass(m_vk_command_buffers[i],
-				   &render_pass_info,
-				   VK_SUBPASS_CONTENTS_INLINE);
+	    uint32_t sampler0 = 0;
+	    vkCmdPushConstants(m_vk_command_buffers[i],
+			       m_vk_pipeline_layout,
+			       VK_SHADER_STAGE_FRAGMENT_BIT,
+			       0,
+			       sizeof(sampler0),
+			       &sampler0);
+	    
+	    // first 3 objects: two triangles and one small cube
+	    vkCmdDraw(m_vk_command_buffers[i],
+		      (m_instance_count - 12) * 3, // num vertices
+		      m_instance_count - 12, // num instances
+		      0, // first vertex
+		      0); // first instance
 
-	      vkCmdDraw(m_vk_command_buffers[i],
-			m_instance_count * 3,
-			m_instance_count,
-			0,
-			0);
+	    uint32_t sampler1 = 1;
+	    vkCmdPushConstants(m_vk_command_buffers[i],
+			       m_vk_pipeline_layout,
+			       VK_SHADER_STAGE_FRAGMENT_BIT,
+			       0,
+			       sizeof(sampler1),
+			       &sampler1);
 
-	      vkCmdEndRenderPass(m_vk_command_buffers[i]);
-	    }
-
-	    VK_FN(vkEndCommandBuffer(m_vk_command_buffers[i]));
+	    // big cube encompassing the scene
+	    vkCmdDraw(m_vk_command_buffers[i],
+		      36,
+		      12, // (6 faces, 12 triangles)
+		      42, // 3 vertices + 3 vertices + 36 vertices
+		      14); // 2 triangles + one cube (6 faces, 12 triangles)
+	    
+	    vkCmdEndRenderPass(m_vk_command_buffers[i]);
 	  }
 
-	  i++;
+	  VK_FN(vkEndCommandBuffer(m_vk_command_buffers[i]));
 	}
 
-	if (ok()) {
-	  m_ok_command_buffers = true;
+	i++;
+      }
+    }
+
+    // ---------------------
+    // WRT descriptor sets
+    // ---------------------
+    // The descriptor set must be associated with an image for us
+    // to sample it in the fragment shader.
+    //
+    // The call to vkUpdateDescriptorSets() handles this portion,
+    // and we have to make this call before any command buffers
+    // that rely on the association itself are used.
+    //
+    // In the command buffer, it's necessary that we bind our
+    // graphics pipeline to the command buffer _before_ any other
+    // pipeline-specific commands are performed.
+    //
+    // The one pipeline specific command that matters here is
+    // the call to vkCmdBindDescriptorSets(), which
+    // associates the descriptor set with the descriptor
+    // set layout that was associated with the
+    // pipeline layout created earlier.
+    void setup_command_buffers() {
+      if (ok_command_pool()) {
+	// bind sampler[i] to test_texture_indices[i] via
+	// test_texture_index's array element index (should be i)
+	darray<texture_pool::index_type> tex_indices(m_test_texture_indices.begin(), m_test_texture_indices.end());
+	
+	if (c_assert(m_texture_pool.update_descriptor_sets(m_vk_curr_ldevice,
+							   std::move(tex_indices)))) {
+
+	  vkDeviceWaitIdle(m_vk_curr_ldevice);	
+
+	  // perform the image layout transition for
+	  // test_image_indices[i]
+	  run_cmds(
+		   [this](VkCommandBuffer cmd_buf) {
+		     puts("image_layout_transition");
+
+		     size_t i{0};
+		     bool good = true;
+
+		     while (i < m_test_image_indices.size() && good) {
+		       auto image_index = m_test_image_indices[i];
+		     
+		       auto layout_transition = m_image_pool.make_layout_transition(image_index);		    
+
+		       good = layout_transition.ok();
+
+		       if (good) {
+			 layout_transition.via(cmd_buf);
+		       }
+
+		       i++;
+		     }
+		   
+		     m_ok_scene = good;
+		   },
+		   [this]() {
+		     puts("run_cmds ERROR");
+		     ASSERT(false);
+		     m_ok_scene = false;
+		   });
+
+	  if (ok_scene()) {
+	    setup_render_commands();	  
+	
+	    if (ok()) {
+	      m_ok_command_buffers = true;
+	    }
+	  }
 	}
       }
     }

@@ -94,11 +94,12 @@ namespace vulkan {
 
   VkDescriptorSetLayoutBinding make_descriptor_set_layout_binding(uint32_t binding,
 								  VkShaderStageFlags stages,
+								  uint32_t num_descriptors,
 								  VkDescriptorType type) {
     VkDescriptorSetLayoutBinding layout_binding = {};
     layout_binding.binding = binding;
     layout_binding.descriptorType = type;
-    layout_binding.descriptorCount = 1;
+    layout_binding.descriptorCount = num_descriptors;
     layout_binding.stageFlags = stages;
     layout_binding.pImmutableSamplers = nullptr;
     return layout_binding;

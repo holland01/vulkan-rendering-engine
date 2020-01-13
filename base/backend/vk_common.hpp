@@ -444,6 +444,7 @@ namespace vulkan {
 
   VkDescriptorSetLayoutBinding make_descriptor_set_layout_binding(uint32_t binding,
 								  VkShaderStageFlags stages,
+								  uint32_t num_descriptors,
 								  VkDescriptorType type);
 
 

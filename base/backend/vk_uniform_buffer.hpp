@@ -249,7 +249,7 @@ namespace vulkan {
 			  ubuffer,
 			  0,
 			  sizeof(data),
-			  reinterpret_cast<void*>(&data));
+			  static_cast<const void*>(&data));
       }
       return r;
     }

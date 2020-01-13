@@ -6,9 +6,13 @@ layout(location = 1) in vec3 frag_Color;
 
 layout(location = 0) out vec4 out_Color;
 
-layout(set=0, binding=0) uniform sampler2D unif_SamplerA;
+layout(set=0, binding=0) uniform sampler2D unif_Samplers[2];
+
+layout(push_constant) uniform sampler_index_buffer {
+  int samplerIndex;
+};
 
 void main() {
-  vec4 color = texture(unif_SamplerA, frag_TexCoord) * vec4(frag_Color, 1.0);
+  vec4 color = texture(unif_Samplers[samplerIndex & 0x1], frag_TexCoord) * vec4(frag_Color, 1.0);
   out_Color = color;
 }

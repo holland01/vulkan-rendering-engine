@@ -1,4 +1,5 @@
 #include "vk_image.hpp"
+#include <unordered_set>
 
 namespace vulkan {
     // at the time of this writing texture_gen_params isn't necessary,
@@ -180,4 +181,93 @@ namespace vulkan {
     }
     return ret;
   }
+
+  bool texture_pool::update_descriptor_sets(VkDevice device, darray<texture_pool::index_type> indices) const {
+    bool good = c_assert(m_image_pool != nullptr && !indices.empty());
+
+    // lots of validation here.
+    // we make sure that:
+    //    a) each index is valid, and
+    //    b) that each index refers to the same descriptor set, and
+    //    c) that each index refers to the same descriptor set layout binding.
+    // Then, we generate the info as required.
+    if (good) {
+      size_t i{0};
+
+      std::unordered_set<descriptor_set_pool::index_type> desc_indices;
+      std::unordered_set<uint32_t> binding_indices;
+      
+      while (i < indices.size() && good) {
+	good = ok_texture(indices[i]);
+
+	desc_indices.insert(m_descriptor_sets.at(indices[i]));
+	binding_indices.insert(m_desc_layout_binding_indices.at(indices[i]));
+	
+	i++;
+      }
+
+      good =
+	good &&
+	desc_indices.size() == 1 &&
+	binding_indices.size() == 1;
+    
+      if (c_assert(good)) {
+	darray<VkDescriptorImageInfo> v_image_info{};
+
+	i = 0;
+	while (i < indices.size()) {
+	  texture_pool::index_type index = indices.at(i);
+	  
+	  VkDescriptorImageInfo _image_info = {};
+	  
+	  _image_info.sampler = m_samplers.at(index);
+	  _image_info.imageView = m_image_pool->image_view(m_images.at(index));
+	  _image_info.imageLayout = m_image_pool->layout_final(m_images.at(index));
+
+	  v_image_info.push_back(_image_info);
+
+	  i++;
+	}
+
+	// it doesn't matter which index we use here.
+	texture_pool::index_type index = indices.at(0);
+
+	// important that the first image is in fact referencing
+	// sampler 0 (yes, the 'good &&' is unnecessary, but at the same time
+	// a new dependency might be added at some point)
+
+	good =
+	  good && 
+	  m_desc_array_element_indices.at(index) == 0;
+
+	if (c_assert(good)) {
+	  VkWriteDescriptorSet write_desc_set = {};
+	
+	  write_desc_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	  write_desc_set.pNext = nullptr;
+
+	  write_desc_set.dstSet = m_descriptor_set_pool->descriptor_set(m_descriptor_sets.at(index));
+	  write_desc_set.descriptorType = m_descriptor_set_pool->descriptor_type(m_descriptor_sets.at(index));
+	  
+	  write_desc_set.dstBinding = m_desc_layout_binding_indices.at(index);
+	  write_desc_set.dstArrayElement = 0;
+	
+	  write_desc_set.descriptorCount = v_image_info.size();
+	  write_desc_set.pImageInfo = v_image_info.data();
+	
+	  write_desc_set.pBufferInfo = nullptr;
+	  write_desc_set.pTexelBufferView = nullptr;
+
+	  vkUpdateDescriptorSets(device,
+				 1,
+				 &write_desc_set,
+				 0,
+				 nullptr);
+	}
+      }
+    }
+    return good;
+  }
 }
+
+
