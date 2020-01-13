@@ -479,25 +479,138 @@ namespace vulkan {
     }
     
   };
+
   
-  struct texture_gen_params {
-    image_gen_params image_params{};
-
-    uint32_t descriptor_array_element{UINT32_MAX};
-    uint32_t binding_index{UINT32_MAX};
-    VkDescriptorType descriptor_type{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER}; 
-    VkShaderStageFlags shader_stage_flags{VK_SHADER_STAGE_FRAGMENT_BIT};   
-
-    bool ok() const {
-      bool r =
-	image_params.ok() &&
-	descriptor_array_element != UINT32_MAX &&
-	binding_index != UINT32_MAX;      
-	
+  struct descriptor_set_gen_params {    
+    darray<VkShaderStageFlags> stages;
+    VkDescriptorType type{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
+    
+    bool ok() const {      
+      bool r = !stages.empty();
       ASSERT(r);
       return r;
     }
+
+    darray<VkDescriptorSetLayoutBinding> make_bindings() const {
+      darray<VkDescriptorSetLayoutBinding> bindings{};
+
+      for (size_t i = 0; i < stages.size(); ++i) {
+	bindings.push_back(make_descriptor_set_layout_binding(static_cast<uint32_t>(i),
+							      stages.at(i),
+							      type));
+      }
+      
+      ASSERT(!bindings.empty());
+      return bindings;
+    }
   };
+
+  class descriptor_set_pool : index_traits<int16_t,
+					   darray<VkDescriptorSet>> {
+  public:
+    //typedef index_traits<int16_t,
+    //			 darray<VkDescriptorSet>> index_type_traits;
+
+    typedef index_traits_this_type::index_type index_type;
+    static inline constexpr index_type k_unset = index_traits_this_type::k_unset;
+
+  private:
+    darray<VkDescriptorSet> m_descriptor_sets;
+    darray<VkDescriptorSetLayout> m_descriptor_set_layouts;
+    darray<VkDescriptorType> m_descriptor_types;
+
+    index_type new_descriptor_set() {
+      index_type index = this->length();
+    
+      m_descriptor_sets.push_back(VK_NULL_HANDLE);
+      m_descriptor_set_layouts.push_back(VK_NULL_HANDLE);
+      m_descriptor_types.push_back(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+      return index;
+    }
+    
+  public:
+    descriptor_set_pool()
+      : index_traits_this_type(m_descriptor_sets) {}
+
+    void free_mem(VkDevice device) {
+      for (index_type i{0}; i < length(); ++i) {
+	free_device_handle<VkDescriptorSetLayout,
+			   &vkDestroyDescriptorSetLayout>(device, m_descriptor_set_layouts[i]);
+      }
+
+      m_descriptor_set_layouts.clear();
+      m_descriptor_sets.clear();
+      m_descriptor_types.clear();
+    }
+
+    bool ok_descriptor_set(index_type index) const {
+      bool r =
+	ok_index(index) &&
+	(m_descriptor_set_layouts.at(index) != VK_NULL_HANDLE) &&
+	(m_descriptor_sets.at(index) != VK_NULL_HANDLE);
+      ASSERT(r);
+      return r;
+    }
+    
+    index_type make_descriptor_set(const device_resource_properties& properties,
+				   const descriptor_set_gen_params& params) {
+      index_type descriptor_set{k_unset};
+
+      if (properties.ok() && params.ok()) {
+	VkDescriptorSetLayout desc_set_layout{VK_NULL_HANDLE};
+        VkDescriptorSet desc_set{VK_NULL_HANDLE};       
+
+	auto bindings = params.make_bindings();
+	
+	desc_set_layout = make_descriptor_set_layout(properties.device,
+						     bindings.data(),
+						     bindings.size());
+
+	if (H_OK(desc_set_layout)) {
+	  desc_set = vulkan::make_descriptor_set(properties.device,
+						 properties.descriptor_pool,
+						 &desc_set_layout,
+						 1);
+	}
+
+	if (H_OK(desc_set)) {
+	  descriptor_set = new_descriptor_set();
+	  
+	  m_descriptor_set_layouts[descriptor_set] = desc_set_layout;
+	  m_descriptor_sets[descriptor_set] = desc_set;
+	  m_descriptor_types[descriptor_set] = params.type;
+	}
+      }
+      ASSERT(ok_descriptor_set(descriptor_set));
+
+      return descriptor_set;
+    }
+
+    VkDescriptorType descriptor_type(index_type index) const {
+      VkDescriptorType type{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
+      if (ok_descriptor_set(index)) {
+	type = m_descriptor_types.at(index);
+      }
+      return type;
+    }
+
+    VkDescriptorSet descriptor_set(index_type index) const {
+      VK_HANDLE_GET_FN_IMPL(index,
+			    ok_descriptor_set,
+			    m_descriptor_sets,
+			    VkDescriptorSet);
+    }
+
+    VkDescriptorSetLayout descriptor_set_layout(index_type index) const {
+      VK_HANDLE_GET_FN_IMPL(index,
+			    ok_descriptor_set,
+			    m_descriptor_set_layouts,
+			    VkDescriptorSetLayout);
+    }
+  };
+  
+  struct texture_gen_params;
   
   class texture_pool : index_traits<int16_t,
 				    darray<image_pool::index_type>> {
@@ -511,227 +624,61 @@ namespace vulkan {
   private:
     darray<image_pool::index_type> m_images;
     darray<VkSampler> m_samplers;
-    darray<VkDescriptorSet> m_descriptor_sets;
-    darray<VkDescriptorSetLayout> m_descriptor_set_layouts;
+
+    darray<descriptor_set_pool::index_type> m_descriptor_sets;
+    
     darray<uint32_t> m_desc_layout_binding_indices;
     darray<uint32_t> m_desc_array_element_indices;
     darray<VkDescriptorType> m_descriptor_types;
     
     image_pool* m_image_pool;
+    descriptor_set_pool* m_descriptor_set_pool;
 
     VkSampler make_sampler(const device_resource_properties& properties,
-			   const texture_gen_params& params) const {
-      VkSampler sampler{VK_NULL_HANDLE};
-
-      VkSamplerCreateInfo create_info = {};
-
-      create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-      create_info.pNext = nullptr;
+			   const texture_gen_params& params) const;
     
-      create_info.flags = 0;
-    
-      create_info.magFilter = VK_FILTER_LINEAR;
-      create_info.minFilter = VK_FILTER_LINEAR;
-
-      create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    
-      create_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      create_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      create_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-      create_info.mipLodBias = 0.0f;
-    
-      create_info.anisotropyEnable = VK_FALSE;
-      create_info.maxAnisotropy = 0.0f;
-
-      create_info.compareEnable = VK_FALSE;
-      create_info.compareOp = VK_COMPARE_OP_ALWAYS;
-      create_info.minLod = 0.0f;
-      create_info.maxLod = 0.0f;
-    
-      create_info.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-
-      create_info.unnormalizedCoordinates = VK_FALSE;
-
-      VK_FN(vkCreateSampler(properties.device,
-			    &create_info,
-			    nullptr,
-			    &sampler));
-      return sampler;
-    }
-    
-    index_type new_texture() {
-      index_type index = this->length();
-      
-      m_images.push_back(image_pool::k_unset);
-      m_samplers.push_back(VK_NULL_HANDLE);
-      m_descriptor_set_layouts.push_back(VK_NULL_HANDLE);
-      m_descriptor_sets.push_back(VK_NULL_HANDLE);
-      m_desc_layout_binding_indices.push_back(UINT32_MAX);
-      m_desc_array_element_indices.push_back(UINT32_MAX);
-      m_descriptor_types.push_back(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-      return index;
-    }
+    index_type new_texture();
     
   public:
-    texture_pool()
-      : index_traits_this_type(m_images),
-	m_image_pool{nullptr}
-    {}
+    texture_pool();
 
-    void set_image_pool(image_pool* p) {
-      // should only be set once
-      ASSERT(m_image_pool == nullptr);
-      m_image_pool = p;
-    }
+    void set_image_pool(image_pool* p);
+
+    void set_descriptor_set_pool(descriptor_set_pool* p);
     
     index_type make_texture(const device_resource_properties& properties,
-			    const texture_gen_params& params) {
-      index_type texture{k_unset};
+			    const texture_gen_params& params);
 
-      if (m_image_pool != nullptr &&
-	  properties.ok() &&
-	  params.ok()) {
-	
-	image_pool::index_type img{image_pool::k_unset};
-	VkSampler smp{VK_NULL_HANDLE};
-	VkDescriptorSetLayout desc_set_layout{VK_NULL_HANDLE};
-	VkDescriptorSet desc_set{VK_NULL_HANDLE};
+    void free_mem(VkDevice device);
 
-	img =
-	  m_image_pool->make_image(properties,
-					 params.image_params);
-	
-	if (m_image_pool->ok_image(img)) {	
-	  smp = make_sampler(properties, params);
-	}
+    bool ok_texture(index_type index) const;
 
-	if (H_OK(smp)) {
-	  auto desc_set_binding = make_descriptor_set_layout_binding(params.binding_index,
-								     params.shader_stage_flags,
-								     params.descriptor_type);
+    image_pool::index_type image_index(index_type index) const;
+    
+    VkSampler sampler(index_type index) const;   
 
-	  
-	  desc_set_layout = make_descriptor_set_layout(properties.device,
-						       &desc_set_binding,
-						       1);
-	}
+    VkDescriptorImageInfo make_descriptor_image_info(index_type index) const;
 
-	if (H_OK(desc_set_layout)) {
-	  desc_set = make_descriptor_set(properties.device,
-					 properties.descriptor_pool,
-					 &desc_set_layout,
-					 1);
-	}
+    VkWriteDescriptorSet make_write_descriptor_set(index_type index, const VkDescriptorImageInfo* image_info) const;
+  };
 
-	if (H_OK(desc_set)) {
-	  texture = new_texture();
-	  
-	  m_images[texture] = img;
-	  m_samplers[texture] = smp;
-	  m_descriptor_set_layouts[texture] = desc_set_layout;
-	  m_descriptor_sets[texture] = desc_set;
+  struct texture_gen_params {
+    image_gen_params image_params{};
 
-	  m_desc_layout_binding_indices[texture] = params.binding_index;
-	  m_desc_array_element_indices[texture] = params.descriptor_array_element;
-	  m_descriptor_types[texture] = params.descriptor_type;
-	}
-      }
-      ASSERT(ok_texture(texture));
-      return texture;
-    }
-
-    void free_mem(VkDevice device) {
-      for (index_type index{0}; index < length(); ++index) {
-	free_device_handle<VkSampler, &vkDestroySampler>(device, m_samplers[index]);
-	// descriptor set layout should be freed by pipeline layout
-	// descriptor set should be freed by pool
-      }
-
-      m_images.clear();
-      m_samplers.clear();
-      m_descriptor_set_layouts.clear();
-      m_descriptor_sets.clear();
-      m_desc_layout_binding_indices.clear();
-      m_desc_array_element_indices.clear();
-      m_descriptor_types.clear();
-      
-      if (m_image_pool != nullptr) {
-	m_image_pool->free_mem(device);
-      }
-    }
-
-    bool ok_texture(index_type index) const {
+    descriptor_set_pool::index_type descriptor_set_index{descriptor_set_pool::k_unset};
+    
+    uint32_t descriptor_array_element{UINT32_MAX};
+    uint32_t binding_index{UINT32_MAX};
+    
+    bool ok() const {
       bool r =
-	this->ok_index(index) &&
-	(m_image_pool != nullptr) &&
-	m_image_pool->ok_image(m_images.at(index)) &&
-	(m_samplers.at(index) != VK_NULL_HANDLE) &&
-	(m_descriptor_set_layouts.at(index) != VK_NULL_HANDLE) &&
-	(m_descriptor_sets.at(index) != VK_NULL_HANDLE) &&
-	(m_desc_layout_binding_indices.at(index) != UINT32_MAX) &&
-	(m_desc_array_element_indices.at(index) != UINT32_MAX);
-
+	image_params.ok() &&
+	(descriptor_array_element != UINT32_MAX) &&
+	(binding_index != UINT32_MAX) &&
+	(descriptor_set_index != descriptor_set_pool::k_unset);
+      
       ASSERT(r);
       return r;
-    }
-
-    image_pool::index_type image_index(index_type index) const {
-      HANDLE_GET_FN_IMPL(index,
-			 ok_texture,
-			 m_images,
-			 image_pool::index_type,
-			 image_pool::k_unset);
-    }
-    
-    VkSampler sampler(index_type index) const {
-      VK_HANDLE_GET_FN_IMPL(index,
-			    ok_texture,
-			    m_samplers,
-			    VkSampler);
-    }
-    
-    VkDescriptorSet descriptor_set(index_type index) const {
-      VK_HANDLE_GET_FN_IMPL(index,
-			    ok_texture,
-			    m_descriptor_sets,
-			    VkDescriptorSet);
-    }
-
-    VkDescriptorSetLayout descriptor_set_layout(index_type index) const {
-      VK_HANDLE_GET_FN_IMPL(index,
-			    ok_texture,
-			    m_descriptor_set_layouts,
-			    VkDescriptorSetLayout);
-    }
-
-    VkDescriptorImageInfo make_descriptor_image_info(index_type index) const {
-      VkDescriptorImageInfo ret = {};
-      ASSERT(m_image_pool != nullptr);
-      if (ok_texture(index)) {
-	ret.sampler = m_samplers.at(index);
-	ret.imageView = m_image_pool->image_view(m_images.at(index));
-	ret.imageLayout = m_image_pool->layout_final(m_images.at(index));
-      }
-      return ret;
-    }
-
-    VkWriteDescriptorSet make_write_descriptor_set(index_type index, const VkDescriptorImageInfo* image_info) const {
-      VkWriteDescriptorSet ret = {};
-      if (ok_texture(index)) {
-	ret.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	ret.pNext = nullptr;
-	ret.dstSet = m_descriptor_sets.at(index);
-	ret.dstBinding = m_desc_layout_binding_indices.at(index);
-	ret.dstArrayElement = m_desc_array_element_indices.at(index);
-	ret.descriptorCount = 1;
-	ret.descriptorType = m_descriptor_types.at(index);
-	ret.pImageInfo = image_info;
-	ret.pBufferInfo = nullptr;
-	ret.pTexelBufferView = nullptr;
-      }
-      return ret;
     }
   };
 }

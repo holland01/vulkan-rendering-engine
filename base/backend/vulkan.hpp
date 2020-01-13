@@ -106,6 +106,8 @@ namespace vulkan {
 
     darray<VkCommandBuffer> m_vk_command_buffers;   
 
+    descriptor_set_pool m_descriptor_set_pool{};
+    
     image_pool m_image_pool{};
 
     texture_pool m_texture_pool{};
@@ -166,6 +168,7 @@ namespace vulkan {
     VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
 
     texture_pool::index_type m_test_texture_index{texture_pool::k_unset};
+    descriptor_set_pool::index_type m_test_texture_ds_index{descriptor_set_pool::k_unset};
     
     bool m_ok_present{false};
     bool m_ok_descriptor_pool{false};
@@ -1299,7 +1302,6 @@ namespace vulkan {
 	uint32_t image_w = 256;
 	uint32_t image_h = 256;
 
-
 	uint32_t bpp = 4;
 
 	darray<uint8_t> buffer(image_w * image_h * bpp, 0);
@@ -1333,13 +1335,27 @@ namespace vulkan {
 	  }
 	}
 
+	descriptor_set_gen_params descriptor_set_params =
+	  {
+	   // darray<VkShaderStageFlags> stages
+	   {
+	    VK_SHADER_STAGE_FRAGMENT_BIT,
+	    VK_SHADER_STAGE_FRAGMENT_BIT
+	   },
+	   // VkDescriptorType type
+	   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+	  };
+
+	m_test_texture_ds_index = m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
+									    descriptor_set_params);
+	
 	texture_gen_params texture_params =
 	  {
 	   // image_params
 	   {
 	    // data
 	    static_cast<void*>(buffer.data()), 
-	    // memory property flags
+	    // memory 
 	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 	    // format
 	    VK_FORMAT_R8G8B8A8_UNORM,
@@ -1375,19 +1391,18 @@ namespace vulkan {
 	    1
 	   },
 	   // end image params
-	   
+
+	   // descriptor set index
+	   m_test_texture_ds_index,
 	   // descriptor array element
 	   0,
 	   // binding index
 	   0,
-	   // descriptor type
-	   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	   // shader stage flags
-	   VK_SHADER_STAGE_FRAGMENT_BIT
 	  };
 
 	m_texture_pool.set_image_pool(&m_image_pool);
-
+	m_texture_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
+	
 	m_test_texture_index = m_texture_pool.make_texture(make_device_resource_properties(),
 							   texture_params);       
 	
@@ -1499,7 +1514,7 @@ namespace vulkan {
 
 	std::array<VkDescriptorSetLayout, 2> set_layouts =
 	  {
-	   m_texture_pool.descriptor_set_layout(m_test_texture_index),
+	   m_descriptor_set_pool.descriptor_set_layout(m_test_texture_ds_index),
 	   m_uniform_block_pool->descriptor_set_layout(m_vertex_uniform_block.index)
 	  };
 	
@@ -1774,7 +1789,7 @@ namespace vulkan {
 
 	std::array<VkDescriptorSet, 2> descriptor_sets =
 	  {
-	   m_texture_pool.descriptor_set(m_test_texture_index),
+	   m_descriptor_set_pool.descriptor_set(m_test_texture_ds_index),
 	   m_uniform_block_pool->descriptor_set(m_vertex_uniform_block.index)
 	  };
 	
@@ -2058,12 +2073,18 @@ namespace vulkan {
       free_vk_ldevice_handle<VkPipeline, &vkDestroyPipeline>(m_vk_graphics_pipeline);
       free_vk_ldevice_handle<VkPipelineLayout, &vkDestroyPipelineLayout>(m_vk_pipeline_layout);
       free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
-
+      
       m_texture_pool.free_mem(m_vk_curr_ldevice);
+      m_image_pool.free_mem(m_vk_curr_ldevice);
       
       m_depthbuffer.free_mem(m_vk_curr_ldevice);
 
       m_uniform_block_pool->free_mem();
+
+      // UBO descriptor set will eventually be moved over
+      // to this pool. In fact, the actual VkDescriptorPool
+      // should be moved to this class as well.
+      m_descriptor_set_pool.free_mem(m_vk_curr_ldevice); 
       
       free_vk_ldevice_handle<VkDescriptorPool, &vkDestroyDescriptorPool>(m_vk_descriptor_pool);
       
