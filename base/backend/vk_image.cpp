@@ -76,7 +76,7 @@ namespace vulkan {
   }
     
   texture_pool::index_type texture_pool::make_texture(const device_resource_properties& properties,
-					const texture_gen_params& params) {
+						      const texture_gen_params& params) {
     texture_pool::index_type texture{k_unset};
 
     if (m_image_pool != nullptr &&
@@ -85,27 +85,23 @@ namespace vulkan {
 	params.ok()) {
 
       if (m_descriptor_set_pool->ok_descriptor_set(params.descriptor_set_index)) {
-	image_pool::index_type img{image_pool::k_unset};
-	VkSampler smp{VK_NULL_HANDLE};     
+	if (m_image_pool->ok_image(params.image_index)) {
+	  image_pool::index_type img{image_pool::k_unset};
+	  VkSampler smp{VK_NULL_HANDLE};     
 
-	img =
-	  m_image_pool->make_image(properties,
-				   params.image_params);
-	
-	if (m_image_pool->ok_image(img)) {	
 	  smp = make_sampler(properties, params);
-	}
 
-	if (H_OK(smp)) {
-	  texture = new_texture();
+	  if (H_OK(smp)) {
+	    texture = new_texture();
 	  
-	  m_images[texture] = img;
-	  m_samplers[texture] = smp;
+	    m_images[texture] = params.image_index;
+	    m_samplers[texture] = smp;
 
-	  m_desc_layout_binding_indices[texture] = params.binding_index;
-	  m_desc_array_element_indices[texture] = params.descriptor_array_element;	
+	    m_desc_layout_binding_indices[texture] = params.binding_index;
+	    m_desc_array_element_indices[texture] = params.descriptor_array_element;	
 		
-	  m_descriptor_sets[texture] = params.descriptor_set_index;
+	    m_descriptor_sets[texture] = params.descriptor_set_index;
+	  }
 	}
       }
     }
@@ -144,14 +140,6 @@ namespace vulkan {
 
     ASSERT(r);
     return r;
-  }
-
-  image_pool::index_type texture_pool::image_index(texture_pool::index_type index) const {
-    HANDLE_GET_FN_IMPL(index,
-		       ok_texture,
-		       m_images,
-		       image_pool::index_type,
-		       image_pool::k_unset);
   }
     
   VkSampler texture_pool::sampler(texture_pool::index_type index) const {

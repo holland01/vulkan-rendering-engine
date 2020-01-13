@@ -629,7 +629,6 @@ namespace vulkan {
     
     darray<uint32_t> m_desc_layout_binding_indices;
     darray<uint32_t> m_desc_array_element_indices;
-    darray<VkDescriptorType> m_descriptor_types;
     
     image_pool* m_image_pool;
     descriptor_set_pool* m_descriptor_set_pool;
@@ -652,8 +651,6 @@ namespace vulkan {
     void free_mem(VkDevice device);
 
     bool ok_texture(index_type index) const;
-
-    image_pool::index_type image_index(index_type index) const;
     
     VkSampler sampler(index_type index) const;   
 
@@ -663,7 +660,7 @@ namespace vulkan {
   };
 
   struct texture_gen_params {
-    image_gen_params image_params{};
+    image_pool::index_type image_index{image_pool::k_unset};
 
     descriptor_set_pool::index_type descriptor_set_index{descriptor_set_pool::k_unset};
     
@@ -672,10 +669,10 @@ namespace vulkan {
     
     bool ok() const {
       bool r =
-	image_params.ok() &&
+	(image_index != image_pool::k_unset) &&
+	(descriptor_set_index != descriptor_set_pool::k_unset) &&
 	(descriptor_array_element != UINT32_MAX) &&
-	(binding_index != UINT32_MAX) &&
-	(descriptor_set_index != descriptor_set_pool::k_unset);
+	(binding_index != UINT32_MAX);
       
       ASSERT(r);
       return r;

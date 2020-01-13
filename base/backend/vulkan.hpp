@@ -73,7 +73,7 @@ namespace vulkan {
 
   struct transform_data {
     mat4_t view_to_clip{R(1.0)};
-    mat4_t world_to_view{R(1.0)};
+    mat4_t world_to_view{R(1.0)};    
   };
 
   struct vertex_data {
@@ -167,7 +167,18 @@ namespace vulkan {
     VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
     VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
 
-    texture_pool::index_type m_test_texture_index{texture_pool::k_unset};
+    std::array<image_pool::index_type, 2> m_test_image_indices =
+      {
+       image_pool::k_unset,
+       image_pool::k_unset
+      };
+    
+    std::array<texture_pool::index_type, 2> m_test_texture_indices =
+      {
+       texture_pool::k_unset,
+       texture_pool::k_unset
+      };
+    
     descriptor_set_pool::index_type m_test_texture_ds_index{descriptor_set_pool::k_unset};
     
     bool m_ok_present{false};
@@ -1297,8 +1308,10 @@ namespace vulkan {
     }
     
     void setup_texture_data() {
-      if (ok_uniform_block_data()) {	       
-	// generate image data
+      if (ok_uniform_block_data()) {
+	m_texture_pool.set_image_pool(&m_image_pool);
+	m_texture_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
+	
 	uint32_t image_w = 256;
 	uint32_t image_h = 256;
 
@@ -1306,40 +1319,43 @@ namespace vulkan {
 
 	darray<uint8_t> buffer(image_w * image_h * bpp, 0);
 
-	uint8_t rgb = 0;
+	// this creates a checkerboard pattern
+	{
+	  uint8_t rgb = 0;
 
-	uint32_t mask = 7;
+	  uint32_t mask = 7;
 
-	uint32_t y = 0;
-	while (y < image_h) {
-	  uint32_t x = 0;
-	  while (x < image_w) {
-	    uint32_t offset = (y * image_w + x) * bpp;
+	  uint32_t y = 0;
+	  while (y < image_h) {
+	    uint32_t x = 0;
+	    while (x < image_w) {
+	      uint32_t offset = (y * image_w + x) * bpp;
 	    
-	    buffer[offset + 0] = 255 & rgb;
-	    buffer[offset + 1] = 255 & rgb;
-	    buffer[offset + 2] = 255 & rgb;
-	    buffer[offset + 3] = 255;
+	      buffer[offset + 0] = 255 & rgb;
+	      buffer[offset + 1] = 255 & rgb;
+	      buffer[offset + 2] = 255 & rgb;
+	      buffer[offset + 3] = 255;
 	    
-	    x++;
+	      x++;
 
-	    if (((x + 1) & mask) == 0) {
+	      if (((x + 1) & mask) == 0) {
+		rgb = ~rgb;
+	      }
+	    }
+
+	    y++;
+
+	    if (((y + 1) & mask) == 0) {
 	      rgb = ~rgb;
 	    }
 	  }
-
-	  y++;
-
-	  if (((y + 1) & mask) == 0) {
-	    rgb = ~rgb;
-	  }
 	}
 
+	
 	descriptor_set_gen_params descriptor_set_params =
 	  {
 	   // darray<VkShaderStageFlags> stages
 	   {
-	    VK_SHADER_STAGE_FRAGMENT_BIT,
 	    VK_SHADER_STAGE_FRAGMENT_BIT
 	   },
 	   // VkDescriptorType type
@@ -1348,50 +1364,53 @@ namespace vulkan {
 
 	m_test_texture_ds_index = m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
 									    descriptor_set_params);
+
+	image_gen_params image_params =
+	  {
+	   // data
+	   static_cast<void*>(buffer.data()), 
+	   // memory 
+	   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	   // format
+	   VK_FORMAT_R8G8B8A8_UNORM,
+	   // initial layout
+	   VK_IMAGE_LAYOUT_PREINITIALIZED,
+	   // final layout
+	   VK_IMAGE_LAYOUT_GENERAL,
+	   // tiling
+	   VK_IMAGE_TILING_LINEAR,
+	   // usage flags
+	   VK_IMAGE_USAGE_SAMPLED_BIT,
+	   // type
+	   VK_IMAGE_TYPE_2D,
+	   // view type
+	   VK_IMAGE_VIEW_TYPE_2D,
+	    
+	   // aspect flags
+	   VK_IMAGE_ASPECT_COLOR_BIT,
+	   // source pipeline stage
+	   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+	   // dest pipeline stage
+	   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+	   // source access flags
+	   0,
+	   // dest access flags
+	   VK_ACCESS_SHADER_READ_BIT,
+	    
+	   // width
+	   image_w,
+	   // height
+	   image_h,
+	   // depth
+	   1
+	  };
+
+	m_test_image_indices[0] = m_image_pool.make_image(make_device_resource_properties(),
+							  image_params);
 	
 	texture_gen_params texture_params =
 	  {
-	   // image_params
-	   {
-	    // data
-	    static_cast<void*>(buffer.data()), 
-	    // memory 
-	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-	    // format
-	    VK_FORMAT_R8G8B8A8_UNORM,
-	    // initial layout
-	    VK_IMAGE_LAYOUT_PREINITIALIZED,
-	    // final layout
-	    VK_IMAGE_LAYOUT_GENERAL,
-	    // tiling
-	    VK_IMAGE_TILING_LINEAR,
-	    // usage flags
-	    VK_IMAGE_USAGE_SAMPLED_BIT,
-	    // type
-	    VK_IMAGE_TYPE_2D,
-	    // view type
-	    VK_IMAGE_VIEW_TYPE_2D,
-	    
-	    // aspect flags
-	    VK_IMAGE_ASPECT_COLOR_BIT,
-	    // source pipeline stage
-	    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-	    // dest pipeline stage
-	    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-	    // source access flags
-	    0,
-	    // dest access flags
-	    VK_ACCESS_SHADER_READ_BIT,
-	    
-	    // width
-	    image_w,
-	    // height
-	    image_h,
-	    // depth
-	    1
-	   },
-	   // end image params
-
+	   m_test_image_indices[0],
 	   // descriptor set index
 	   m_test_texture_ds_index,
 	   // descriptor array element
@@ -1399,14 +1418,11 @@ namespace vulkan {
 	   // binding index
 	   0,
 	  };
-
-	m_texture_pool.set_image_pool(&m_image_pool);
-	m_texture_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
 	
-	m_test_texture_index = m_texture_pool.make_texture(make_device_resource_properties(),
-							   texture_params);       
+	m_test_texture_indices[0] = m_texture_pool.make_texture(make_device_resource_properties(),
+								texture_params);      
 	
-	m_ok_texture_data = m_texture_pool.ok_texture(m_test_texture_index);
+	m_ok_texture_data = m_texture_pool.ok_texture(m_test_texture_indices[0]);
       }
     }
 
@@ -1748,25 +1764,36 @@ namespace vulkan {
     // pipeline layout created earlier.
     void setup_command_buffers() {
       if (ok_command_pool()) {
-	VkDescriptorImageInfo image_info =
-	  m_texture_pool.make_descriptor_image_info(m_test_texture_index);
-	VkWriteDescriptorSet write_desc_set =
-	  m_texture_pool.make_write_descriptor_set(m_test_texture_index, &image_info);
+	// bind sampler[i] to test_texture_indices[i] via
+	// test_texture_index's array element index (should be i)
+	for (texture_pool::index_type texture_index: m_test_texture_indices) {
+	  
+	  VkDescriptorImageInfo image_info =
+	    m_texture_pool.make_descriptor_image_info(texture_index);
+	  
+	  VkWriteDescriptorSet write_desc_set =
+	    m_texture_pool.make_write_descriptor_set(texture_index, &image_info);
 
-	vkUpdateDescriptorSets(m_vk_curr_ldevice,
-			       1,
-			       &write_desc_set,
-			       0,
-			       nullptr);
+	  vkUpdateDescriptorSets(m_vk_curr_ldevice,
+				 1,
+				 &write_desc_set,
+				 0,
+				 nullptr);
+
+	  break;
+	}
 
 	vkDeviceWaitIdle(m_vk_curr_ldevice);	
+
+	// perform the image layout transition for
+	// test_texture_indices[0]
 	
 	run_cmds(
 		 [this](VkCommandBuffer cmd_buf) {
 		   puts("image_layout_transition");
 
 		   m_image_pool.
-		     make_layout_transition(m_texture_pool.image_index(m_test_texture_index)).
+		     make_layout_transition(m_test_image_indices[0]).
 		     via(cmd_buf);
 
 		   m_ok_scene = true;
