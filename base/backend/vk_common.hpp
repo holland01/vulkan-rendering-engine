@@ -226,6 +226,12 @@ namespace vulkan {
     }
   };
 
+  struct vertex_data {
+    vec3_t position;
+    vec2_t st;
+    vec3_t color;
+  };
+  
   struct device_resource_properties {
     darray<uint32_t> queue_family_indices;
     VkPhysicalDevice physical_device{VK_NULL_HANDLE};

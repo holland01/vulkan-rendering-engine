@@ -28,13 +28,6 @@
 namespace vulkan {
   struct image_requirements;
   
-  VkPipelineVertexInputStateCreateInfo default_vertex_input_state_settings();
-  VkPipelineInputAssemblyStateCreateInfo default_input_assembly_state_settings();
-  VkPipelineViewportStateCreateInfo default_viewport_state_settings();
-  VkPipelineRasterizationStateCreateInfo default_rasterization_state_settings();
-  VkPipelineMultisampleStateCreateInfo default_multisample_state_settings();
-  VkPipelineColorBlendAttachmentState default_color_blend_attach_state_settings();
-  VkPipelineColorBlendStateCreateInfo default_color_blend_state_settings();
   VkPipelineLayoutCreateInfo default_pipeline_layout_settings();
 
   VkAttachmentDescription default_colorbuffer_settings(VkFormat swapchain_format);
@@ -42,8 +35,6 @@ namespace vulkan {
 
   VkAttachmentDescription default_depthbuffer_settings();
   VkAttachmentReference default_depthbuffer_ref_settings();
-
-  VkStencilOpState default_stencilop_state();
   
   VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code);
 
@@ -81,12 +72,6 @@ namespace vulkan {
     int sampler_index;
   };
 
-  struct vertex_data {
-    vec3_t position;
-    vec2_t st;
-    vec3_t color;
-  };
-
   struct rot_cmd {
     vec3_t axes;
     real_t rad;
@@ -120,6 +105,8 @@ namespace vulkan {
     render_pass_pool m_render_pass_pool{};
 
     pipeline_layout_pool m_pipeline_layout_pool{};
+
+    pipeline_pool m_pipeline_pool{};
     
     depthbuffer_data m_depthbuffer{};
     
@@ -154,8 +141,6 @@ namespace vulkan {
     VkPipelineLayout m_vk_pipeline_layout{VK_NULL_HANDLE};
 
     VkRenderPass m_vk_render_pass{VK_NULL_HANDLE};
-
-    darray<VkPipeline> m_vk_graphics_pipelines;
 
     VkSurfaceFormatKHR m_vk_khr_swapchain_format;
 
@@ -208,6 +193,11 @@ namespace vulkan {
     darray<pipeline_layout_pool::index_type> m_pipeline_layout_indices =
       {
        pipeline_layout_pool::k_unset
+      };
+
+    darray<pipeline_pool::index_type> m_pipeline_indices =
+      {
+       pipeline_pool::k_unset
       };
     
     bool m_ok_present{false};
@@ -485,22 +475,6 @@ namespace vulkan {
 	
 	free_vk_ldevice_handle<VkBuffer, &vkDestroyBuffer>(dummy_buffer);
       }
-      return ret;
-    }
-
-    VkShaderModule make_shader_module(darray<uint8_t> spv_code) const {
-      VkShaderModule ret;
-
-      if (ok_present()) {
-	VkShaderModuleCreateInfo create_info = {};
-
-	create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	create_info.codeSize = spv_code.size();
-	create_info.pCode = reinterpret_cast<uint32_t*>(spv_code.data());
-      
-	VK_FN(vkCreateShaderModule(m_vk_curr_ldevice, &create_info, nullptr, &ret));
-      }
-
       return ret;
     }
 
@@ -1582,182 +1556,6 @@ namespace vulkan {
 	m_ok_depthbuffer_data = m_depthbuffer.ok();
       }
     }
-
-    struct pipeline_input {
-      VkPipelineLayout pipeline_layout{VK_NULL_HANDLE};
-      
-      std::string vert_spv_path{};
-      std::string frag_spv_path{};
-
-      bool ok() const {
-	bool r =
-	  (!vert_spv_path.empty()) &&
-	  (!frag_spv_path.empty()) &&
-	  (pipeline_layout != VK_NULL_HANDLE);
-	
-	ASSERT(r);	
-	return r;
-      }
-    };
-
-        
-    struct pipeline_output {
-      VkPipeline pipeline{VK_NULL_HANDLE};
-      
-      bool ok() const {
-	bool r =
-	  (pipeline != VK_NULL_HANDLE);
-	
-	ASSERT(r);
-	return r;
-      }
-    };
-    
-    pipeline_output allocate_pipeline(const pipeline_input& input) {
-      pipeline_output output{};
-
-      if (input.ok()) {
-	//
-	// create shader programs
-	// 
-	auto spv_vshader = read_file(input.vert_spv_path);
-	auto spv_fshader = read_file(input.frag_spv_path);
-
-	ASSERT(!spv_vshader.empty());
-	ASSERT(!spv_fshader.empty());
-	
-	VkShaderModule vshader_module = make_shader_module(spv_vshader);
-	VkShaderModule fshader_module = make_shader_module(spv_fshader);
-
-	VkPipelineShaderStageCreateInfo vshader_create = {};
-	vshader_create.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vshader_create.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vshader_create.module = vshader_module;
-	vshader_create.pName = "main";
-
-	VkPipelineShaderStageCreateInfo fshader_create = {};
-	fshader_create.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fshader_create.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fshader_create.module = fshader_module;
-	fshader_create.pName = "main";
-
-	std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages =
-	  {
-	   vshader_create,
-	   fshader_create
-	  };
-
-	auto vertex_input_state = default_vertex_input_state_settings();
-
-	VkVertexInputAttributeDescription iad_position = {};
-	iad_position.location = 0;
-	iad_position.binding = 0;
-	iad_position.format = VK_FORMAT_R32G32B32_SFLOAT;
-	iad_position.offset = offsetof(vertex_data, position);
-
-	VkVertexInputAttributeDescription iad_texture = {};
-	iad_texture.location = 1;
-	iad_texture.binding = 0;
-	iad_texture.format = VK_FORMAT_R32G32_SFLOAT;
-	iad_texture.offset = offsetof(vertex_data, st);
-
-	VkVertexInputAttributeDescription iad_color = {};
-	iad_color.location = 2;
-	iad_color.binding = 0;
-	iad_color.format = VK_FORMAT_R32G32B32_SFLOAT;
-	iad_color.offset = offsetof(vertex_data, color);
-
-	darray<VkVertexInputAttributeDescription> input_attrs =
-	  {
-	   iad_position,
-	   iad_texture,
-	   iad_color
-	  };
-
-	vertex_input_state.vertexAttributeDescriptionCount = input_attrs.size();
-	vertex_input_state.pVertexAttributeDescriptions = input_attrs.data();
-	
-	VkVertexInputBindingDescription ibd = {};
-	ibd.binding = 0;
-	ibd.stride = sizeof(vertex_data);
-	ibd.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-	vertex_input_state.vertexBindingDescriptionCount = 1;
-	vertex_input_state.pVertexBindingDescriptions = &ibd;
-		
-	auto input_assembly_state = default_input_assembly_state_settings();
-	
-	auto viewport = make_viewport(R2(0), m_vk_swapchain_extent, 0.0f, 1.0f);
-	
-	VkRect2D scissor = {};
-	scissor.offset = { 0, 0 };
-	scissor.extent = m_vk_swapchain_extent;
-
-	auto viewport_state = default_viewport_state_settings();
-	viewport_state.viewportCount = 1;
-	viewport_state.pViewports = &viewport;
-	viewport_state.scissorCount = 1;
-	viewport_state.pScissors = &scissor;
-
-	auto rasterization_state = default_rasterization_state_settings();
-	auto multisample_state = default_multisample_state_settings();
-	
-	auto color_blend_attach_state = default_color_blend_attach_state_settings();
-	auto color_blend_state = default_color_blend_state_settings();
-	color_blend_state.attachmentCount = 1;
-	color_blend_state.pAttachments = &color_blend_attach_state;
-	
-
-	VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
-	depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depth_stencil_state.pNext = nullptr;
-	depth_stencil_state.flags = 0;
-	depth_stencil_state.depthTestEnable = VK_TRUE;
-	depth_stencil_state.depthWriteEnable = VK_TRUE;
-	depth_stencil_state.depthCompareOp = VK_COMPARE_OP_LESS;
-	depth_stencil_state.depthBoundsTestEnable = VK_FALSE;
-	depth_stencil_state.stencilTestEnable = VK_FALSE;
-	depth_stencil_state.minDepthBounds = 0.0f;
-	depth_stencil_state.maxDepthBounds = 1.0f;
-	depth_stencil_state.front = default_stencilop_state();
-	depth_stencil_state.back = default_stencilop_state();
-	
-	VkGraphicsPipelineCreateInfo pipeline_info = {};
-	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipeline_info.stageCount = 2;
-	pipeline_info.pStages = shader_stages.data();
-	pipeline_info.pVertexInputState = &vertex_input_state;
-	pipeline_info.pInputAssemblyState = &input_assembly_state;
-	pipeline_info.pViewportState = &viewport_state;
-	pipeline_info.pRasterizationState = &rasterization_state;
-	pipeline_info.pMultisampleState = &multisample_state;
-	pipeline_info.pDepthStencilState = &depth_stencil_state;
-	pipeline_info.pColorBlendState = &color_blend_state;
-	pipeline_info.pDynamicState = nullptr;
-	pipeline_info.layout = input.pipeline_layout;
-	pipeline_info.renderPass = m_vk_render_pass;
-	pipeline_info.subpass = 0;
-	pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
-	pipeline_info.basePipelineIndex = -1;
-
-	VkPipeline graphics_pipeline{VK_NULL_HANDLE};
-	VK_FN(vkCreateGraphicsPipelines(m_vk_curr_ldevice,
-					VK_NULL_HANDLE,
-					1,
-					&pipeline_info,
-					nullptr,
-					&output.pipeline));
-
-	//
-	// Free memory
-	//
-	
-	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(vshader_module);
-	free_vk_ldevice_handle<VkShaderModule, &vkDestroyShaderModule>(fshader_module);
-      }
-            
-      return output;
-    }
     
     void setup_graphics_pipeline() {
       if (ok_depthbuffer_data()) {
@@ -1787,23 +1585,30 @@ namespace vulkan {
 	if (m_pipeline_layout_pool.ok_pipeline_layout(m_pipeline_layout_indices[0])) {
 
 	  m_vk_pipeline_layout = m_pipeline_layout_pool.pipeline_layout(m_pipeline_layout_indices[0]);
+
+	  m_pipeline_pool.set_pipeline_layout_pool(&m_pipeline_layout_pool);
+	  m_pipeline_pool.set_render_pass_pool(&m_render_pass_pool);
 	  
-	  pipeline_input texture2d_pipeline_in
+	  pipeline_gen_params texture2d_pipeline_in
 	    {
-	     m_vk_pipeline_layout,
+	     // viewport extent
+	     m_vk_swapchain_extent,
+	     
 	     // vert spv path
 	     "resources/shaders/tri_ubo/tri_ubo.vert.spv",
 	     // frag spv path
-	     "resources/shaders/tri_ubo/tri_ubo.frag.spv"
+	     "resources/shaders/tri_ubo/tri_ubo.frag.spv",
+	     
+	     m_pipeline_layout_indices[0],
+
+	     m_render_pass_indices[0],
 	    };       		
 
-	  pipeline_output texture2d_pipeline_out = allocate_pipeline(texture2d_pipeline_in);
+	  m_pipeline_indices[0] =
+	    m_pipeline_pool.make_pipeline(make_device_resource_properties(),
+					  texture2d_pipeline_in);
 	
-	  if (texture2d_pipeline_out.ok()) {	
-	    m_vk_graphics_pipelines.push_back(texture2d_pipeline_out.pipeline);
-
-	    m_ok_graphics_pipeline = true;
-	  }
+	  m_ok_graphics_pipeline = m_pipeline_pool.ok_pipeline(m_pipeline_indices[0]);	  
 	}
       }
     }
@@ -2064,7 +1869,7 @@ namespace vulkan {
 	    
 	    setup_render_commands(m_vk_command_buffers,
 				  descriptor_sets,
-				  m_vk_graphics_pipelines[0],
+				  m_pipeline_pool.pipeline(m_pipeline_indices[0]),
 				  m_vk_pipeline_layout);	  
 	
 	    if (ok()) {
@@ -2256,7 +2061,7 @@ namespace vulkan {
       
       free_vk_ldevice_handles<VkFramebuffer, &vkDestroyFramebuffer>(m_vk_swapchain_framebuffers);
       
-      free_vk_ldevice_handles<VkPipeline, &vkDestroyPipeline>(m_vk_graphics_pipelines);
+      m_pipeline_pool.free_mem(m_vk_curr_ldevice);
       
       m_pipeline_layout_pool.free_mem(m_vk_curr_ldevice);
 
