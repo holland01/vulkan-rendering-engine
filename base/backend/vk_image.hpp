@@ -608,6 +608,26 @@ namespace vulkan {
 			    m_descriptor_set_layouts,
 			    VkDescriptorSetLayout);
     }
+
+    bool write_buffer(index_type index,
+		      VkDevice device,
+		      VkBuffer buf,
+		      VkDeviceSize buf_size,
+		      uint32_t binding_index,
+		      uint32_t array_element_index) const {
+      bool r = false;
+      if (ok_descriptor_set(index)) {
+	r = write_descriptor_set(device,
+				 buf,
+				 buf_size,
+				 m_descriptor_sets.at(index),
+				 binding_index,
+				 array_element_index,
+				 m_descriptor_types.at(index));
+       
+      }
+      return r;
+    }
   };
   
   struct texture_gen_params;

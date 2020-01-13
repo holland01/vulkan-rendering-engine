@@ -60,6 +60,15 @@ void assert_impl(bool cond,
                  const char* file,
                  const char* expr);
 
+static inline bool c_assert_impl(bool cond,
+				 int line,
+				 const char* func,
+				 const char* file,
+				 const char* expr) { assert_impl(cond, line, func, file, expr);
+  return cond; }
+
+#define c_assert(cond) c_assert_impl((cond), __LINE__, __func__, __FILE__, #cond)
+
 void logf_impl(int line,
                const char* func,
                const char* file,

@@ -11,8 +11,8 @@
 #include "device_context.hpp"
 
 #include "vk_common.hpp"
-#include "vk_uniform_buffer.hpp"
 #include "vk_image.hpp"
+#include "vk_uniform_buffer.hpp"
 
 #include <optional>
 #include <set>
@@ -76,6 +76,10 @@ namespace vulkan {
     mat4_t world_to_view{R(1.0)};    
   };
 
+  struct sampler_data {
+    int sampler_index;
+  };
+
   struct vertex_data {
     vec3_t position;
     vec2_t st;
@@ -90,9 +94,7 @@ namespace vulkan {
   using vertex_list_t = darray<vertex_data>;
   
   class renderer {
-    uint32_t m_instance_count{0};
-    
-    std::unique_ptr<uniform_block_pool> m_uniform_block_pool{nullptr};
+    uint32_t m_instance_count{0};   
     
     darray<VkPhysicalDevice> m_vk_physical_devs;
 
@@ -112,9 +114,12 @@ namespace vulkan {
 
     texture_pool m_texture_pool{};
 
+    uniform_block_pool m_uniform_block_pool{};
+
     depthbuffer_data m_depthbuffer{};
     
-    uniform_block_data<transform_data> m_vertex_uniform_block{};
+    uniform_block_data<transform_data> m_transform_uniform_block{};
+    uniform_block_data<sampler_data> m_sampler_uniform_block{};
 
     static inline constexpr vec3_t k_room_cube_center = R3v(0, 0, 0);
     static inline constexpr vec3_t k_room_cube_size = R3(20);
@@ -125,6 +130,9 @@ namespace vulkan {
     static inline constexpr vec3_t k_color_red = R3v(1, 0, 0);
     static inline constexpr vec3_t k_color_blue = R3v(0, 0, 1);
 
+    static inline constexpr int32_t k_sampler_checkerboard = 0;
+    static inline constexpr int32_t k_sampler_aqua = 1;
+    
     // NOTE:
     // right handed system,
     // so positive rotation about a given axis
@@ -178,8 +186,15 @@ namespace vulkan {
        texture_pool::k_unset,
        texture_pool::k_unset
       };
+
+    static constexpr inline int k_descriptor_set_samplers = 0;
+    static constexpr inline int k_descriptor_set_uniform_blocks = 1; 
     
-    descriptor_set_pool::index_type m_test_texture_ds_index{descriptor_set_pool::k_unset};
+    std::array<descriptor_set_pool::index_type, 2> m_test_descriptor_set_indices =
+      {
+       descriptor_set_pool::k_unset,
+       descriptor_set_pool::k_unset
+      };   
     
     bool m_ok_present{false};
     bool m_ok_descriptor_pool{false};
@@ -225,6 +240,7 @@ namespace vulkan {
 			     vec3_t color = R3(1),
 			     vec3_t scale = R3(1),
 			     darray<rot_cmd> rot = darray<rot_cmd>()) {
+      
       auto a = model_triangle(R3(0), color);
       auto b = model_triangle(R3(0), color);
 
@@ -1292,18 +1308,47 @@ namespace vulkan {
 
     void setup_uniform_block_data() {
       if (ok_descriptor_pool()) {
-	m_uniform_block_pool.reset(new uniform_block_pool{make_device_resource_properties()});
-	
-	m_vertex_uniform_block.index =
-	  m_uniform_block_pool->add(&m_vertex_uniform_block.data,
-				    sizeof(m_vertex_uniform_block.data),
-				    1,
-				    0,
-				    VK_SHADER_STAGE_VERTEX_BIT);
 
-	m_vertex_uniform_block.pool = m_uniform_block_pool.get();
+	{
+	  descriptor_set_gen_params uniform_block_desc_set_params =
+	    {
+	     {
+	      VK_SHADER_STAGE_VERTEX_BIT, // binding 0: transform block
+	      VK_SHADER_STAGE_VERTEX_BIT // binding 1: sampler block
+	     },
+	     
+	     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+	    };
+
+	  m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks] =
+	    m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
+						      uniform_block_desc_set_params);
+	}
+
+	{
+	  uniform_block_gen_params transform_block_params =
+	    {
+	     m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks],	   
+
+	     static_cast<void*>(&m_transform_uniform_block.data),
+	     sizeof(m_transform_uniform_block.data),
+	     // array element index
+	     0,
+	     // binding index
+	     0
+	    };
+
+	  m_uniform_block_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
 	
-	m_ok_uniform_block_data = m_vertex_uniform_block.ok();	
+	  m_transform_uniform_block.index =
+	    m_uniform_block_pool.make_uniform_block(make_device_resource_properties(),
+						    transform_block_params);
+	}
+	  
+	m_transform_uniform_block.pool = &m_uniform_block_pool;
+	
+	m_ok_uniform_block_data =
+	  m_transform_uniform_block.ok();	
       }
     }
     
@@ -1362,7 +1407,7 @@ namespace vulkan {
 	   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
 	  };
 
-	m_test_texture_ds_index = m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
+	m_test_descriptor_set_indices[k_descriptor_set_samplers] = m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
 									    descriptor_set_params);
 
 	image_gen_params image_params =
@@ -1412,7 +1457,7 @@ namespace vulkan {
 	  {
 	   m_test_image_indices[0],
 	   // descriptor set index
-	   m_test_texture_ds_index,
+	   m_test_descriptor_set_indices[k_descriptor_set_samplers],
 	   // descriptor array element
 	   0,
 	   // binding index
@@ -1530,8 +1575,8 @@ namespace vulkan {
 
 	std::array<VkDescriptorSetLayout, 2> set_layouts =
 	  {
-	   m_descriptor_set_pool.descriptor_set_layout(m_test_texture_ds_index),
-	   m_uniform_block_pool->descriptor_set_layout(m_vertex_uniform_block.index)
+	   m_descriptor_set_pool.descriptor_set_layout(m_test_descriptor_set_indices[k_descriptor_set_samplers]),
+	   m_descriptor_set_pool.descriptor_set_layout(m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks])
 	  };
 	
 	auto pipeline_layout = default_pipeline_layout_settings();
@@ -1786,8 +1831,7 @@ namespace vulkan {
 	vkDeviceWaitIdle(m_vk_curr_ldevice);	
 
 	// perform the image layout transition for
-	// test_texture_indices[0]
-	
+	// test_image_indices[i]
 	run_cmds(
 		 [this](VkCommandBuffer cmd_buf) {
 		   puts("image_layout_transition");
@@ -1816,8 +1860,8 @@ namespace vulkan {
 
 	std::array<VkDescriptorSet, 2> descriptor_sets =
 	  {
-	   m_descriptor_set_pool.descriptor_set(m_test_texture_ds_index),
-	   m_uniform_block_pool->descriptor_set(m_vertex_uniform_block.index)
+	   m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_samplers]),
+	   m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks])
 	  };
 	
 	size_t i = 0;
@@ -1963,16 +2007,18 @@ namespace vulkan {
     }
 
     void set_world_to_view_transform(const mat4_t& w2v) {
-      m_vertex_uniform_block.data.world_to_view = w2v;
+      m_transform_uniform_block.data.world_to_view = w2v;
     }
 
     void set_view_to_clip_transform(const mat4_t& v2c) {
-      m_vertex_uniform_block.data.view_to_clip = v2c;
+      m_transform_uniform_block.data.view_to_clip = v2c;
     }
 
     void render() {
       if (ok_scene()) {
-	m_uniform_block_pool->update_block(m_vertex_uniform_block.index);
+	m_uniform_block_pool.update_block(m_transform_uniform_block.index,
+					  m_vk_curr_ldevice);
+	
 	VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
 	
 	constexpr uint64_t k_timeout_ns = 10000000000; // 10 seconds
@@ -2106,7 +2152,7 @@ namespace vulkan {
       
       m_depthbuffer.free_mem(m_vk_curr_ldevice);
 
-      m_uniform_block_pool->free_mem();
+      m_uniform_block_pool.free_mem(m_vk_curr_ldevice);
 
       // UBO descriptor set will eventually be moved over
       // to this pool. In fact, the actual VkDescriptorPool

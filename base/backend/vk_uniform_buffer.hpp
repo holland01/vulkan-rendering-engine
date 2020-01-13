@@ -4,35 +4,48 @@
 
 namespace vulkan {
 
-  class uniform_block_pool {
+  struct uniform_block_gen_params {
+    descriptor_set_pool::index_type descriptor_set_index{descriptor_set_pool::k_unset};
+    
+    void* block_data{nullptr};
+    
+    uint32_t block_size{UINT32_MAX};
+    uint32_t array_element_index{UINT32_MAX};
+    uint32_t binding_index{UINT32_MAX};
+
+    bool ok() const {
+      bool r =
+	(descriptor_set_index != descriptor_set_pool::k_unset) &&
+	(block_data != nullptr) &&
+	(block_size != UINT32_MAX) &&
+	(array_element_index != UINT32_MAX) &&
+	(binding_index != UINT32_MAX);
+      ASSERT(r);
+      return r;
+    }    
+  };
+  
+  class uniform_block_pool : index_traits<int16_t, darray<VkDeviceSize>> {
   public:
-    using index_type = int16_t;
-    static constexpr index_type k_unset = num_max<index_type>();
+    typedef index_traits_this_type::index_type index_type;
+    static inline constexpr index_type k_unset = index_traits_this_type::k_unset;
     
   private:
     // uniform block data
-    darray<uint32_t> m_binding_indices{};
-    darray<uint32_t> m_set_indices{};
     darray<VkDeviceSize> m_dev_sizes{};
     darray<uint32_t> m_user_sizes{};
-    darray<VkDescriptorSetLayout> m_descriptor_set_layouts{};
-    darray<VkDescriptorSet> m_descriptor_sets{};
     darray<VkDeviceMemory> m_device_memories{};
     darray<VkBuffer> m_buffers{};
     darray<void*> m_user_ptrs{};
 
-    device_resource_properties m_resource_props;
+    descriptor_set_pool* m_descriptor_set_pool{nullptr};
     
-    index_type push_blank() {
-      auto i = m_binding_indices.size();
+    index_type new_uniform_block() {
+      index_type i{this->length()};
       
-      m_binding_indices.push_back(num_max<uint32_t>());
       m_dev_sizes.push_back(num_max<VkDeviceSize>());
-      m_user_sizes.push_back(num_max<uint32_t>());
-      m_set_indices.push_back(num_max<uint32_t>());
+      m_user_sizes.push_back(UINT32_MAX);      
       
-      m_descriptor_set_layouts.push_back(VK_NULL_HANDLE);
-      m_descriptor_sets.push_back(VK_NULL_HANDLE);
       m_device_memories.push_back(VK_NULL_HANDLE);
       m_buffers.push_back(VK_NULL_HANDLE);
 
@@ -41,23 +54,30 @@ namespace vulkan {
       return i;
     }
 
-    VkBuffer make_uniform_buffer(VkDeviceSize sz) const {
-      return vulkan::make_buffer(m_resource_props,
+    VkBuffer make_uniform_buffer(const device_resource_properties& resource_props,
+				 VkDeviceSize sz) const {
+      
+      return vulkan::make_buffer(resource_props,
 				 0,
 				 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				 sz);
 
     }
     
-    bool is_valid(VkDeviceSize desired_size, VkDeviceSize& out_required_size, int32_t& out_property_index) const {
+    bool is_valid(const device_resource_properties& resource_props,
+		  VkDeviceSize desired_size,
+		  VkDeviceSize& out_required_size,
+		  int32_t& out_property_index) const {
+      
       bool ret = false;
 
-      VkBuffer dummy = make_uniform_buffer(desired_size);
+      VkBuffer dummy = make_uniform_buffer(resource_props,
+					   desired_size);
       
-      if (api_ok() && dummy != VK_NULL_HANDLE) {
+      if (H_OK(dummy)) {
 	VkMemoryRequirements req = {};
 	
-	vkGetBufferMemoryRequirements(m_resource_props.device,
+	vkGetBufferMemoryRequirements(resource_props.device,
 				      dummy,
 				      &req);
 
@@ -65,7 +85,7 @@ namespace vulkan {
 
 	VkPhysicalDeviceMemoryProperties mem_props = {};
 
-	vkGetPhysicalDeviceMemoryProperties(m_resource_props.physical_device,
+	vkGetPhysicalDeviceMemoryProperties(resource_props.physical_device,
 					    &mem_props);
 	
 	out_property_index =
@@ -80,177 +100,114 @@ namespace vulkan {
 	  desired_size <= req.size &&
 	  out_property_index != -1;
 
-	vkDestroyBuffer(m_resource_props.device, dummy, nullptr);
+	vkDestroyBuffer(resource_props.device, dummy, nullptr);
       }
       
       ASSERT(ret);
             
       return ret;
     }
-
-    bool ok_index(index_type which) const {
-      bool r =
-	which != k_unset &&
-        which < length();
-      ASSERT(r);
-      return r;
-    }
-    
-    void free_uniform_block(index_type which) {
-      vkDeviceWaitIdle(m_resource_props.device);
-      if (ok_index(which)) {
-
-	// in the event that any of these VK handles are null,
-	// the corresponding free function will silently do nothing.
-	if (api_ok()) {	  
-	  vkFreeMemory(m_resource_props.device,
-		       m_device_memories[which],
-		       nullptr);
-
-	  vkDestroyDescriptorSetLayout(m_resource_props.device,
-				       m_descriptor_set_layouts[which],
-				       nullptr);
-
-	  vkDestroyBuffer(m_resource_props.device,
-			  m_buffers[which],
-			  nullptr);
-	}
-
-	m_device_memories[which] = VK_NULL_HANDLE;
-	m_descriptor_set_layouts[which] = VK_NULL_HANDLE;
-	m_buffers[which] = VK_NULL_HANDLE;
-	m_descriptor_sets[which] = VK_NULL_HANDLE;
-	
-	m_user_ptrs[which] = nullptr;
-	
-	m_binding_indices[which] = num_max<uint32_t>();
-	m_dev_sizes[which] = num_max<VkDeviceSize>();
-	m_user_sizes[which] = num_max<uint32_t>();
-	m_set_indices[which] = num_max<uint32_t>();
-      }		       
-    }
     
   public:
-    uniform_block_pool(device_resource_properties drp)
-	: m_resource_props{drp}
-	    
+    uniform_block_pool()
+      : index_traits_this_type(m_dev_sizes)	    
     {}
 
-    void free_mem() {
-      index_type l = length();
-      for (index_type i = 0; i < l; ++i) {
-	free_uniform_block(i);
+    void free_mem(VkDevice device) {
+      for (index_type i{0}; i < this->length(); ++i) {
+	free_device_handle<VkDeviceMemory, &vkFreeMemory>(device,
+							  m_device_memories[i]);
+
+	free_device_handle<VkBuffer, &vkDestroyBuffer>(device,
+						       m_buffers[i]);
+      }
+
+      m_device_memories.clear();
+      m_buffers.clear();
+      m_user_ptrs.clear();
+      m_dev_sizes.clear();
+      m_user_sizes.clear();
+    }
+
+    void set_descriptor_set_pool(descriptor_set_pool* p) {
+      if (c_assert(m_descriptor_set_pool == nullptr)) {
+	m_descriptor_set_pool = p;
       }
     }
     
-    index_type add(void* block_data,
-		   uint32_t block_size,
-		   uint32_t set,
-		   uint32_t binding_index,
-		   VkShaderStageFlags stage_flags) {
-      index_type ret = k_unset;
-      
-      int32_t memory_property_index = -1;
-      // THIS needs to be queried from is_valid and passed to
-      // make_buffer_memory. It's the required size.
-      VkDeviceSize required_size = 0; 
-      bool valid = is_valid(static_cast<VkDeviceSize>(block_size),
-			    required_size,
-			    memory_property_index);
-      ASSERT(valid);
+    index_type make_uniform_block(const device_resource_properties& properties,
+				  const uniform_block_gen_params& params)  {
+      index_type ret{k_unset};
 
-      VkBuffer ubuffer{VK_NULL_HANDLE};
-      VkDescriptorSetLayout descriptor_set_layout{VK_NULL_HANDLE};
-      VkDescriptorSet descset{VK_NULL_HANDLE};
-      VkDeviceMemory device_memory{VK_NULL_HANDLE};
-      
-      if (api_ok() && valid) {
-	device_memory = make_device_memory(m_resource_props.device,
-					   block_data,
-					   block_size,
-					   required_size,
-					   memory_property_index);
-      }
-
-      if (api_ok() && device_memory != VK_NULL_HANDLE) {
-	ubuffer = make_uniform_buffer(block_size);
-      }
-      
-      bool bound = false;
-      if (api_ok() && ubuffer != VK_NULL_HANDLE) {	
-	VK_FN(vkBindBufferMemory(m_resource_props.device,
-				 ubuffer,
-				 device_memory,
-				 0));
-	bound = api_ok();
-      }
-      
-      if (bound) {
-	auto binding =
-	  make_descriptor_set_layout_binding(binding_index,
-					     stage_flags,
-					     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	descriptor_set_layout =
-	  make_descriptor_set_layout(m_resource_props.device, &binding, 1);
-      }
-
-      if (api_ok() && descriptor_set_layout != VK_NULL_HANDLE) {
-	descset =
-	  make_descriptor_set(m_resource_props.device,
-			      m_resource_props.descriptor_pool,
-			      &descriptor_set_layout,
-			      1);
-      }
-
-      if (api_ok() && descset != VK_NULL_HANDLE) {	
-	write_descriptor_set(m_resource_props.device,
-			     ubuffer,
-			     static_cast<VkDeviceSize>(block_size),
-			     descset,
-			     binding_index,
-			     0,
-			     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      if (c_assert(m_descriptor_set_pool != nullptr) &&
+	  properties.ok() &&
+	  params.ok() &&
+	  m_descriptor_set_pool->ok_descriptor_set(params.descriptor_set_index)) {
+	int32_t memory_property_index = -1;
+	// THIS needs to be queried from is_valid and passed to
+	// make_buffer_memory. It's the required size.
+	VkDeviceSize required_size = 0;
 	
-	ret = push_blank();
+	bool valid = is_valid(properties,
+			      static_cast<VkDeviceSize>(params.block_size),
+			      required_size,
+			      memory_property_index);
 
-	m_binding_indices[ret] = binding_index;
-	m_set_indices[ret] = set;
-	m_dev_sizes[ret] = required_size;
-	m_user_sizes[ret] = block_size;
+	if (c_assert(valid)) {
+	  VkBuffer ubuffer{VK_NULL_HANDLE};
+	  VkDeviceMemory device_memory{VK_NULL_HANDLE};
+      
+	  if (api_ok()) {
+	    device_memory = make_device_memory(properties.device,
+					       params.block_data,
+					       params.block_size,
+					       required_size,
+					       memory_property_index);
+	  }
+
+	  if (H_OK(device_memory)) {
+	    ubuffer = make_uniform_buffer(properties,
+					  params.block_size);
+	  }
+      
+	  bool bound = false;
+	  if (H_OK(ubuffer)) {	
+	    VK_FN(vkBindBufferMemory(properties.device,
+				     ubuffer,
+				     device_memory,
+				     0));
+	    bound = api_ok();
+	  }      
+
+	  if (bound) {
+	    
+	    bool write_result = m_descriptor_set_pool->write_buffer(params.descriptor_set_index,
+								    properties.device,
+								    ubuffer,
+								    static_cast<VkDeviceSize>(params.block_size),
+								    params.binding_index,
+								    params.array_element_index);
+
+	    if (c_assert(write_result)) {							    
+	      ret = new_uniform_block();
+
+	      m_dev_sizes[ret] = required_size;
+	      m_user_sizes[ret] = params.block_size;
 	
-	m_descriptor_set_layouts[ret] = descriptor_set_layout;
-	m_descriptor_sets[ret] = descset;
-	m_device_memories[ret] = device_memory;
-	m_buffers[ret] = ubuffer;
+	      m_device_memories[ret] = device_memory;
+	      m_buffers[ret] = ubuffer;
 
-	m_user_ptrs[ret] = block_data;
+	      m_user_ptrs[ret] = params.block_data;
+	    }
+	  }
+	}
       }
       
       ASSERT(ret != k_unset);
 
       return ret;
     }
-
-    index_type length() const {
-      return static_cast<index_type>(m_binding_indices.size());
-    }
-    
-    VkDescriptorSet descriptor_set(index_type which) const {
-      VkDescriptorSet ret{VK_NULL_HANDLE};
-      if (ok_index(which)) {
-	ret = m_descriptor_sets.at(which);
-      }
-      return ret;
-    }
-
-    VkDescriptorSetLayout descriptor_set_layout(index_type which) const {
-      VkDescriptorSetLayout ret{VK_NULL_HANDLE};
-      if (ok_index(which)) {
-	ret = m_descriptor_set_layouts.at(which);
-      }
-      return ret;
-    }
-
+        
     VkBuffer buffer(index_type which) const {
       VkBuffer ret{VK_NULL_HANDLE};
       if (ok_index(which)) {
@@ -259,9 +216,9 @@ namespace vulkan {
       return ret;
     }
 
-    void update_block(index_type which) const {
+    void update_block(index_type which, VkDevice device) const {
       if (ok_index(which)) {
-	write_device_memory(m_resource_props.device,
+	write_device_memory(device,
 			    m_device_memories.at(which),
 			    m_user_ptrs.at(which),
 			    static_cast<VkDeviceSize>(m_user_sizes.at(which)));
@@ -283,8 +240,9 @@ namespace vulkan {
       return r;
     }
 
-    void cmd_buffer_update(VkCommandBuffer cmd_buffer) {
-      if (ok()) {
+    bool cmd_buffer_update(VkCommandBuffer cmd_buffer) const {
+      bool r = ok();
+      if (r) {
 	VkBuffer ubuffer = pool->buffer(index);
 
 	vkCmdUpdateBuffer(cmd_buffer,
@@ -293,6 +251,7 @@ namespace vulkan {
 			  sizeof(data),
 			  reinterpret_cast<void*>(&data));
       }
+      return r;
     }
   };
 }

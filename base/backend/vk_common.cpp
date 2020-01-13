@@ -246,7 +246,7 @@ namespace vulkan {
     return write;
   }
 
-  void write_descriptor_set(VkDevice device,
+  bool write_descriptor_set(VkDevice device,
 			    VkBuffer buffer,
 			    VkDeviceSize size,
 			    VkDescriptorSet descset,
@@ -266,7 +266,9 @@ namespace vulkan {
 			   0,
 			   nullptr);
 
-    vkDeviceWaitIdle(device);
+    VK_FN(vkDeviceWaitIdle(device));
+
+    return api_ok();
   }
 
     

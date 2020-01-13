@@ -481,7 +481,7 @@ namespace vulkan {
 							uint32_t array_element,
 							VkDescriptorType descriptor_type);
   
-  void write_descriptor_set(VkDevice device,
+  bool write_descriptor_set(VkDevice device,
 			    VkBuffer buffer,
 			    VkDeviceSize size,
 			    VkDescriptorSet descset,
