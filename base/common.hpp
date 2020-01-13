@@ -256,6 +256,11 @@ static inline std::vector<T> operator+(const std::vector<T>& a, const std::vecto
   return vec_join(a, b);
 }
 
+template <typename T>
+static inline const T* null_if_empty(const std::vector<T>& v) {
+  return v.empty() ? nullptr : v.data();
+}
+
 template <class Type>
 static inline darray<Type> darray_clone(const darray<Type>& in) {
   darray<Type> x {in.begin(), in.end()};
