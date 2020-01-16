@@ -30,20 +30,18 @@ namespace vulkan {
   };
   
   struct rpass_attachment_params {
-    VkFormat format{VK_FORMAT_UNDEFINED};
-    
-    image_pool::index_type image_attachment_index{image_pool::k_unset};
+    VkFormat format{VK_FORMAT_UNDEFINED};    
     
     VkAttachmentLoadOp load_op{VK_ATTACHMENT_LOAD_OP_LOAD};
     VkAttachmentStoreOp store_op{VK_ATTACHMENT_STORE_OP_STORE};
 
-    rpass_layout_info layout_info{}; // only used if image_attachment_index isn't used
+    rpass_layout_info layout_info{};
 
     bool ok() const {
       bool r =
-	(format != VK_FORMAT_UNDEFINED) &&
-	((image_attachment_index != image_pool::k_unset) ||
-	 layout_info.ok());
+	(format != VK_FORMAT_UNDEFINED) &&       
+	layout_info.ok();
+      
       ASSERT(r);
       return r;
     }
@@ -115,7 +113,9 @@ namespace vulkan {
   struct render_pass_gen_params {    
     darray<rpass_attachment_params> attachment_params{};
 
-    rpass_attachment_data make_attachment_data(image_pool* pool) const {
+    darray<VkSubpassDependency> additional_dependencies{}; // optional
+    
+    rpass_attachment_data make_attachment_data() const {
       rpass_attachment_data data{};
       
       uint32_t index = 0;
@@ -136,18 +136,10 @@ namespace vulkan {
 	  description.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	  description.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
-	  if (params.image_attachment_index != image_pool::k_unset) {
-	    description.initialLayout = pool->layout_initial(params.image_attachment_index);
-	    description.finalLayout = pool->layout_final(params.image_attachment_index);
-	    
-	    reference.layout = pool->layout_attach(params.image_attachment_index);
-	  }
-	  else {
-	    description.initialLayout = params.layout_info.l_initial;
-	    description.finalLayout = params.layout_info.l_final;
-
-	    reference.layout = params.layout_info.l_attach;
-	  }
+	  description.initialLayout = params.layout_info.l_initial;
+	  description.finalLayout = params.layout_info.l_final;
+	  
+	  reference.layout = params.layout_info.l_attach;
 	
 	  data.descriptions.push_back(description);
 	  data.references.push_back(reference);
@@ -159,11 +151,10 @@ namespace vulkan {
       return data;
     }
     
-    bool ok(image_pool* pool) const {
+    bool ok() const {
       bool r =
-	(pool != nullptr) &&
 	(!attachment_params.empty()) &&
-	make_attachment_data(pool).ok();
+	make_attachment_data().ok();
       
       ASSERT(r);
       return r;
@@ -177,8 +168,6 @@ namespace vulkan {
 
   private:
     darray<VkRenderPass> m_render_passes;
-
-    image_pool* m_image_pool{nullptr};
     
     index_type new_render_pass() {
       index_type index{this->length()};
@@ -213,8 +202,7 @@ namespace vulkan {
 
       index_type render_pass_index{k_unset};
 
-      if (c_assert(m_image_pool != nullptr) &&
-	  params.ok(m_image_pool) &&
+      if (params.ok() &&
 	  properties.ok()) {
 	VkRenderPass render_pass_object{VK_NULL_HANDLE};
 	
@@ -257,7 +245,7 @@ namespace vulkan {
 
 	// find depth and color attachments,
 	// assign accordingly
-        rpass_attachment_data attach_data = params.make_attachment_data(m_image_pool);
+        rpass_attachment_data attach_data = params.make_attachment_data();
 
 	const VkAttachmentReference* p_depth_ref = attach_data.depth();
 	const VkAttachmentReference* p_color_ref = attach_data.color();
@@ -336,14 +324,18 @@ namespace vulkan {
 	    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 
 	  self_dependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	
-	  std::array<VkSubpassDependency, 3> dependencies =
+
+	  darray<VkSubpassDependency> dependencies =
 	    {
 	     depth_dependency,
 	     color_dependency,
 	     self_dependency
 	    };
-	
+
+	  dependencies.insert(dependencies.end(),
+			      params.additional_dependencies.begin(),
+			      params.additional_dependencies.end());
+	    	
 	  VkRenderPassCreateInfo render_pass_info = {};
 	  render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	  render_pass_info.flags = 0;
@@ -370,11 +362,6 @@ namespace vulkan {
       }
       
       return render_pass_index;
-    }
-
-    void set_image_pool(image_pool* p) {
-      ASSERT(m_image_pool == nullptr);
-      m_image_pool = p;
     }
 
     VkRenderPass render_pass(index_type index) const {

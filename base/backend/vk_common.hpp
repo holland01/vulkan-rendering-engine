@@ -395,6 +395,12 @@ namespace vulkan {
     }
   };
 
+  struct depthbuffer_layouts {    
+    static VkImageLayout primary() {
+      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+  };
+  
   struct depthbuffer_data {
     static inline constexpr uint32_t k_bpp = 4;
     static inline constexpr VkFormat k_format = VK_FORMAT_D24_UNORM_S8_UINT;
