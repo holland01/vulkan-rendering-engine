@@ -3,6 +3,20 @@
 #include "vk_common.hpp"
 
 namespace vulkan {
+  static inline bool validate_attachment(VkImageUsageFlags usage_flags,
+					 VkImageLayout attachment_layout) {
+    return ((is_image_usage_attachment(usage_flags) &&
+	     !c_in(attachment_layout,
+		k_invalid_attachment_layouts))
+
+	    ||
+
+
+	    (!is_image_usage_attachment(usage_flags) &&
+	     attachment_layout == VK_IMAGE_LAYOUT_UNDEFINED));
+
+  }
+  
   struct image_gen_params {
     static constexpr std::array<uint32_t, 3> k_max_dim =
       {
@@ -15,28 +29,35 @@ namespace vulkan {
     
     VkMemoryPropertyFlags memory_property_flags{0};
     VkFormat format{VK_FORMAT_UNDEFINED};
+
+    VkImageLayout attachment_layout{VK_IMAGE_LAYOUT_UNDEFINED};
     VkImageLayout initial_layout{VK_IMAGE_LAYOUT_UNDEFINED};
     VkImageLayout final_layout{VK_IMAGE_LAYOUT_UNDEFINED};
+
     VkImageTiling tiling{VK_IMAGE_TILING_OPTIMAL};
     VkImageUsageFlags usage_flags{0};
     VkImageType type{VK_IMAGE_TYPE_2D};
     VkImageViewType view_type{VK_IMAGE_VIEW_TYPE_2D};
     VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
+
     VkPipelineStageFlags source_pipeline_stage{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
     VkPipelineStageFlags dest_pipeline_stage{VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT};
+
     VkAccessFlags source_access_flags{0};
     VkAccessFlags dest_access_flags{VK_ACCESS_SHADER_READ_BIT};
         
     uint32_t width{UINT32_MAX};
     uint32_t height{UINT32_MAX};
     uint32_t depth{UINT32_MAX};
-
+    
     bool ok() const {
       bool r =	
 	(width <= k_max_dim[0]) &&
 	(height <= k_max_dim[1]) &&
-	(depth <= k_max_dim[2]);
-	
+	(depth <= k_max_dim[2]) &&
+	validate_attachment(usage_flags,
+			    attachment_layout);
+		
       ASSERT(r);
       return r;
     }
@@ -73,6 +94,7 @@ namespace vulkan {
     darray<VkFormat> m_formats;
     darray<VkImageLayout> m_layouts_initial;
     darray<VkImageLayout> m_layouts_final;
+    darray<VkImageLayout> m_layouts_attach_opt;
     darray<uint32_t> m_widths;
     darray<uint32_t> m_heights;
     darray<uint32_t> m_depths; // bpp is derived from format
@@ -86,6 +108,8 @@ namespace vulkan {
 
     darray<VkAccessFlags> m_src_access_flags;
     darray<VkAccessFlags> m_dst_access_flags;
+
+    darray<VkImageUsageFlags> m_usage_flags;
 
     bool image_create_info_valid(VkPhysicalDevice physical_device, const VkImageCreateInfo& create_info) const {
       VkImageFormatProperties properties;
@@ -284,6 +308,8 @@ namespace vulkan {
       m_layouts_initial.push_back(VK_IMAGE_LAYOUT_UNDEFINED);
       m_layouts_final.push_back(VK_IMAGE_LAYOUT_UNDEFINED);
       
+      m_layouts_attach_opt.push_back(VK_IMAGE_LAYOUT_UNDEFINED);
+      
       m_widths.push_back(UINT32_MAX);
       m_heights.push_back(UINT32_MAX);
       m_depths.push_back(UINT32_MAX);
@@ -298,6 +324,8 @@ namespace vulkan {
       
       m_src_access_flags.push_back(0);
       m_dst_access_flags.push_back(VK_ACCESS_SHADER_READ_BIT);
+
+      m_usage_flags.push_back(0);
             
       return index;
     }
@@ -317,7 +345,11 @@ namespace vulkan {
 	(m_layouts_final.at(index) != VK_IMAGE_LAYOUT_UNDEFINED) &&
 	(m_widths.at(index) != UINT32_MAX) &&
 	(m_heights.at(index) != UINT32_MAX) &&
-	(m_depths.at(index) != UINT32_MAX);
+	(m_depths.at(index) != UINT32_MAX) &&
+	(m_usage_flags.at(index) != 0) &&
+	validate_attachment(m_usage_flags.at(index),
+			    m_layouts_attach_opt.at(index));
+      
       ASSERT(r);
       return r;
     }
@@ -400,6 +432,8 @@ namespace vulkan {
       
 	  m_src_access_flags[img_index] = params.source_access_flags;
 	  m_dst_access_flags[img_index] = params.dest_access_flags;
+
+	  m_usage_flags[img_index] = params.usage_flags;
 	}
       }
       ASSERT(ok_image(img_index));
@@ -420,6 +454,7 @@ namespace vulkan {
       m_image_views.clear();
       m_device_memories.clear();
       m_formats.clear();
+      m_layouts_attach_opt.clear();
       m_layouts_initial.clear();
       m_layouts_final.clear();
       m_widths.clear();
@@ -435,6 +470,8 @@ namespace vulkan {
       
       m_src_access_flags.clear();
       m_dst_access_flags.clear();
+
+      m_usage_flags.clear();
     }
 
     VkImage image(index_type index) const {
@@ -444,10 +481,26 @@ namespace vulkan {
 			    VkImage);
     }
 
+    VkImageLayout layout_initial(index_type index) const {
+      HANDLE_GET_FN_IMPL(index,
+			 ok_image,
+			 m_layouts_initial,
+			 VkImageLayout,
+			 VK_IMAGE_LAYOUT_UNDEFINED);
+    }
+    
     VkImageLayout layout_final(index_type index) const {
       HANDLE_GET_FN_IMPL(index,
 			 ok_image,
 			 m_layouts_final,
+			 VkImageLayout,
+			 VK_IMAGE_LAYOUT_UNDEFINED);
+    }
+
+    VkImageLayout layout_attach(index_type index) const {
+      HANDLE_GET_FN_IMPL(index,
+			 ok_image,
+			 m_layouts_attach_opt,
 			 VkImageLayout,
 			 VK_IMAGE_LAYOUT_UNDEFINED);
     }

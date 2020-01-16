@@ -79,35 +79,167 @@ namespace vulkan {
   
   using vertex_list_t = darray<vertex_data>;
 
-  struct pass_info {
-    darray<VkImage> m_images;
-    darray<VkImageView> m_image_views;
+  struct pass_create_params {
+    image_pool* pool{nullptr};
+    render_pass_pool* rpass_pool{nullptr};
+
+    render_pass_pool::index_type render_pass{render_pass_pool::k_unset};
+    
+    uint32_t width{UINT32_MAX};
+    uint32_t height{UINT32_MAX};
+    
+    const darray<VkImageView>& next_pass_image_views;
+    
+    VkImageView depth_image_view{VK_NULL_HANDLE};
+    VkFormat format{VK_FORMAT_UNDEFINED};
+
+    bool ok() const {
+      bool r =
+	(pool != nullptr) &&
+	(rpass_pool != nullptr) &&
+	(width != UINT32_MAX) &&
+	(height != UINT32_MAX) &&
+	(!next_pass_image_views.empty()) &&
+	(depth_image_view != VK_NULL_HANDLE) &&
+	(rpass_pool->ok_render_pass(render_pass)) &&
+	(format != VK_FORMAT_UNDEFINED);
+      
+      ASSERT(r);
+      return r;
+    }
+  };
+  
+  class pass_info {
+  private:
+    darray<image_pool::index_type> m_images;
     darray<VkFramebuffer> m_framebuffers;
 
-    void make_images(VkDevice device, size_t count, VkFormat format) {
-      VkImageCreateInfo image_ci = {};
+    size_t m_expected_count{num_max<size_t>()};
 
-      image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-      image_ci.pNext = nullptr;
-      image_ci.imageType = VK_IMAGE_TYPE_2D;
+    bool make_images(const device_resource_properties& properties,
+		     const pass_create_params& params) {
+      image_gen_params i_params{};
+
+      i_params.memory_property_flags =
+	VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+      i_params.format = params.format;
       
-      m_images.resize(count);
+      i_params.attachment_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      i_params.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+      i_params.final_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      
+      i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
+      i_params.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+      
+      i_params.type = VK_IMAGE_TYPE_2D;
+      i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
+      i_params.aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
+      
+      i_params.source_pipeline_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+      i_params.dest_pipeline_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      
+      i_params.source_access_flags = 0;
 
-      for (size_t i = 0; i < count && api_ok(); ++i) {
-	
+      i_params.dest_access_flags =
+	VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+	VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+	VK_ACCESS_TRANSFER_READ_BIT;
+
+      i_params.width = params.width;
+      i_params.height = params.height;
+      i_params.depth = 1;
+            
+      m_images.resize(m_expected_count);
+
+      bool good = true;
+      
+      for (size_t i = 0; i < m_images.size() && good; ++i) {
+	m_images[i] = params.pool->make_image(properties,
+					      i_params);
+
+	good = params.pool->ok_image(m_images[i]);
       }
+
+      return good;
+    }
+
+    void make_framebuffers(const device_resource_properties& properties,
+			   const pass_create_params& params) {
+      #if 0
+      std::array<VkImageView, 3> attachments{};
+      attachments.fill(VK_NULL_HANDLE);
+      
+      VkFramebufferCreateInfo framebuffer_info = {};
+      
+      framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+      framebuffer_info.pNext = nullptr;
+	
+      framebuffer_info.flags = 0;
+
+      framebuffer_info.renderPass = params.render_pass;
+
+      framebuffer_info.attachmentCount = attachments.size();
+
+      framebuffer_info.width = params.width;
+      framebuffer_info.height = params.height;
+      framebuffer_info.layers = 1;
+
+      m_framebuffers.resize(params.next_pass_image_views.size());
+      
+      for (size_t i = 0; i < m_framebuffers.size() && api_ok(); ++i) {
+	attachments[0] = params.next_pass_image_views.at(i);
+	attachments[1] = params.pool->image_view(m_images[i]);
+	attachments[2] = params.depth_image_view;
+	
+	framebuffer_info.pAttachments = attachments.data();
+	
+	VK_FN(vkCreateFramebuffer(properties.device,
+				  &framebuffer_info,
+				  nullptr,
+				  &m_framebuffers[i]));
+      }
+
+      if (!api_ok()) {
+	free_mem(properties.device);	
+      }
+      #endif
     }
     
-    void init(VkDevice device, size_t count, VkFormat format) {
+  public:
+    void init(const device_resource_properties& properties,
+	      const pass_create_params& params) {
       
+      if (api_ok() &&
+	  properties.ok() &&
+	  params.ok()) {	
+	m_expected_count = params.next_pass_image_views.size();
+	
+	if (make_images(properties,
+			params)) {
+
+	  make_framebuffers(properties,
+			    params);
+	}
+      }
+    }
+
+    void free_mem(VkDevice device) {
+      for (VkFramebuffer& fb: m_framebuffers) {
+	free_device_handle<VkFramebuffer, &vkDestroyFramebuffer>(device,
+								 fb);
+      }
+
+      m_framebuffers.clear();
+      m_images.clear();
     }
     
     bool ok() const {
       bool r =
-	api_ok() &&
-	(!m_images.empty()) &&
-	(m_images.size() == m_image_views.size()) &&
-	(m_image_views.size() == m_framebuffers.size());
+	(m_expected_count != num_max<size_t>()) &&
+	(m_images.size() == m_expected_count) &&
+	(m_images.size() == m_framebuffers.size());
+      
       ASSERT(r);
       return r;
     }
@@ -887,7 +1019,6 @@ namespace vulkan {
         }
       }
     }
-
     
     // make_image_views
     //
@@ -1381,23 +1512,61 @@ namespace vulkan {
       
       return m_render_pass_pool.ok_render_pass(m_render_pass_indices[index]);
     }
+
+    bool setup_render_pass_texture2d() {
+      return setup_render_pass(k_render_phase_texture2d,
+			       {
+				// attachment params
+				{
+				 // color buffer info
+				 {
+				  m_vk_khr_swapchain_format.format,
+				
+				  image_pool::k_unset, // left unset, since this is all from the swapchain
+				  // load op
+				  VK_ATTACHMENT_LOAD_OP_CLEAR,
+				  // store op
+				  VK_ATTACHMENT_STORE_OP_STORE,
+				  // layout info
+				  {
+				   // initial
+				   VK_IMAGE_LAYOUT_UNDEFINED,
+				   // attachment layout
+				   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				   // final layout
+				   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+				  }
+				 },
+				 // depth buffer info
+				 {
+				  depthbuffer_data::k_format,
+				
+				  image_pool::k_unset, // left unset, since this is all from the swapchain
+				  // load op
+				  VK_ATTACHMENT_LOAD_OP_CLEAR,
+				  // store op
+				  VK_ATTACHMENT_STORE_OP_STORE,
+				  // layout info
+				  {
+				   // initial
+				   depthbuffer_data::k_initial_layout,
+				   // attachment layout
+				   depthbuffer_data::k_final_layout,
+				   // final layout
+				   depthbuffer_data::k_final_layout
+				  }			       
+				 }
+				}
+			       });
+
+    }
     
     void setup_render_pass() {
       if (ok_descriptor_pool()) {
-	m_ok_render_pass =
-	  setup_render_pass(k_render_phase_texture2d,
-			    {
-			     m_vk_khr_swapchain_format.format
-			    }) &&
-#if 0  
-		  setup_render_pass(k_render_phase_cubemap,
-			    {
-			      m_vk_khr_swapchain_format.format
-			    });
-#else
-	true;
-#endif
-
+	m_render_pass_pool.set_image_pool(&m_image_pool);
+	
+	m_ok_render_pass = setup_render_pass_texture2d();
+	  
 	m_render_pass_indices[k_render_phase_cubemap] =
 	  m_render_pass_indices.at(k_render_phase_texture2d);
       }
@@ -1555,6 +1724,8 @@ namespace vulkan {
 	   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 	   // format
 	   VK_FORMAT_R8G8B8A8_UNORM,
+	   // attachment layout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
 	   // initial layout
 	   VK_IMAGE_LAYOUT_PREINITIALIZED,
 	   // final layout
@@ -1586,7 +1757,7 @@ namespace vulkan {
 	   // depth
 	   1
 	  };
-
+	
 	m_test_image_indices[0] = m_image_pool.make_image(make_device_resource_properties(),
 							  image_params);
 	
@@ -1807,10 +1978,27 @@ namespace vulkan {
 	m_vk_swapchain_framebuffers =
 	  make_framebuffer_list(render_pass(k_render_phase_texture2d),
 				m_vk_swapchain_image_views);	
-
+	
 	if (!m_vk_swapchain_framebuffers.empty()) {
-	  m_ok_framebuffers = true;
-	}      
+
+	  #if 0
+	  m_first_pass.init_framebuffers(make_device_resource_properties(),
+					 pass_create_params
+					 {
+					   &m_image_pool,
+					     &m_render_pass_pool,
+					     m_render_pass_indices.at(k_render_phase_cubemap),	
+					     m_vk_swapchain_extent.width,
+					     m_vk_swapchain_extent.height,	 
+					     m_vk_swapchain_image_views,
+					     m_depthbuffer.image_view,			        
+					     m_vk_khr_swapchain_format.format});
+	  #endif
+	  
+	  if (api_ok() /*&& m_first_pass.ok()*/) {
+	    m_ok_framebuffers = true;
+	  }
+	}	
       }
     }
 
@@ -2246,6 +2434,8 @@ namespace vulkan {
 	vkDeviceWaitIdle(m_vk_curr_ldevice);
       }
 
+      m_first_pass.free_mem(m_vk_curr_ldevice);
+      
       free_vk_ldevice_handle<VkDeviceMemory, &vkFreeMemory>(m_vk_vertex_buffer_mem);
       
       free_vk_ldevice_handle<VkBuffer, &vkDestroyBuffer>(m_vk_vertex_buffer);

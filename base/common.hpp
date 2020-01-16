@@ -1,5 +1,4 @@
 #pragma once
-
 #if !defined(BASE_ENABLE_VULKAN)
 #define BASE_ENABLE_VULKAN
 #endif // BASE_ENABLE_VULKAN
@@ -44,6 +43,7 @@
 #include <array>
 #include <functional>
 #include <stdint.h>
+#include <initializer_list>
 
 #include "util.hpp"
 
@@ -234,9 +234,19 @@ static inline mat4_t m4i() {
   return mat4_t {R(1)};
 }
 
-
-
 static const real_t k_to_rgba8 = R(1) / R(255);
+
+template <typename T>
+static inline bool c_in(const T& needle, const darray<T>& haystack) {
+  bool k = false;
+  for (const T& x: haystack) {
+    if (needle == x) {
+      k = true;
+      break;
+    }
+  }
+  return k;
+}
 
 template <typename T>
 static inline bool vec_contains(const std::vector<T>& v, const T& t) {

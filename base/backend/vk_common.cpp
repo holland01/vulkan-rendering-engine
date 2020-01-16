@@ -1,6 +1,13 @@
 #include "vk_common.hpp"
 
 namespace vulkan {
+  const darray<VkImageLayout> k_invalid_attachment_layouts =
+    {
+     VK_IMAGE_LAYOUT_UNDEFINED,
+     VK_IMAGE_LAYOUT_PREINITIALIZED,
+     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+    };
+  
   VkResult g_vk_result = VK_SUCCESS;
 
   VkResult vk_call(VkResult call, const char* expr, int line, const char* file) {

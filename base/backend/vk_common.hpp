@@ -10,6 +10,8 @@
   } while (0)
 
 namespace vulkan {
+  extern const darray<VkImageLayout> k_invalid_attachment_layouts;
+  
   extern VkResult g_vk_result;
   
   VkResult vk_call(VkResult call, const char* expr, int line, const char* file);
@@ -226,6 +228,8 @@ namespace vulkan {
     }
   };
 
+
+  
   struct vertex_data {
     vec3_t position;
     vec2_t st;
@@ -258,6 +262,7 @@ namespace vulkan {
     case VK_FORMAT_D24_UNORM_S8_UINT:
     case VK_FORMAT_D32_SFLOAT:
     case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_UNORM:
       ret = 4;
       break;
     default:
@@ -265,6 +270,16 @@ namespace vulkan {
       break;
     }
     return ret;
+  }
+
+  static inline bool is_image_usage_attachment(VkImageUsageFlags flags) {
+    constexpr VkImageUsageFlags k_mask =
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+      VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
+      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+ 
+    return (flags & k_mask) != 0;
   }
 
   template <class vkHandleType,
