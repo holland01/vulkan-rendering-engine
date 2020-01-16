@@ -21,3 +21,4 @@ tri_ubo: tri_ubo.vert.spv tri_ubo.frag.spv
 
 clean:
 	rm -rf bin
+	rm -f *~
