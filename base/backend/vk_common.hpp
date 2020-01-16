@@ -495,4 +495,8 @@ namespace vulkan {
 			    uint32_t binding_index,
 			    uint32_t array_element,
 			    VkDescriptorType descriptor_type);
+
+  static inline std::string realpath_spv(const std::string& spv_filename) {
+    return "resources/shaders/bin/" + spv_filename;
+  }
 }
