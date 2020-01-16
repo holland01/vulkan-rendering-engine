@@ -78,19 +78,55 @@ namespace vulkan {
   };
   
   using vertex_list_t = darray<vertex_data>;
+
+  struct pass_info {
+    darray<VkImage> m_images;
+    darray<VkImageView> m_image_views;
+    darray<VkFramebuffer> m_framebuffers;
+
+    void make_images(VkDevice device, size_t count, VkFormat format) {
+      VkImageCreateInfo image_ci = {};
+
+      image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+      image_ci.pNext = nullptr;
+      image_ci.imageType = VK_IMAGE_TYPE_2D;
+      
+      m_images.resize(count);
+
+      for (size_t i = 0; i < count && api_ok(); ++i) {
+	
+      }
+    }
+    
+    void init(VkDevice device, size_t count, VkFormat format) {
+      
+    }
+    
+    bool ok() const {
+      bool r =
+	api_ok() &&
+	(!m_images.empty()) &&
+	(m_images.size() == m_image_views.size()) &&
+	(m_image_views.size() == m_framebuffers.size());
+      ASSERT(r);
+      return r;
+    }
+  };
   
-  class renderer {
+  class renderer {    
     uint32_t m_instance_count{0};   
+
+    pass_info m_first_pass{};
     
     darray<VkPhysicalDevice> m_vk_physical_devs;
 
     darray<VkImage> m_vk_swapchain_images;
-
-    darray<VkImage> m_vk_depth_buffers;
     
     darray<VkImageView> m_vk_swapchain_image_views;
 
     darray<VkFramebuffer> m_vk_swapchain_framebuffers;
+
+    darray<VkImage> m_vk_firstpass_images;
 
     darray<VkCommandBuffer> m_vk_command_buffers;   
 
@@ -136,11 +172,7 @@ namespace vulkan {
       
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
-    VkDescriptorPool m_vk_descriptor_pool{VK_NULL_HANDLE};
-    
-    VkPipelineLayout m_vk_pipeline_layout{VK_NULL_HANDLE};
-
-    VkRenderPass m_vk_render_pass{VK_NULL_HANDLE};
+    VkDescriptorPool m_vk_descriptor_pool{VK_NULL_HANDLE};   
 
     VkSurfaceFormatKHR m_vk_khr_swapchain_format;
 
@@ -176,27 +208,46 @@ namespace vulkan {
        texture_pool::k_unset
       };
 
+    //
+    // Descriptor set indices
+    //
+    // NOTE:
+    //    m_vk_descriptor_pool is used to allocate memory
+    //    needed for these descriptor sets. When the pool is allocated,
+    //    the amount of descriptor sets that are to be created is specified
+    //    _upfront_. So, it's important that the number of indices here
+    //    match the total count that's passed to vkCreateDescriptorPool's
+    //    create_info (see setup_descriptor_pool())
+    //
     static constexpr inline int k_descriptor_set_samplers = 0;
     static constexpr inline int k_descriptor_set_uniform_blocks = 1; 
+    static constexpr inline int k_descriptor_set_sampler_cubemap = 2;
     
-    std::array<descriptor_set_pool::index_type, 2> m_test_descriptor_set_indices =
+    std::array<descriptor_set_pool::index_type, 3> m_test_descriptor_set_indices =
       {
-       descriptor_set_pool::k_unset,
-       descriptor_set_pool::k_unset
+       descriptor_set_pool::k_unset,  // pipeline 0
+       descriptor_set_pool::k_unset,  // pipeline 0, pipeline 1
+       descriptor_set_pool::k_unset   // pipeline 1
       };   
 
+    static constexpr inline int k_render_phase_texture2d = 0;
+    static constexpr inline int k_render_phase_cubemap = 1;
+    
     darray<render_pass_pool::index_type> m_render_pass_indices =
       {
+       render_pass_pool::k_unset,
        render_pass_pool::k_unset
       };
 
     darray<pipeline_layout_pool::index_type> m_pipeline_layout_indices =
       {
-       pipeline_layout_pool::k_unset
+       pipeline_layout_pool::k_unset,
+       pipeline_layout_pool::k_unset,
       };
 
     darray<pipeline_pool::index_type> m_pipeline_indices =
       {
+       pipeline_pool::k_unset,
        pipeline_pool::k_unset
       };
     
@@ -328,6 +379,27 @@ namespace vulkan {
 		   color,
 		   scale,
 		   {});
+    }
+
+    VkRenderPass render_pass(int index) const {
+      return
+	m_render_pass_pool.render_pass(m_render_pass_indices.at(index));
+    }
+    
+    VkPipelineLayout pipeline_layout(int index) const {
+      return
+	m_pipeline_layout_pool.pipeline_layout(m_pipeline_layout_indices.at(index));
+    }
+
+    VkPipeline pipeline(int index) const {
+      return
+	m_pipeline_pool.pipeline(m_pipeline_indices.at(index));
+    }
+
+    VkDescriptorSetLayout descriptor_set_layout(int index) const {
+      return
+	m_descriptor_set_pool.
+	descriptor_set_layout(m_test_descriptor_set_indices.at(index));
     }
 
     void print_physical_device_memory_types() {
@@ -1275,8 +1347,8 @@ namespace vulkan {
 	std::vector<VkDescriptorPoolSize> pool_sizes =
 	  {
 	   // type, descriptorCount
-	   { texture2d_data::k_descriptor_type, 1 },
-	   { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 }
+	   { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 },
+	   { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
 	  };
 
 	uint32_t max_sets = sum<uint32_t,
@@ -1301,23 +1373,33 @@ namespace vulkan {
       }
     }
 
+    bool setup_render_pass(int index, render_pass_gen_params params) {
+      m_render_pass_indices[index] =
+	  m_render_pass_pool.make_render_pass(make_device_resource_properties(),
+					      params);       
+
+      
+      return m_render_pass_pool.ok_render_pass(m_render_pass_indices[index]);
+    }
+    
     void setup_render_pass() {
       if (ok_descriptor_pool()) {
+	m_ok_render_pass =
+	  setup_render_pass(k_render_phase_texture2d,
+			    {
+			     m_vk_khr_swapchain_format.format
+			    }) &&
+#if 0  
+		  setup_render_pass(k_render_phase_cubemap,
+			    {
+			      m_vk_khr_swapchain_format.format
+			    });
+#else
+	true;
+#endif
 
-	render_pass_gen_params rpass_params =
-	  {
-	   m_vk_khr_swapchain_format.format
-	  };
-
-	m_render_pass_indices[0] =
-	  m_render_pass_pool.make_render_pass(make_device_resource_properties(),
-					      rpass_params);
-	
-	m_ok_render_pass = m_render_pass_pool.ok_render_pass(m_render_pass_indices[0]);
-
-	if (ok_render_pass()) {
-	  m_vk_render_pass = m_render_pass_pool.render_pass(m_render_pass_indices[0]);
-	}
+	m_render_pass_indices[k_render_phase_cubemap] =
+	  m_render_pass_indices.at(k_render_phase_texture2d);
       }
     }
 
@@ -1378,23 +1460,47 @@ namespace vulkan {
 	// create our descriptor set that's used
 	// for the 2d samplers
 	//
-	
-	descriptor_set_gen_params descriptor_set_params =
-	  {
-	   // darray<VkShaderStageFlags> stages
-	   {
-	    VK_SHADER_STAGE_FRAGMENT_BIT
-	   },
-	   {
-	    2
-	   },
-	   // VkDescriptorType type
-	   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-	  };
+	{
+	  descriptor_set_gen_params descriptor_set_params =
+	    {
+	     // darray<VkShaderStageFlags> stages
+	     {
+	      VK_SHADER_STAGE_FRAGMENT_BIT
+	     },
+	     {
+	      2
+	     },
+	     // VkDescriptorType type
+	     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+	    };
 
-	m_test_descriptor_set_indices[k_descriptor_set_samplers] =
-	  m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
-						    descriptor_set_params);
+	  m_test_descriptor_set_indices[k_descriptor_set_samplers] =
+	    m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
+						      descriptor_set_params);
+	}
+
+	//
+	// create our descriptor set that's used for
+	// the cubemap
+	// 
+	{
+	  descriptor_set_gen_params descriptor_set_params =
+	    {
+	     // darray<VkShaderStageFlags> stages
+	     {
+	      VK_SHADER_STAGE_FRAGMENT_BIT
+	     },
+	     {
+	      1
+	     },
+	     // VkDescriptorType type
+	     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+	    };
+
+	  m_test_descriptor_set_indices[k_descriptor_set_sampler_cubemap] =
+	    m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
+						      descriptor_set_params);
+	}
 
 	//
 	// make first image/texture
@@ -1556,92 +1662,155 @@ namespace vulkan {
 	m_ok_depthbuffer_data = m_depthbuffer.ok();
       }
     }
+
+
+    bool setup_pipeline(int render_phase_index,
+			pipeline_layout_gen_params layout_params,
+			pipeline_gen_params params) {
+      bool success = false;
+
+      params.render_pass_index = m_render_pass_indices.at(render_phase_index);
+      
+      m_pipeline_layout_indices[render_phase_index] =
+	m_pipeline_layout_pool.make_pipeline_layout(make_device_resource_properties(),
+						    layout_params);
+      
+      params.pipeline_layout_index = m_pipeline_layout_indices.at(render_phase_index);
+      
+      if (m_pipeline_layout_pool.ok_pipeline_layout(m_pipeline_layout_indices[0])) {
+		  
+	m_pipeline_indices[render_phase_index] =
+	  m_pipeline_pool.make_pipeline(make_device_resource_properties(),
+				        params);
+
+	success = m_pipeline_pool.ok_pipeline(m_pipeline_indices[render_phase_index]);
+      }
+
+      return success;
+    }
     
-    void setup_graphics_pipeline() {
+    bool setup_pipeline_texture2d() {      	
+      return setup_pipeline(k_render_phase_texture2d,
+			    // pipeline layout
+			    {
+			     // descriptor set layouts
+			     {
+			      descriptor_set_layout(k_descriptor_set_samplers),
+			      
+			      descriptor_set_layout(k_descriptor_set_uniform_blocks)
+			     },
+			     // push constant ranges
+			     {
+			      {
+			       VK_SHADER_STAGE_FRAGMENT_BIT,
+			       0,
+			       sizeof(int)
+			      }
+			     }
+			    },
+			    // pipeline
+			    {
+			     // viewport extent
+			     m_vk_swapchain_extent,	   
+			     // vert spv path
+			     realpath_spv("tri_ubo.vert.spv"),
+			     // frag spv path
+			     realpath_spv("tri_ubo.frag.spv")
+
+			     // remaining index parameters handled in setup_pipeline()
+			    });
+    }
+
+    bool setup_pipeline_cubemap() {
+      return setup_pipeline(k_render_phase_cubemap,
+			    // pipeline layout
+			    {
+			     // descriptor set layouts
+			     {
+			      descriptor_set_layout(k_descriptor_set_sampler_cubemap),
+			      
+			      descriptor_set_layout(k_descriptor_set_uniform_blocks)
+			     },
+			     // push constant ranges
+			     {}
+			    },
+			    // pipeline
+			    {
+			     // viewport extent
+			     m_vk_swapchain_extent,	   
+			     // vert spv path
+			     realpath_spv("cubemap.vert.spv"),
+			     // frag spv path
+			     realpath_spv("cubemap.frag.spv")
+
+			     // remaining index parameters handled in setup_pipeline()
+			    });
+    }
+    
+    void setup_graphics_pipeline() {      
       if (ok_depthbuffer_data()) {
-	{
-	  pipeline_layout_gen_params layout_params =
-	    {
-	     // descriptor set layouts
-	     {
-	      m_descriptor_set_pool.descriptor_set_layout(m_test_descriptor_set_indices[k_descriptor_set_samplers]),
-	      m_descriptor_set_pool.descriptor_set_layout(m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks])
-	     },
-	     // push constant ranges
-	     {
-	      {
-	       VK_SHADER_STAGE_FRAGMENT_BIT,
-	       0,
-	       sizeof(int)
-	      }
-	     }
-	    };
-	  
-	  m_pipeline_layout_indices[0] =
-	    m_pipeline_layout_pool.make_pipeline_layout(make_device_resource_properties(),
-							layout_params);
-	}
+	m_pipeline_pool.set_pipeline_layout_pool(&m_pipeline_layout_pool);
+	m_pipeline_pool.set_render_pass_pool(&m_render_pass_pool);
 	
-	if (m_pipeline_layout_pool.ok_pipeline_layout(m_pipeline_layout_indices[0])) {
-
-	  m_vk_pipeline_layout = m_pipeline_layout_pool.pipeline_layout(m_pipeline_layout_indices[0]);
-
-	  m_pipeline_pool.set_pipeline_layout_pool(&m_pipeline_layout_pool);
-	  m_pipeline_pool.set_render_pass_pool(&m_render_pass_pool);
-	  
-	  pipeline_gen_params texture2d_pipeline_in
-	    {
-	     // viewport extent
-	     m_vk_swapchain_extent,
-	     
-	     // vert spv path
-	     "resources/shaders/tri_ubo/tri_ubo.vert.spv",
-	     // frag spv path
-	     "resources/shaders/tri_ubo/tri_ubo.frag.spv",
-	     
-	     m_pipeline_layout_indices[0],
-
-	     m_render_pass_indices[0],
-	    };       		
-
-	  m_pipeline_indices[0] =
-	    m_pipeline_pool.make_pipeline(make_device_resource_properties(),
-					  texture2d_pipeline_in);
-	
-	  m_ok_graphics_pipeline = m_pipeline_pool.ok_pipeline(m_pipeline_indices[0]);	  
-	}
+	m_ok_graphics_pipeline =
+	  setup_pipeline_texture2d() &&
+	  setup_pipeline_cubemap();
       }
     }
 
+    darray<VkFramebuffer> make_framebuffer_list(VkRenderPass fb_render_pass,
+						const darray<VkImageView>& color_image_views) {
+      darray<VkFramebuffer> ret(color_image_views.size(), VK_NULL_HANDLE);
+
+      size_t i = 0;
+      bool good = true;
+      
+      while (i < ret.size() && good) {
+	std::array<VkImageView, 2> attachments =
+	  {
+	   color_image_views[i],
+	   m_depthbuffer.image_view
+	  };
+
+	VkFramebufferCreateInfo framebuffer_info = {};
+	framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	framebuffer_info.pNext = nullptr;
+	
+	framebuffer_info.flags = 0;
+
+	framebuffer_info.renderPass = fb_render_pass;
+
+	framebuffer_info.attachmentCount = attachments.size();
+	framebuffer_info.pAttachments = attachments.data();
+
+	framebuffer_info.width = m_vk_swapchain_extent.width;
+	framebuffer_info.height = m_vk_swapchain_extent.height;
+	framebuffer_info.layers = 1;
+
+	VK_FN(vkCreateFramebuffer(m_vk_curr_ldevice,
+				  &framebuffer_info,
+				  nullptr,
+				  &ret[i]));
+	good = api_ok();
+	i++;
+      }
+
+      if (!c_assert(good)) {
+	ret.clear();
+      }
+
+      return ret;
+    }
+    
     void setup_framebuffers() {
       if (ok_vertex_buffer()) {
-	m_vk_swapchain_framebuffers.resize(m_vk_swapchain_image_views.size());
+	m_vk_swapchain_framebuffers =
+	  make_framebuffer_list(render_pass(k_render_phase_texture2d),
+				m_vk_swapchain_image_views);	
 
-	for (size_t i = 0; i < m_vk_swapchain_image_views.size(); ++i) {
-	  std::array<VkImageView, 2> attachments =
-	    {
-	     m_vk_swapchain_image_views[i],
-	     m_depthbuffer.image_view
-	    };
-
-	  VkFramebufferCreateInfo framebuffer_info = {};
-	  framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	  framebuffer_info.pNext = nullptr;
-	  framebuffer_info.flags = 0;
-	  framebuffer_info.renderPass = m_vk_render_pass;
-	  framebuffer_info.attachmentCount = attachments.size();
-	  framebuffer_info.pAttachments = attachments.data();
-	  framebuffer_info.width = m_vk_swapchain_extent.width;
-	  framebuffer_info.height = m_vk_swapchain_extent.height;
-	  framebuffer_info.layers = 1;
-
-	  VK_FN(vkCreateFramebuffer(m_vk_curr_ldevice,
-				    &framebuffer_info,
-				    nullptr,
-				    &m_vk_swapchain_framebuffers[i]));
-	}
-
-	m_ok_framebuffers = true;
+	if (!m_vk_swapchain_framebuffers.empty()) {
+	  m_ok_framebuffers = true;
+	}      
       }
     }
 
@@ -1660,12 +1829,87 @@ namespace vulkan {
       }      
     }
 
+    void commands_begin_pipeline(VkCommandBuffer cmd_buffer,
+				 VkPipeline pipeline,
+				 VkPipelineLayout pipeline_layout,
+				 const darray<VkDescriptorSet>& descriptor_sets) {
+
+      VkDeviceSize vertex_buffer_ofs = 0;
+      
+      vkCmdBindPipeline(cmd_buffer,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			pipeline);
+	    
+      vkCmdBindVertexBuffers(cmd_buffer,
+			     0,
+			     1,
+			     &m_vk_vertex_buffer,
+			     &vertex_buffer_ofs);
+
+      vkCmdUpdateBuffer(cmd_buffer,
+			m_vk_vertex_buffer,
+			0,
+			sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
+			m_vertex_buffer_vertices.data());
+
+      vkCmdBindDescriptorSets(cmd_buffer,
+			      VK_PIPELINE_BIND_POINT_GRAPHICS,
+			      pipeline_layout,
+			      0,
+			      descriptor_sets.size(),
+			      descriptor_sets.data(),
+			      0,
+			      nullptr);
+
+      image_layout_transition().
+	from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+	to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+	for_aspect(depthbuffer_data::k_image_aspect_flags).
+	from_access(0).
+	to_access(depthbuffer_data::k_access_flags).
+	from(depthbuffer_data::k_initial_layout).
+	to(depthbuffer_data::k_final_layout).
+	for_image(m_depthbuffer.image).
+	via(cmd_buffer);
+    }
+
+    void commands_start_render_pass(VkCommandBuffer cmd_buffer,
+				    VkFramebuffer framebuffer,
+				    VkRenderPass render_pass) {
+      VkRenderPassBeginInfo render_pass_info = {};
+      
+      render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+      render_pass_info.renderPass = render_pass;
+      render_pass_info.framebuffer = framebuffer;
+
+      // shader loads and stores take place within this region
+      render_pass_info.renderArea.offset = {0, 0};
+      render_pass_info.renderArea.extent = m_vk_swapchain_extent;
+
+      std::array<VkClearValue, 2> clear_values;
+	    
+      clear_values[0].color.float32[0] = 1.0f;
+      clear_values[0].color.float32[1] = 0.0f;
+      clear_values[0].color.float32[2] = 0.0f;
+      clear_values[0].color.float32[3] = 1.0f;
+
+      clear_values[1].depthStencil.depth = 1.0f;
+      clear_values[1].depthStencil.stencil = 0;
+	    
+      // for the color attachment's VK_ATTACHMENT_LOAD_OP_CLEAR
+      // operation
+      render_pass_info.clearValueCount = clear_values.size();
+      render_pass_info.pClearValues = clear_values.data();
+	    	    
+      vkCmdBeginRenderPass(cmd_buffer,
+			   &render_pass_info,
+			   VK_SUBPASS_CONTENTS_INLINE);      
+    }
+    
     void setup_render_commands(darray<VkCommandBuffer>& command_buffers,
 			       const darray<VkDescriptorSet>& descriptor_sets,
 			       VkPipeline pipeline,
 			       VkPipelineLayout pipeline_layout) {
-      //      m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
-
       ASSERT(!command_buffers.empty());
       
       VkCommandBufferAllocateInfo alloc_info = {};
@@ -1678,7 +1922,26 @@ namespace vulkan {
 	
       size_t i = 0;
 
-      VkDeviceSize vertex_buffer_ofs = 0;
+      auto draw_inner_objects =
+	[this](VkCommandBuffer cmd_buffer) {
+	  // first 3 objects: two triangles and one small cube
+	  vkCmdDraw(cmd_buffer,
+		    (m_instance_count - 12) * 3, // num vertices
+		    m_instance_count - 12, // num instances
+		    0, // first vertex
+		    0); // first instance
+
+	};
+
+      auto draw_room =
+	[](VkCommandBuffer cmd_buffer) {
+	  // big cube encompassing the scene
+	  vkCmdDraw(cmd_buffer,
+		    36,
+		    12, // (6 faces, 12 triangles)
+		    42, // 3 vertices + 3 vertices + 36 vertices
+		    14); // 2 triangles + one cube (6 faces, 12 triangles)
+	};
 	
       while (i < command_buffers.size() && ok()) {
 	VkCommandBufferBeginInfo begin_info = {};
@@ -1689,73 +1952,17 @@ namespace vulkan {
 	VK_FN(vkBeginCommandBuffer(command_buffers[i], &begin_info));	  
 	  
 	if (ok()) {
-	  vkCmdBindPipeline(command_buffers[i],
-			    VK_PIPELINE_BIND_POINT_GRAPHICS,
-			    pipeline);
-	    
-	  vkCmdBindVertexBuffers(m_vk_command_buffers[i],
-				 0,
-				 1,
-				 &m_vk_vertex_buffer,
-				 &vertex_buffer_ofs);
-
-	  vkCmdUpdateBuffer(command_buffers[i],
-			    m_vk_vertex_buffer,
-			    0,
-			    sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
-			    m_vertex_buffer_vertices.data());
-
-	  vkCmdBindDescriptorSets(command_buffers[i],
-				  VK_PIPELINE_BIND_POINT_GRAPHICS,
+	  commands_begin_pipeline(command_buffers[i],
+				  pipeline,
 				  pipeline_layout,
-				  0,
-				  descriptor_sets.size(),
-				  descriptor_sets.data(),
-				  0,
-				  nullptr);
-
-	  image_layout_transition().
-	    from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-	    to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-	    for_aspect(depthbuffer_data::k_image_aspect_flags).
-	    from_access(0).
-	    to_access(depthbuffer_data::k_access_flags).
-	    from(depthbuffer_data::k_initial_layout).
-	    to(depthbuffer_data::k_final_layout).
-	    for_image(m_depthbuffer.image).
-	    via(m_vk_command_buffers[i]);
-	    
+				  descriptor_sets);
+	  
+	  commands_start_render_pass(command_buffers[i],
+				     m_vk_swapchain_framebuffers[i],
+				     render_pass(k_render_phase_texture2d));
 	    
 	  // note that instances are per-triangle
 	  {
-	    VkRenderPassBeginInfo render_pass_info = {};
-	    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	    render_pass_info.renderPass = m_vk_render_pass;
-	    render_pass_info.framebuffer = m_vk_swapchain_framebuffers[i];
-
-	    // shader loads and stores take place within this region
-	    render_pass_info.renderArea.offset = {0, 0};
-	    render_pass_info.renderArea.extent = m_vk_swapchain_extent;
-
-	    std::array<VkClearValue, 2> clear_values;
-	    
-	    clear_values[0].color.float32[0] = 1.0f;
-	    clear_values[0].color.float32[1] = 0.0f;
-	    clear_values[0].color.float32[2] = 0.0f;
-	    clear_values[0].color.float32[3] = 1.0f;
-
-	    clear_values[1].depthStencil.depth = 1.0f;
-	    clear_values[1].depthStencil.stencil = 0;
-	    
-	    // for the color attachment's VK_ATTACHMENT_LOAD_OP_CLEAR
-	    // operation
-	    render_pass_info.clearValueCount = clear_values.size();
-	    render_pass_info.pClearValues = clear_values.data();
-	    	    
-	    vkCmdBeginRenderPass(command_buffers[i],
-				 &render_pass_info,
-				 VK_SUBPASS_CONTENTS_INLINE);
-
 	    uint32_t sampler0 = 0;
 	    vkCmdPushConstants(command_buffers[i],
 			       pipeline_layout,
@@ -1764,13 +1971,8 @@ namespace vulkan {
 			       sizeof(sampler0),
 			       &sampler0);
 	    
-	    // first 3 objects: two triangles and one small cube
-	    vkCmdDraw(m_vk_command_buffers[i],
-		      (m_instance_count - 12) * 3, // num vertices
-		      m_instance_count - 12, // num instances
-		      0, // first vertex
-		      0); // first instance
-
+	    draw_inner_objects(command_buffers[i]);
+	  
 	    uint32_t sampler1 = 1;
 	    vkCmdPushConstants(command_buffers[i],
 			       pipeline_layout,
@@ -1778,14 +1980,8 @@ namespace vulkan {
 			       0,
 			       sizeof(sampler1),
 			       &sampler1);
-
-	    // big cube encompassing the scene
-	    vkCmdDraw(command_buffers[i],
-		      36,
-		      12, // (6 faces, 12 triangles)
-		      42, // 3 vertices + 3 vertices + 36 vertices
-		      14); // 2 triangles + one cube (6 faces, 12 triangles)
-	    
+	    draw_room(command_buffers[i]);
+	  	    
 	    vkCmdEndRenderPass(command_buffers[i]);
 	  }
 
@@ -1870,7 +2066,7 @@ namespace vulkan {
 	    setup_render_commands(m_vk_command_buffers,
 				  descriptor_sets,
 				  m_pipeline_pool.pipeline(m_pipeline_indices[0]),
-				  m_vk_pipeline_layout);	  
+				  pipeline_layout(k_render_phase_texture2d));	  
 	
 	    if (ok()) {
 	      m_ok_command_buffers = true;
