@@ -13,7 +13,14 @@ namespace vulkan {
 
 
 	    (!is_image_usage_attachment(usage_flags) &&
-	     attachment_layout == VK_IMAGE_LAYOUT_UNDEFINED));
+	     attachment_layout == VK_IMAGE_LAYOUT_UNDEFINED)
+
+	    ||
+
+	    (is_image_usage_attachment(usage_flags) &&
+	     attachment_layout == VK_IMAGE_LAYOUT_UNDEFINED)
+
+	    );
 
   }
   
