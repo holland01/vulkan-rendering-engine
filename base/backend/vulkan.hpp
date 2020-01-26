@@ -170,24 +170,44 @@ namespace vulkan {
 		       const darray<image_pool::index_type>& images,
 		       const render_pass_framebuffer_create_params& self
 		       )>;
+
+  struct attachment_index_info {
+    enum class image_source
+      {
+       pool,
+       swapchain
+      };
+
+    image_source color_source;
+    
+    int io_image{0};
+    int color_image{1};
+    int depth_image{2};
+
+    bool io_is_output{true}
+    bool is_final_pass{false};
+  }; 
   
   struct render_pass_framebuffer_create_params {
     const render_pass_image_create_params& image_params;
-    const darray<VkImageView>& next_pass_image_views;
+    const darray<VkImageView>& io_image_views;
+    const attachment_index_info attach_info;
     
     VkRenderPass render_pass{VK_NULL_HANDLE};
     VkImageView  depth_image_view{VK_NULL_HANDLE};
 
-    attachment_setup_fn_type fn_attachment_setup;    
+    attachment_setup_fn_type fn_attachment_setup;
 
     render_pass_framebuffer_create_params(const render_pass_image_create_params& image_params,
-					  const darray<VkImageView>& next_pass_image_views,    
+					  const darray<VkImageView>& io_image_views,
+					  const attachment_index_info& attach_info,
 					  VkRenderPass render_pass,
 					  VkImageView  depth_image_view,
 					  attachment_setup_fn_type fn_attachment_setup)
       
       : image_params{image_params},
-	next_pass_image_views{next_pass_image_views},
+	io_image_views{io_image_views},
+	attach_info{attach_index_info},
 	render_pass{render_pass},
 	depth_image_view{depth_image_view},
 	fn_attachment_setup{fn_attachment_setup}
@@ -199,7 +219,7 @@ namespace vulkan {
 	(render_pass != VK_NULL_HANDLE) &&
 	(depth_image_view != VK_NULL_HANDLE) &&
 	(fn_attachment_setup != nullptr) &&
-	(!next_pass_image_views.empty());
+	(!io_image_views.empty());
       ASSERT(r);
       return r;
     }
@@ -207,7 +227,8 @@ namespace vulkan {
   
   class render_pass_external_data {
   private:  
-    darray<image_pool::index_type> m_images;
+    darray<image_pool::index_type> m_images; // color attachment images
+    darray<image_pool::index_type> m_out_images_opt; // for transfer (optional)
     darray<VkFramebuffer> m_framebuffers;
     
     size_t m_expected_count{num_max<size_t>()};
@@ -267,6 +288,68 @@ namespace vulkan {
       return good;
     }
 
+    bool make_out_images(const device_resource_properties& properties) {
+            bool good =
+	properties.ok() &&
+	params.ok();
+      
+      if (good) {
+	m_expected_count = params.num_images;
+	
+	image_gen_params i_params{};
+
+	i_params.memory_property_flags =
+	  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	i_params.format = params.format;
+      
+	i_params.attachment_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+	i_params.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+	i_params.final_layout = VK_IMAGE_LAYOUT_TRANSFER_DEST_OPTIMAL;
+      
+	i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
+	i_params.usage_flags =
+	  VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+	  VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+      
+	i_params.type = VK_IMAGE_TYPE_2D;
+	i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
+	i_params.aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
+      
+	i_params.source_pipeline_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	i_params.dest_pipeline_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      
+	i_params.source_access_flags = 0;
+
+	i_params.dest_access_flags =
+	  VK_ACCESS_TRANSFER_WRITE_BIT | 
+	  VK_ACCESS_TRANSFER_READ_BIT;
+
+	i_params.width = params.width;
+	i_params.height = params.height;
+	i_params.depth = 1;
+            
+	m_images.resize(m_expected_count);
+      
+	for (size_t i = 0; i < m_images.size() && good; ++i) {
+	  m_images[i] = params.p_image_pool->make_image(properties,
+							i_params);
+
+	  good = params.p_image_pool->ok_image(m_images[i]);
+	}
+      }
+
+      return good;
+    }
+
+    darray<VkImageView> out_image_views(image_pool* pool) const {
+      darray<VkImageView> ret{};
+      for (auto i: m_out_images) {
+	ret.push_back(pool->image_view(i));
+      }
+      return ret;
+    }
+
     bool make_framebuffers(const device_resource_properties& properties,
 			   const render_pass_framebuffer_create_params& params) {
 
@@ -274,8 +357,9 @@ namespace vulkan {
 	properties.ok() &&
 	params.ok() &&
 	(m_expected_count != num_max<size_t>() && m_expected_count != 0) &&
-	(!m_images.empty()) &&
-	(m_images.size() == m_expected_count);
+	(((!m_images.empty()) && (m_images.size() == m_expected_count))
+	 ||
+	 params.attach_info.is_final_pass);
 
       if (good) {      
 	std::array<VkImageView, 3> attachments{};
@@ -297,8 +381,7 @@ namespace vulkan {
 	framebuffer_info.layers = 1;
 
 	m_framebuffers.resize(m_expected_count, VK_NULL_HANDLE);
-       
-	
+       	
 	for (size_t i = 0; i < m_framebuffers.size() && good; ++i) {
 	  params.fn_attachment_setup(i,
 				     attachments,
@@ -346,10 +429,6 @@ namespace vulkan {
   
   class renderer {    
     uint32_t m_instance_count{0};   
-
-    render_pass_external_data m_first_pass{};
-
-    render_pass_external_data m_second_pass{};
     
     darray<VkPhysicalDevice> m_vk_physical_devs;
 
@@ -462,12 +541,17 @@ namespace vulkan {
        descriptor_set_pool::k_unset,  // pipeline 0, pipeline 1
        descriptor_set_pool::k_unset   // pipeline 1
       };   
-
-    
     
     static constexpr inline int k_pass_texture2d = 0;
     static constexpr inline int k_pass_cubemap = 1;
     static constexpr inline int k_pass_test_fbo = 2; // test FBO pass
+
+    darray<render_pass_external_data> m_pass_ext_data =
+      {
+       render_pass_external_data{},
+       render_pass_external_data{},
+       render_pass_external_data{}
+      }
     
     darray<render_pass_pool::index_type> m_render_pass_indices =
       {
@@ -1943,8 +2027,8 @@ namespace vulkan {
 		       return
 			 setup_render_pass_texture2d() &&
 			 setup_render_pass_cubemap() &&
-			 m_first_pass.make_images(make_device_resource_properties(),
-						  make_render_pass_image_params());
+			 m_pass_ext_data[k_pass_cubemap].make_images(make_device_resource_properties(),
+								     make_render_pass_image_params());
 		     }		       
 		    },
 		    {
@@ -1952,9 +2036,11 @@ namespace vulkan {
 		     [this]() -> bool {
 		       return
 			 setup_render_pass_texture2d_initial() &&
+
 			 setup_render_pass_test_fbo() &&
-			 m_first_pass.make_images(make_device_resource_properties(),
-						  make_render_pass_image_params());
+
+			 m_pass_ext_data[k_pass_texture2d].make_images(make_device_resource_properties(),
+								       make_render_pass_image_params());			 
 		     }
 		    }
 	    });
@@ -2247,9 +2333,9 @@ namespace vulkan {
 
       return success;
     }
-    
-    bool setup_pipeline_texture2d() {      	
-      return setup_pipeline(k_pass_texture2d,
+
+    bool setup_default_pipeline(int pass_index) {
+      return setup_pipeline(pass_index,
 			    // pipeline layout
 			    {
 			     // descriptor set layouts
@@ -2278,10 +2364,15 @@ namespace vulkan {
 
 			     // remaining index parameters handled in setup_pipeline()
 			    });
+
+    }
+    
+    bool setup_pipeline_texture2d() {
+      return setup_default_pipeline(k_pass_texture2d)
     }
 
     bool setup_pipeline_test_fbo() {
-      return setup_pipeline_texture2d();
+      return setup_default_pipeline(k_pass_test_fbo);
     }
     
     bool setup_pipeline_cubemap() {
@@ -2388,32 +2479,50 @@ namespace vulkan {
       return ret;
     }
 
-    bool setup_framebuffers_from_render_pass(render_pass_external_data& ext_data, int rpass_index) {
+    bool setup_framebuffers_from_render_pass(render_pass_external_data& ext_data,
+					     const darray<VkImageView>& io_image_views,
+					     const attachment_index_info& attach_info,
+					     int rpass_index) {
       return
-	m_first_pass.make_framebuffers(make_device_resource_properties(),
-				       { // image params
-					make_render_pass_image_params(),
-					m_vk_swapchain_image_views, 
-					render_pass(rpass_index),
-					m_depthbuffer.image_view,
-					[](size_t framebuffer_index,
+        ext_data.make_framebuffers(make_device_resource_properties(),
+				   { // image params
+				    make_render_pass_image_params(),
+				    m_vk_swapchain_image_views,
+				    attach_info,
+				    render_pass(rpass_index),
+				    m_depthbuffer.image_view,
+				    [this](size_t framebuffer_index,
 					   attachment_list_t& attachments,
 					   const darray<image_pool::index_type>& images,
 					   const render_pass_framebuffer_create_params& self) {
-					      
-					  attachments[0] =
-					    self.next_pass_image_views.at(framebuffer_index);
-					  attachments[1] =
-					    self.image_params.p_image_pool->image_view(images.at(framebuffer_index));
-					  attachments[2] =
-					    self.depth_image_view;
-					}
-				       });	  
+					  
+				      attachments[self.attach_info.io_image] =
+					self.io_image_views.at(framebuffer_index);
+				      
+				      switch (self.attach_info.color_source) {
+				      case attachment_index_info::image_source::pool:
+
+					attachments[self.attach_info.color_image] =
+					  self.image_params.p_image_pool->image_view(images.at(framebuffer_index));
+
+					break;
+				      case attachment_index_info::image_source::swapchain:
+					
+					attachments[self.attach_info.color_image] =
+					  this->m_vk_swapchain_image_views.at(framebuffer_index);
+
+					break;
+				      }
+
+				      attachments[self.attach_index_info.depth_image] =
+					self.depth_image_view;
+				    }
+				   });	  
     }
     
     void setup_framebuffers() {
       if (ok_vertex_buffer()) {
-
+	
 	m_ok_framebuffers =
 	  vk_match({
 		    {
@@ -2430,14 +2539,20 @@ namespace vulkan {
 		     vk_test_type::skybox,
 		     [this]() -> bool {
 		       return
-			 setup_framebuffers_from_render_pass(m_first_pass, k_pass_cubemap);
+			 false; // TODO
 		     }		       
 		    },
 		    {
 		     vk_test_type::test_fbo,
 		     [this]() -> bool {
+		       attachment_index_info info{};
+
+		       
+		       
 		       return
-			 setup_framebuffers_from_render_pass(m_first_pass, k_pass_test_fbo);
+			 setup_framebuffers_from_render_pass(m_pass_ext_data.at(k_pass_texture2d),
+							     
+							     k_pass_texture_2d);
 		     }
 		    }
 	    });       
@@ -2876,7 +2991,9 @@ namespace vulkan {
 	vkDeviceWaitIdle(m_vk_curr_ldevice);
       }
 
-      m_first_pass.free_mem(m_vk_curr_ldevice);
+      for (auto& pass_info: m_pass_ext_data) {
+	m_pass_ext_data.free_mem(m_vk_curr_ldevice);
+      }
       
       free_vk_ldevice_handle<VkDeviceMemory, &vkFreeMemory>(m_vk_vertex_buffer_mem);
       
