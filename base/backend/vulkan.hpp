@@ -43,7 +43,9 @@ namespace vulkan {
   depthbuffer_data make_depthbuffer(const device_resource_properties& properties,
 				    uint32_t width,
 				    uint32_t height);
-    
+
+  static inline constexpr bool k_test_multipass = false;
+  
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
     std::optional<uint32_t> present_family{};
@@ -319,6 +321,8 @@ namespace vulkan {
     uint32_t m_instance_count{0};   
 
     render_pass_external_data m_first_pass{};
+
+    render_pass_external_data m_second_pass{};
     
     darray<VkPhysicalDevice> m_vk_physical_devs;
 
@@ -1628,6 +1632,52 @@ namespace vulkan {
 			  });
     }
 
+    bool setup_render_pass_texture2d_standalone() {
+      return
+	setup_render_pass(k_render_phase_texture2d,
+			  {
+			   // attachment params
+			   {
+			    // color buffer info
+			    {
+			     m_vk_khr_swapchain_format.format,	       				
+			     // load op
+			     VK_ATTACHMENT_LOAD_OP_CLEAR,
+			     // store op
+			     VK_ATTACHMENT_STORE_OP_STORE,
+			     // layout info
+			     {
+			      // initial
+			      VK_IMAGE_LAYOUT_UNDEFINED,
+			      // attachment layout
+			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			      // final layout
+			      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+			     }
+			    },
+			    // depth buffer info
+			    {
+			     depthbuffer_data::k_format,				
+			     // load op
+			     VK_ATTACHMENT_LOAD_OP_CLEAR,
+			     // store op
+			     VK_ATTACHMENT_STORE_OP_STORE,
+			     // layout info
+			     {
+			      // initial
+			      depthbuffer_data::k_initial_layout,
+			      // attachment layout
+			      depthbuffer_layouts::primary(),
+			      // final layout
+			      depthbuffer_layouts::primary()
+			     }			       
+			    }
+			   },
+			   // additional dependencies
+			   {}
+			  });
+    } 
+
     bool setup_render_pass_cubemap() {
       return
 	setup_render_pass(k_render_phase_cubemap,
@@ -1665,7 +1715,7 @@ namespace vulkan {
 			      // attachment layout
 			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			      // final layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			      
 			     }
 			    },
 			    // depth buffer info
@@ -1717,14 +1767,19 @@ namespace vulkan {
 	};
     }
     
-    
     void setup_render_pass() {
-      if (ok_descriptor_pool()) {	
-	m_ok_render_pass =
-	  setup_render_pass_texture2d() &&
-	  setup_render_pass_cubemap() &&
-	  m_first_pass.make_images(make_device_resource_properties(),
-				   make_render_pass_image_params());	  
+      if (ok_descriptor_pool()) {
+	STATIC_IF (k_test_multipass) {
+	  m_ok_render_pass =
+	    setup_render_pass_texture2d() &&
+	    setup_render_pass_cubemap() &&
+	    m_first_pass.make_images(make_device_resource_properties(),
+				     make_render_pass_image_params());
+
+	}
+	else {
+	  m_ok_render_pass = setup_render_pass_texture2d_standalone();
+	}
       }
     }
 
@@ -2111,8 +2166,11 @@ namespace vulkan {
 	m_pipeline_pool.set_render_pass_pool(&m_render_pass_pool);
 	
 	m_ok_graphics_pipeline =
-	  setup_pipeline_texture2d() &&
-	  setup_pipeline_cubemap();
+	  setup_pipeline_texture2d();
+
+	STATIC_IF (k_test_multipass) {
+	  m_ok_graphics_pipeline = m_ok_graphics_pipeline && setup_pipeline_cubemap();
+	}
       }
     }
 
@@ -2165,30 +2223,34 @@ namespace vulkan {
 	m_vk_swapchain_framebuffers =
 	  make_framebuffer_list(render_pass(k_render_phase_texture2d),
 				m_vk_swapchain_image_views);	
-	
-	if (!m_vk_swapchain_framebuffers.empty()) {
 
-	  m_ok_framebuffers =
-	    m_first_pass.make_framebuffers(make_device_resource_properties(),
-					   { // image params
-					    make_render_pass_image_params(),
-					    m_vk_swapchain_image_views,
-					    render_pass(k_render_phase_cubemap),
-					    m_depthbuffer.image_view,
-					    [](size_t framebuffer_index,
-					       attachment_list_t& attachments,
-					       const darray<image_pool::index_type>& images,
-					       const render_pass_framebuffer_create_params& self) {
+	m_ok_framebuffers = !m_vk_swapchain_framebuffers.empty();
+	
+	STATIC_IF (k_test_multipass) {
+	  if (m_ok_framebuffers) {
+
+	    m_ok_framebuffers =
+	      m_first_pass.make_framebuffers(make_device_resource_properties(),
+					     { // image params
+					      make_render_pass_image_params(),
+					      m_vk_swapchain_image_views, 
+					      render_pass(k_render_phase_cubemap),
+					      m_depthbuffer.image_view,
+					      [](size_t framebuffer_index,
+						 attachment_list_t& attachments,
+						 const darray<image_pool::index_type>& images,
+						 const render_pass_framebuffer_create_params& self) {
 					      
-					      attachments[0] =
-						self.next_pass_image_views.at(framebuffer_index);
-					      attachments[1] =
-						self.image_params.p_image_pool->image_view(images.at(framebuffer_index));
-					      attachments[2] =
-						self.depth_image_view;
-					    }
-					   });	  
-	}	
+						attachments[0] =
+						  self.next_pass_image_views.at(framebuffer_index);
+						attachments[1] =
+						  self.image_params.p_image_pool->image_view(images.at(framebuffer_index));
+						attachments[2] =
+						  self.depth_image_view;
+					      }
+					     });	  
+	  }
+	}
       }
     }
 
