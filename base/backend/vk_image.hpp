@@ -422,7 +422,8 @@ namespace vulkan {
 
 	  m_layouts_initial[img_index] = params.initial_layout;
 	  m_layouts_final[img_index] = params.final_layout;
-
+	  m_layouts_attach_opt[img_index] = params.attachment_layout;
+	  
 	  m_formats[img_index] = params.format;
 	  
 	  m_widths[img_index] = params.width;
