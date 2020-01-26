@@ -45,6 +45,35 @@ namespace vulkan {
 				    uint32_t height);
 
   static inline constexpr bool k_test_multipass = false;
+
+  enum class vk_test_type
+    {
+     basic_shapes = 0,
+     skybox,
+     test_fbo
+    };
+
+  static inline constexpr vk_test_type k_vk_test = vk_test_type::test_fbo;
+
+  using vk_test_fn_t =
+    std::function<bool()>;
+  
+  struct vk_test_params {
+    vk_test_type test;
+    vk_test_fn_t fn;
+    
+  };
+  
+  static inline bool vk_match(const darray<vk_test_params>& params) {
+    bool ret = false;
+    for (const auto& p: params) {
+      if (p.test == k_vk_test) {
+	ret = p.fn();
+	break;
+      }
+    }
+    return ret;
+  }
   
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
@@ -80,8 +109,6 @@ namespace vulkan {
   };
   
   using vertex_list_t = darray<vertex_data>;
-
-  
   
   struct pass_create_params {
     image_pool* pool{nullptr};
@@ -436,11 +463,15 @@ namespace vulkan {
        descriptor_set_pool::k_unset   // pipeline 1
       };   
 
-    static constexpr inline int k_render_phase_texture2d = 0;
-    static constexpr inline int k_render_phase_cubemap = 1;
+    
+    
+    static constexpr inline int k_pass_texture2d = 0;
+    static constexpr inline int k_pass_cubemap = 1;
+    static constexpr inline int k_pass_test_fbo = 2; // test FBO pass
     
     darray<render_pass_pool::index_type> m_render_pass_indices =
       {
+       render_pass_pool::k_unset,
        render_pass_pool::k_unset,
        render_pass_pool::k_unset
       };
@@ -449,10 +480,12 @@ namespace vulkan {
       {
        pipeline_layout_pool::k_unset,
        pipeline_layout_pool::k_unset,
+       pipeline_layout_pool::k_unset
       };
 
     darray<pipeline_pool::index_type> m_pipeline_indices =
       {
+       pipeline_pool::k_unset,
        pipeline_pool::k_unset,
        pipeline_pool::k_unset
       };
@@ -1588,7 +1621,7 @@ namespace vulkan {
 
     bool setup_render_pass_texture2d() {
       return
-	setup_render_pass(k_render_phase_texture2d,
+	setup_render_pass(k_pass_texture2d,
 			  {
 			   // attachment params
 			   {
@@ -1632,9 +1665,135 @@ namespace vulkan {
 			  });
     }
 
+    bool setup_render_pass_test_fbo() {
+      return
+	setup_render_pass(k_pass_test_fbo,
+			  {
+			   // attachment params
+			   {
+			    // color buffer info
+			    {
+			     m_vk_khr_swapchain_format.format,	       				
+			     // load op
+			     VK_ATTACHMENT_LOAD_OP_LOAD,
+			     // store op
+			     VK_ATTACHMENT_STORE_OP_STORE,
+			     // layout info
+			     {
+			      // initial
+			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			      // attachment layout
+			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			      // final layout
+			      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+			     }
+			    },
+			    // depth buffer info
+			    {
+			     depthbuffer_data::k_format,				
+			     // load op
+			     VK_ATTACHMENT_LOAD_OP_LOAD,
+			     // store op
+			     VK_ATTACHMENT_STORE_OP_STORE,
+			     // layout info
+			     {
+			      // initial
+			      depthbuffer_layouts::primary(),
+			      // attachment layout
+			      depthbuffer_layouts::primary(),
+			      // final layout
+			      depthbuffer_layouts::primary()
+			     }			       
+			    }
+			   },
+			   // additional dependencies
+			   {}
+			  });
+
+    }
+
+    bool setup_render_pass_texture2d_initial() {
+      return
+	setup_render_pass(k_pass_texture2d,
+			  {
+			   // attachment params
+			   {
+			    // swapchain color buffer info
+			    {
+			     m_vk_khr_swapchain_format.format,	       				
+			     // load op
+			     VK_ATTACHMENT_LOAD_OP_CLEAR,
+			     // store op
+			     VK_ATTACHMENT_STORE_OP_STORE,
+			     // layout info
+			     {
+			      // initial
+			      VK_IMAGE_LAYOUT_UNDEFINED,
+			      // attachment layout
+			      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			      // final layout
+			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			     
+			     }
+			    },
+			    // main pass color buffer info
+			    { 
+			     m_vk_khr_swapchain_format.format,	       				
+			     // load op
+			     VK_ATTACHMENT_LOAD_OP_CLEAR,
+			     // store op
+			     VK_ATTACHMENT_STORE_OP_STORE,
+			     // layout info
+			     {
+			      // initial
+			      VK_IMAGE_LAYOUT_UNDEFINED,
+			      // attachment layout
+			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			      // final layout
+			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			      
+			     }
+			    },
+			    // depth buffer info
+			    {
+			     depthbuffer_data::k_format,				
+			     // load op
+			     VK_ATTACHMENT_LOAD_OP_CLEAR,
+			     // store op
+			     VK_ATTACHMENT_STORE_OP_STORE,
+			     // layout info
+			     {
+			      // initial
+			      depthbuffer_data::k_initial_layout,
+			      // attachment layout
+			      depthbuffer_layouts::primary(),
+			      // final layout
+			      depthbuffer_layouts::primary()
+			     }			       
+			    }
+			   },
+			   // additional dependencies
+			   {// for swapchain image
+			    {
+			     // src subpass index
+			     0,
+			     // dst subpass index
+			     0,
+			     // src stage mask
+			     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			     // dst stage mask
+			     VK_PIPELINE_STAGE_TRANSFER_BIT,
+			     // src access mask
+			     VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+			     // dst access mask
+			     VK_ACCESS_TRANSFER_WRITE_BIT
+			    }
+			   }
+			  });
+
+    }
+    
     bool setup_render_pass_texture2d_standalone() {
       return
-	setup_render_pass(k_render_phase_texture2d,
+	setup_render_pass(k_pass_texture2d,
 			  {
 			   // attachment params
 			   {
@@ -1680,7 +1839,7 @@ namespace vulkan {
 
     bool setup_render_pass_cubemap() {
       return
-	setup_render_pass(k_render_phase_cubemap,
+	setup_render_pass(k_pass_cubemap,
 			  {
 			   // attachment params
 			   {
@@ -1769,17 +1928,36 @@ namespace vulkan {
     
     void setup_render_pass() {
       if (ok_descriptor_pool()) {
-	STATIC_IF (k_test_multipass) {
-	  m_ok_render_pass =
-	    setup_render_pass_texture2d() &&
-	    setup_render_pass_cubemap() &&
-	    m_first_pass.make_images(make_device_resource_properties(),
-				     make_render_pass_image_params());
-
-	}
-	else {
-	  m_ok_render_pass = setup_render_pass_texture2d_standalone();
-	}
+	// this code brought to you Lambda gang
+	m_ok_render_pass =
+	  vk_match({
+		    {
+		     vk_test_type::basic_shapes,
+		     [this]() -> bool {
+		       return setup_render_pass_texture2d_standalone();
+		     }
+		    },
+		    {
+		     vk_test_type::skybox,
+		     [this]() -> bool {
+		       return
+			 setup_render_pass_texture2d() &&
+			 setup_render_pass_cubemap() &&
+			 m_first_pass.make_images(make_device_resource_properties(),
+						  make_render_pass_image_params());
+		     }		       
+		    },
+		    {
+		     vk_test_type::test_fbo,
+		     [this]() -> bool {
+		       return
+			 setup_render_pass_texture2d_initial() &&
+			 setup_render_pass_test_fbo() &&
+			 m_first_pass.make_images(make_device_resource_properties(),
+						  make_render_pass_image_params());
+		     }
+		    }
+	    });
       }
     }
 
@@ -2071,7 +2249,7 @@ namespace vulkan {
     }
     
     bool setup_pipeline_texture2d() {      	
-      return setup_pipeline(k_render_phase_texture2d,
+      return setup_pipeline(k_pass_texture2d,
 			    // pipeline layout
 			    {
 			     // descriptor set layouts
@@ -2102,9 +2280,12 @@ namespace vulkan {
 			    });
     }
 
+    bool setup_pipeline_test_fbo() {
+      return setup_pipeline_texture2d();
+    }
+    
     bool setup_pipeline_cubemap() {
-      return setup_pipeline(k_render_phase_cubemap,
-#if 0
+      return setup_pipeline(k_pass_cubemap,
 			    // pipeline layout
 			    {
 			     // descriptor set layouts
@@ -2126,51 +2307,40 @@ namespace vulkan {
 			     realpath_spv("cubemap.frag.spv")
 
 			     // remaining index parameters handled in setup_pipeline()
-			    }
-#else
-			    // pipeline layout
-			    {
-			     // descriptor set layouts
-			     {
-			      descriptor_set_layout(k_descriptor_set_samplers),
-			      
-			      descriptor_set_layout(k_descriptor_set_uniform_blocks)
-			     },
-			     // push constant ranges
-			     {
-			      {
-			       VK_SHADER_STAGE_FRAGMENT_BIT,
-			       0,
-			       sizeof(int)
-			      }
-			     }
-			    },
-			    // pipeline
-			    {
-			     // viewport extent
-			     m_vk_swapchain_extent,	   
-			     // vert spv path
-			     realpath_spv("tri_ubo.vert.spv"),
-			     // frag spv path
-			     realpath_spv("tri_ubo.frag.spv")
-
-			     // remaining index parameters handled in setup_pipeline()
-			    }
-#endif
-			    );
+			    });
     }
     
     void setup_graphics_pipeline() {      
       if (ok_depthbuffer_data()) {
 	m_pipeline_pool.set_pipeline_layout_pool(&m_pipeline_layout_pool);
 	m_pipeline_pool.set_render_pass_pool(&m_render_pass_pool);
-	
-	m_ok_graphics_pipeline =
-	  setup_pipeline_texture2d();
 
-	STATIC_IF (k_test_multipass) {
-	  m_ok_graphics_pipeline = m_ok_graphics_pipeline && setup_pipeline_cubemap();
-	}
+	m_ok_graphics_pipeline =
+	  vk_match({
+		    {
+		     vk_test_type::basic_shapes,
+		     [this]() -> bool {
+		       return setup_pipeline_texture2d();
+		     }
+		    },
+		    {
+		     vk_test_type::skybox,
+		     [this]() -> bool {
+		       return
+			 setup_pipeline_texture2d() &&
+			 setup_pipeline_cubemap();
+		     }		       
+		    },
+		    {
+		     vk_test_type::test_fbo,
+		     [this]() -> bool {
+		       return
+			 setup_pipeline_texture2d() &&
+			 setup_pipeline_test_fbo();
+		     }
+		    }
+	    });
+       
       }
     }
 
@@ -2217,40 +2387,60 @@ namespace vulkan {
 
       return ret;
     }
+
+    bool setup_framebuffers_from_render_pass(render_pass_external_data& ext_data, int rpass_index) {
+      return
+	m_first_pass.make_framebuffers(make_device_resource_properties(),
+				       { // image params
+					make_render_pass_image_params(),
+					m_vk_swapchain_image_views, 
+					render_pass(rpass_index),
+					m_depthbuffer.image_view,
+					[](size_t framebuffer_index,
+					   attachment_list_t& attachments,
+					   const darray<image_pool::index_type>& images,
+					   const render_pass_framebuffer_create_params& self) {
+					      
+					  attachments[0] =
+					    self.next_pass_image_views.at(framebuffer_index);
+					  attachments[1] =
+					    self.image_params.p_image_pool->image_view(images.at(framebuffer_index));
+					  attachments[2] =
+					    self.depth_image_view;
+					}
+				       });	  
+    }
     
     void setup_framebuffers() {
       if (ok_vertex_buffer()) {
-	m_vk_swapchain_framebuffers =
-	  make_framebuffer_list(render_pass(k_render_phase_texture2d),
-				m_vk_swapchain_image_views);	
 
-	m_ok_framebuffers = !m_vk_swapchain_framebuffers.empty();
-	
-	STATIC_IF (k_test_multipass) {
-	  if (m_ok_framebuffers) {
+	m_ok_framebuffers =
+	  vk_match({
+		    {
+		     vk_test_type::basic_shapes,
+		     [this]() -> bool {
+		       	m_vk_swapchain_framebuffers =
+			  make_framebuffer_list(render_pass(k_pass_texture2d),
+						m_vk_swapchain_image_views);	
 
-	    m_ok_framebuffers =
-	      m_first_pass.make_framebuffers(make_device_resource_properties(),
-					     { // image params
-					      make_render_pass_image_params(),
-					      m_vk_swapchain_image_views, 
-					      render_pass(k_render_phase_cubemap),
-					      m_depthbuffer.image_view,
-					      [](size_t framebuffer_index,
-						 attachment_list_t& attachments,
-						 const darray<image_pool::index_type>& images,
-						 const render_pass_framebuffer_create_params& self) {
-					      
-						attachments[0] =
-						  self.next_pass_image_views.at(framebuffer_index);
-						attachments[1] =
-						  self.image_params.p_image_pool->image_view(images.at(framebuffer_index));
-						attachments[2] =
-						  self.depth_image_view;
-					      }
-					     });	  
-	  }
-	}
+		       return !m_vk_swapchain_framebuffers.empty(); 
+		     }
+		    },
+		    {
+		     vk_test_type::skybox,
+		     [this]() -> bool {
+		       return
+			 setup_framebuffers_from_render_pass(m_first_pass, k_pass_cubemap);
+		     }		       
+		    },
+		    {
+		     vk_test_type::test_fbo,
+		     [this]() -> bool {
+		       return
+			 setup_framebuffers_from_render_pass(m_first_pass, k_pass_test_fbo);
+		     }
+		    }
+	    });       
       }
     }
 
@@ -2399,7 +2589,7 @@ namespace vulkan {
 	  
 	  commands_start_render_pass(command_buffers[i],
 				     m_vk_swapchain_framebuffers[i],
-				     render_pass(k_render_phase_texture2d));
+				     render_pass(k_pass_texture2d));
 	    
 	  // note that instances are per-triangle
 	  {
@@ -2506,7 +2696,7 @@ namespace vulkan {
 	    setup_render_commands(m_vk_command_buffers,
 				  descriptor_sets,
 				  m_pipeline_pool.pipeline(m_pipeline_indices[0]),
-				  pipeline_layout(k_render_phase_texture2d));	  
+				  pipeline_layout(k_pass_texture2d));	  
 	
 	    if (ok()) {
 	      m_ok_command_buffers = true;
