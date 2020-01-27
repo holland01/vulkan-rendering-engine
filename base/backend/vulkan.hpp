@@ -22,8 +22,11 @@
 #include <iomanip>
 #include <iostream>
 #include <functional>
+#include <variant>
 
 #include <glm/gtc/matrix_transform.hpp>
+
+#define STOP(x) std::cout << "made it" << std::endl; if (false) { x } 
 
 namespace vulkan {
   struct image_requirements;
@@ -160,57 +163,60 @@ namespace vulkan {
   };
 
   using attachment_list_t =
-    std::array<VkImageView, 3>;
-
-  struct render_pass_framebuffer_create_params;
+    std::array<VkImageView, 2>;
   
-  using attachment_setup_fn_type =
-    std::function<void(size_t framebuffer_index,
-		       attachment_list_t& attachments,
-		       const darray<image_pool::index_type>& images,
-		       const render_pass_framebuffer_create_params& self
-		       )>;
-
-  struct attachment_index_info {
-    enum class image_source
-      {
-       pool,
-       swapchain
-      };
-
-    image_source color_source;
+  struct attachment_index_info {    
+    size_t color_image{0};
+    size_t depth_image{1};
     
-    int io_image{0};
-    int color_image{1};
-    int depth_image{2};
-
-    bool io_is_output{true}
+    bool io_is_output{true};
     bool is_final_pass{false};
   }; 
   
+  struct attachment_setup_fn_params {    
+    attachment_list_t& attachments;
+    
+    const VkImageView* color_image_views;
+    size_t num_color_image_views;
+    size_t framebuffer_index;
+
+    bool ok(const attachment_index_info& attach_info) const {
+      bool r =
+	(0 <= framebuffer_index && framebuffer_index < num_color_image_views) &&
+	in_range<size_t>(0ull, attach_info.color_image, attachments.size()) &&
+	in_range<size_t>(0ull, attach_info.depth_image, attachments.size()) &&
+	((color_image_views != nullptr && num_color_image_views != 0) ||
+	 (color_image_views == nullptr && num_color_image_views == 0));
+      
+      ASSERT(r);
+      return r;
+    }
+  };
+   
   struct render_pass_framebuffer_create_params {
     const render_pass_image_create_params& image_params;
-    const darray<VkImageView>& io_image_views;
     const attachment_index_info attach_info;
+
+    VkImageView* io_image_views;
     
     VkRenderPass render_pass{VK_NULL_HANDLE};
     VkImageView  depth_image_view{VK_NULL_HANDLE};
 
-    attachment_setup_fn_type fn_attachment_setup;
+    size_t num_io_image_views;
 
     render_pass_framebuffer_create_params(const render_pass_image_create_params& image_params,
-					  const darray<VkImageView>& io_image_views,
 					  const attachment_index_info& attach_info,
+					  VkImageView* io_image_views,
+					  size_t num_io_image_views,
 					  VkRenderPass render_pass,
-					  VkImageView  depth_image_view,
-					  attachment_setup_fn_type fn_attachment_setup)
+					  VkImageView  depth_image_view)
       
       : image_params{image_params},
-	io_image_views{io_image_views},
-	attach_info{attach_index_info},
+	attach_info{attach_info},
+	io_image_views{io_image_views},	
 	render_pass{render_pass},
 	depth_image_view{depth_image_view},
-	fn_attachment_setup{fn_attachment_setup}
+	num_io_image_views{num_io_image_views}
     {}
 
     bool ok() const {
@@ -218,30 +224,125 @@ namespace vulkan {
         image_params.ok() &&
 	(render_pass != VK_NULL_HANDLE) &&
 	(depth_image_view != VK_NULL_HANDLE) &&
-	(fn_attachment_setup != nullptr) &&
-	(!io_image_views.empty());
+	((io_image_views != nullptr && num_io_image_views > 0) ||
+	 (io_image_views == nullptr && num_io_image_views == 0));
+      
       ASSERT(r);
       return r;
     }
   };
   
   class render_pass_external_data {
-  private:  
-    darray<image_pool::index_type> m_images; // color attachment images
-    darray<image_pool::index_type> m_out_images_opt; // for transfer (optional)
+  private:
+    
+    std::variant<darray<image_pool::index_type>,
+		 darray<VkImageView>> m_images; // color attachment images
+    
+    darray<image_pool::index_type> m_out_images; // for transfer (optional)
+
+    darray<image_pool::index_type> m_in_images; // from transfer to shader as input attachment
+    
     darray<VkFramebuffer> m_framebuffers;
     
     size_t m_expected_count{num_max<size_t>()};
+
+    struct internal_image_gen_params {
+      VkImageLayout l_initial{VK_IMAGE_LAYOUT_UNDEFINED};
+      VkImageLayout l_attach{VK_IMAGE_LAYOUT_UNDEFINED};
+      VkImageLayout l_final{VK_IMAGE_LAYOUT_UNDEFINED};
+      
+      const VkImageUsageFlags usage{0};
+
+      const VkPipelineStageFlags source_stage{0};
+      const VkPipelineStageFlags dest_stage{0};
+      
+      const VkAccessFlags source_access{0};
+      const VkAccessFlags dest_access{0};
+
+      const VkImageTiling tiling{VK_IMAGE_TILING_OPTIMAL};
+      
+      bool ok() const {
+	bool r =
+	  c_assert(l_final != VK_IMAGE_LAYOUT_UNDEFINED) &&
+	  c_assert(usage != 0) &&
+	  c_assert(source_stage != 0) &&
+	  c_assert(dest_stage != 0) &&
+	  c_assert(source_access != 0) &&
+	  c_assert(dest_access != 0) &&
+	  c_assert(tiling == VK_IMAGE_TILING_OPTIMAL) &&
+	  c_assert(validate_attachment(usage, l_attach));
+	
+	return r;
+      }
+    };
+    
+    bool make_images(darray<image_pool::index_type>& pool_images,
+		     const device_resource_properties& properties,
+		     const render_pass_image_create_params& params,
+		     const internal_image_gen_params& int_params) {
+      bool good =
+	properties.ok() &&
+	params.ok() &&
+	int_params.ok();
+      
+      if (good) {
+	
+	image_gen_params i_params{};
+
+	i_params.memory_property_flags =
+	  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	i_params.format = params.format;
+      
+	i_params.attachment_layout = int_params.l_attach;
+	i_params.initial_layout = int_params.l_initial;
+	i_params.final_layout = int_params.l_final;
+      
+	i_params.tiling = int_params.tiling;
+	
+	i_params.usage_flags = int_params.usage;
+	        
+	i_params.type = VK_IMAGE_TYPE_2D;
+	i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
+	i_params.aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
+      
+	i_params.source_pipeline_stage = int_params.source_stage;
+	// color attachment output stage will be between these, and will be handled
+	// via subpass dependency
+	i_params.dest_pipeline_stage = int_params.dest_stage;
+      
+	i_params.source_access_flags = int_params.source_access;
+
+	i_params.dest_access_flags = int_params.dest_access;
+
+	i_params.width = params.width;
+	i_params.height = params.height;
+	i_params.depth = 1;
+            
+        pool_images.resize(params.num_images);
+      
+	for (size_t i = 0; i < pool_images.size() && good; ++i) {
+	  pool_images[i] = params.p_image_pool->make_image(properties,
+							   i_params);
+
+	  good = params.p_image_pool->ok_image(pool_images[i]);
+	}
+      }
+
+      return good;
+    }
     
   public:
-    bool make_images(const device_resource_properties& properties,
-		     const render_pass_image_create_params& params) {
+    bool make_color_images(const device_resource_properties& properties,
+			   const render_pass_image_create_params& params) {
       bool good =
 	properties.ok() &&
 	params.ok();
       
       if (good) {
 	m_expected_count = params.num_images;
+
+	darray<image_pool::index_type> pool_images{};
 	
 	image_gen_params i_params{};
 
@@ -252,44 +353,94 @@ namespace vulkan {
       
 	i_params.attachment_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	i_params.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-	i_params.final_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	i_params.final_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
       
 	i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
-	i_params.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	
+	i_params.usage_flags =
+	  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+	  VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
       
 	i_params.type = VK_IMAGE_TYPE_2D;
 	i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
 	i_params.aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
       
-	i_params.source_pipeline_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	i_params.dest_pipeline_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	i_params.source_pipeline_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	// color attachment output stage will be between these, and will be handled
+	// via subpass dependency
+	i_params.dest_pipeline_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       
-	i_params.source_access_flags = 0;
+	i_params.source_access_flags =
+	  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+	  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 
 	i_params.dest_access_flags =
-	  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-	  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
 	  VK_ACCESS_TRANSFER_READ_BIT;
 
 	i_params.width = params.width;
 	i_params.height = params.height;
 	i_params.depth = 1;
             
-	m_images.resize(m_expected_count);
+        pool_images.resize(m_expected_count);
       
-	for (size_t i = 0; i < m_images.size() && good; ++i) {
-	  m_images[i] = params.p_image_pool->make_image(properties,
+	for (size_t i = 0; i < pool_images.size() && good; ++i) {
+	  pool_images[i] = params.p_image_pool->make_image(properties,
 							i_params);
 
-	  good = params.p_image_pool->ok_image(m_images[i]);
+	  good = params.p_image_pool->ok_image(pool_images[i]);
+	}
+
+	if (good) {
+	  m_images = pool_images;
 	}
       }
 
       return good;
     }
 
-    bool make_out_images(const device_resource_properties& properties) {
-            bool good =
+    bool set_images(const darray<VkImageView>& color_output_views) {
+      m_expected_count = color_output_views.size();
+      m_images = color_output_views;
+      return
+	c_assert(m_images.index() == 1) &&
+	c_assert(is_ext_view_color_attachments());
+    }
+
+    bool make_in_images(const device_resource_properties& properties,
+			const render_pass_image_create_params& params) {
+      return make_images(m_in_images,
+			 properties,
+			 params,
+			 {
+			  // initial layout
+			  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			  // attachment layout
+			  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			  // final layout
+			  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			  // usage
+			  VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+			  VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+			  // source stage;
+			  // we may get better performance by choosing
+			  // a later stage here, but for now
+			  // this is simpler and should prevent
+			  // potential issues since we're performing
+			  // a layout transition FROM dst to
+			  // the input attachment
+			  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			  // dest stage
+			  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			  // source access
+			  VK_ACCESS_TRANSFER_WRITE_BIT,
+			  // dest access
+			  VK_ACCESS_INPUT_ATTACHMENT_READ_BIT
+			 });
+    }
+    
+    bool make_out_images(const device_resource_properties& properties,
+			 const render_pass_image_create_params& params) {
+      bool good =
 	properties.ok() &&
 	params.ok();
       
@@ -303,66 +454,88 @@ namespace vulkan {
 
 	i_params.format = params.format;
       
-	i_params.attachment_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-	i_params.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-	i_params.final_layout = VK_IMAGE_LAYOUT_TRANSFER_DEST_OPTIMAL;
+	i_params.attachment_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+	
+	i_params.initial_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;	
+	i_params.final_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
       
 	i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
+	
 	i_params.usage_flags =
-	  VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-	  VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	  VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
       
 	i_params.type = VK_IMAGE_TYPE_2D;
 	i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
 	i_params.aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
       
-	i_params.source_pipeline_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	i_params.dest_pipeline_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	i_params.source_pipeline_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	i_params.dest_pipeline_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       
-	i_params.source_access_flags = 0;
+	i_params.source_access_flags =
+	  VK_ACCESS_TRANSFER_WRITE_BIT;
 
 	i_params.dest_access_flags =
-	  VK_ACCESS_TRANSFER_WRITE_BIT | 
 	  VK_ACCESS_TRANSFER_READ_BIT;
-
+	
 	i_params.width = params.width;
 	i_params.height = params.height;
 	i_params.depth = 1;
             
-	m_images.resize(m_expected_count);
+	m_out_images.resize(m_expected_count);
       
-	for (size_t i = 0; i < m_images.size() && good; ++i) {
-	  m_images[i] = params.p_image_pool->make_image(properties,
-							i_params);
-
-	  good = params.p_image_pool->ok_image(m_images[i]);
+	for (size_t i = 0; i < m_out_images.size() && good; ++i) {
+	  m_out_images[i] =
+	    params.p_image_pool->make_image(properties,
+					    i_params);
+	  
+	  good = params.p_image_pool->ok_image(m_out_images[i]);
 	}
       }
 
       return good;
     }
 
-    darray<VkImageView> out_image_views(image_pool* pool) const {
-      darray<VkImageView> ret{};
-      for (auto i: m_out_images) {
-	ret.push_back(pool->image_view(i));
-      }
-      return ret;
-    }
+    bool setup_attachment(attachment_setup_fn_params& params,
+			  const render_pass_framebuffer_create_params& self) {
+      bool r = params.ok(self.attach_info);
+      if (r) {				      				      
+	params.attachments[self.attach_info.color_image] =
+	  params
+	  .color_image_views[params.framebuffer_index];					  
 
+	params.attachments[self.attach_info.depth_image] =
+	  self.depth_image_view;
+      }
+      return r;
+    }
+    
     bool make_framebuffers(const device_resource_properties& properties,
 			   const render_pass_framebuffer_create_params& params) {
 
-      bool good =
-	properties.ok() &&
-	params.ok() &&
-	(m_expected_count != num_max<size_t>() && m_expected_count != 0) &&
-	(((!m_images.empty()) && (m_images.size() == m_expected_count))
-	 ||
-	 params.attach_info.is_final_pass);
 
-      if (good) {      
-	std::array<VkImageView, 3> attachments{};
+      // Images in the variant might be pool images. So, either we
+      // use images from the pool or we have swapchain images
+      // that will take their place (in the event that this is a final render pass).
+      darray<VkImageView> color_image_views;
+
+      if (is_pool_color_attachments()) {
+	color_image_views =
+	  params
+	  .image_params
+	  .p_image_pool->image_views(pool_color_attachments());
+      }
+      else {
+	color_image_views = ext_view_color_attachments();
+      }
+
+      bool good =
+	c_assert(properties.ok()) &&
+	c_assert(params.ok()) &&
+	c_assert(m_expected_count != num_max<size_t>() && m_expected_count != 0) &&
+	c_assert(color_image_views.size() == m_expected_count);
+      
+      if (c_assert(good)) {      
+	attachment_list_t attachments{};
 	attachments.fill(VK_NULL_HANDLE);
       
 	VkFramebufferCreateInfo framebuffer_info = {};
@@ -381,31 +554,96 @@ namespace vulkan {
 	framebuffer_info.layers = 1;
 
 	m_framebuffers.resize(m_expected_count, VK_NULL_HANDLE);
-       	
-	for (size_t i = 0; i < m_framebuffers.size() && good; ++i) {
-	  params.fn_attachment_setup(i,
-				     attachments,
-				     m_images,
-				     params);
 	
-	  framebuffer_info.pAttachments = attachments.data();
+	attachment_setup_fn_params attach_params =
+	  {
+	   //    mutable attachment_list_t& attachments;
+	   //    const VkImageView* color_image_views;
+	   //    size_t num_color_image_views;
+	   //    size_t framebuffer_index;
+	   attachments,
+	   color_image_views.data(),
+	   color_image_views.size(),
+	   0
+	  };
+	
+	for (size_t i = 0; i < m_framebuffers.size() && good; ++i) {
+	  attach_params.framebuffer_index = i;
 	  
-	  VK_FN(vkCreateFramebuffer(properties.device,
-				    &framebuffer_info,
-				    nullptr,
-				    &m_framebuffers[i]));
+	  good = setup_attachment(attach_params,
+				  params);
 
-	  good = H_OK(m_framebuffers[i]);
+	  if (c_assert(good)) {
+	    framebuffer_info.pAttachments = attachments.data();
+	  
+	    VK_FN(vkCreateFramebuffer(properties.device,
+				      &framebuffer_info,
+				      nullptr,
+				      &m_framebuffers[i]));
+
+	    good = H_OK(m_framebuffers[i]);
+	  }
 	}
-
-	if (!good) {
+	
+	if (!c_assert(good)) {
 	  free_mem(properties.device);	
 	}
       }
 
-      return good;
+      return c_assert(good);
     }    
 
+    darray<VkImageView> out_image_views(const image_pool& pool) const {
+      return pool.image_views(m_out_images);
+    }
+
+    const darray<image_pool::index_type>& out_image_indices() const {
+      // it's assumed that if this is being called
+      // in the first place that the user intends for this instance
+      // to have output images already set
+      ASSERT(!m_out_images.empty());
+      return m_out_images;
+    }
+
+    bool is_pool_color_attachments() const {
+      return std::holds_alternative<darray<image_pool::index_type>>(m_images); 
+    }
+
+    bool is_ext_view_color_attachments() const {
+      return std::holds_alternative<darray<VkImageView>>(m_images);
+    }
+
+    darray<image_pool::index_type>& pool_color_attachments() {
+      ASSERT(is_pool_color_attachments());
+      
+      return std::get<darray<image_pool::index_type>>(m_images);
+    }
+
+    darray<VkImageView>& ext_view_color_attachments() {
+      ASSERT(is_ext_view_color_attachments());
+      
+      return std::get<darray<VkImageView>>(m_images);
+    }
+
+    const darray<image_pool::index_type>& pool_color_attachments() const {
+      ASSERT(is_pool_color_attachments());
+
+      return std::get<darray<image_pool::index_type>>(m_images);
+    }
+
+    const darray<VkImageView>& ext_view_color_attachments() const {
+      ASSERT(is_ext_view_color_attachments());
+      
+      return std::get<darray<VkImageView>>(m_images);
+    }
+
+    size_t color_attachments_size() const {
+      return
+	is_pool_color_attachments()
+	? pool_color_attachments().size()
+	: ext_view_color_attachments().size();
+    }
+    
     void free_mem(VkDevice device) {
       for (VkFramebuffer& fb: m_framebuffers) {
 	free_device_handle<VkFramebuffer, &vkDestroyFramebuffer>(device,
@@ -413,17 +651,27 @@ namespace vulkan {
       }
 
       m_framebuffers.clear();
-      m_images.clear();
+
+      if (is_pool_color_attachments()) {
+	pool_color_attachments().clear();
+      }
+      else {
+	ext_view_color_attachments().clear();
+      }
     }
     
     bool ok() const {
       bool r =
-	(m_expected_count != num_max<size_t>()) &&
-	(m_images.size() == m_expected_count) &&
-	(m_images.size() == m_framebuffers.size());
+	c_assert(m_expected_count != num_max<size_t>()) &&
+	c_assert(color_attachments_size() == m_expected_count) &&
+	c_assert(color_attachments_size() == m_framebuffers.size());
       
-      ASSERT(r);
       return r;
+    }
+
+    const darray<VkFramebuffer>& framebuffers() const {
+      ASSERT(!m_framebuffers.empty());
+      return m_framebuffers;
     }
   };
   
@@ -508,13 +756,13 @@ namespace vulkan {
     VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
     VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
 
-    std::array<image_pool::index_type, 2> m_test_image_indices =
+    darray<image_pool::index_type> m_test_image_indices =
       {
        image_pool::k_unset,
        image_pool::k_unset
       };
     
-    std::array<texture_pool::index_type, 2> m_test_texture_indices =
+    darray<texture_pool::index_type> m_test_texture_indices =
       {
        texture_pool::k_unset,
        texture_pool::k_unset
@@ -535,7 +783,7 @@ namespace vulkan {
     static constexpr inline int k_descriptor_set_uniform_blocks = 1; 
     static constexpr inline int k_descriptor_set_sampler_cubemap = 2;
     
-    std::array<descriptor_set_pool::index_type, 3> m_test_descriptor_set_indices =
+    darray<descriptor_set_pool::index_type> m_test_descriptor_set_indices =
       {
        descriptor_set_pool::k_unset,  // pipeline 0
        descriptor_set_pool::k_unset,  // pipeline 0, pipeline 1
@@ -551,7 +799,7 @@ namespace vulkan {
        render_pass_external_data{},
        render_pass_external_data{},
        render_pass_external_data{}
-      }
+      };
     
     darray<render_pass_pool::index_type> m_render_pass_indices =
       {
@@ -902,9 +1150,9 @@ namespace vulkan {
             ASSERT(present_mode_count != 0);
             details.present_modes.resize(present_mode_count);
             VK_FN(vkGetPhysicalDeviceSurfacePresentModesKHR(device,
-                                                              m_vk_khr_surface,
-                                                              &present_mode_count,
-                                                              details.present_modes.data()));
+							    m_vk_khr_surface,
+							    &present_mode_count,
+							    details.present_modes.data()));
           }
         }
       }
@@ -1801,24 +2049,7 @@ namespace vulkan {
 	setup_render_pass(k_pass_texture2d,
 			  {
 			   // attachment params
-			   {
-			    // swapchain color buffer info
-			    {
-			     m_vk_khr_swapchain_format.format,	       				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      VK_IMAGE_LAYOUT_UNDEFINED,
-			      // attachment layout
-			      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			      // final layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			     
-			     }
-			    },
+			   {			   
 			    // main pass color buffer info
 			    { 
 			     m_vk_khr_swapchain_format.format,	       				
@@ -1833,7 +2064,7 @@ namespace vulkan {
 			      // attachment layout
 			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			      // final layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			      
+			      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL			      
 			     }
 			    },
 			    // depth buffer info
@@ -1855,7 +2086,8 @@ namespace vulkan {
 			    }
 			   },
 			   // additional dependencies
-			   {// for swapchain image
+			   {// for color attachment image:
+			    // dependencies require more than this			
 			    {
 			     // src subpass index
 			     0,
@@ -1868,7 +2100,7 @@ namespace vulkan {
 			     // src access mask
 			     VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
 			     // dst access mask
-			     VK_ACCESS_TRANSFER_WRITE_BIT
+			     VK_ACCESS_TRANSFER_READ_BIT			    
 			    }
 			   }
 			  });
@@ -2012,13 +2244,17 @@ namespace vulkan {
     
     void setup_render_pass() {
       if (ok_descriptor_pool()) {
-	// this code brought to you Lambda gang
+	//
+	// this code brought to you by
+	// Lambda gang
+	//
 	m_ok_render_pass =
 	  vk_match({
 		    {
 		     vk_test_type::basic_shapes,
 		     [this]() -> bool {
-		       return setup_render_pass_texture2d_standalone();
+		       return
+			 setup_render_pass_texture2d_standalone();
 		     }
 		    },
 		    {
@@ -2027,20 +2263,28 @@ namespace vulkan {
 		       return
 			 setup_render_pass_texture2d() &&
 			 setup_render_pass_cubemap() &&
-			 m_pass_ext_data[k_pass_cubemap].make_images(make_device_resource_properties(),
-								     make_render_pass_image_params());
+			 m_pass_ext_data[k_pass_cubemap].make_color_images(make_device_resource_properties(),
+									   make_render_pass_image_params());
 		     }		       
 		    },
 		    {
 		     vk_test_type::test_fbo,
 		     [this]() -> bool {
 		       return
-			 setup_render_pass_texture2d_initial() &&
+			 c_assert(setup_render_pass_texture2d_initial()) &&
 
-			 setup_render_pass_test_fbo() &&
+			 c_assert(setup_render_pass_test_fbo()) &&
 
-			 m_pass_ext_data[k_pass_texture2d].make_images(make_device_resource_properties(),
-								       make_render_pass_image_params());			 
+			 c_assert(m_pass_ext_data[k_pass_texture2d].make_color_images(make_device_resource_properties(),
+										      make_render_pass_image_params())) &&
+			 
+			 c_assert(m_pass_ext_data[k_pass_texture2d].make_out_images(make_device_resource_properties(),
+										    make_render_pass_image_params())) &&
+
+			 c_assert(m_pass_ext_data[k_pass_test_fbo].make_in_images(make_device_resource_properties(),
+										  make_render_pass_image_params())) &&
+									   
+			 c_assert(m_pass_ext_data[k_pass_test_fbo].set_images(m_vk_swapchain_image_views));			 
 		     }
 		    }
 	    });
@@ -2368,7 +2612,7 @@ namespace vulkan {
     }
     
     bool setup_pipeline_texture2d() {
-      return setup_default_pipeline(k_pass_texture2d)
+      return setup_default_pipeline(k_pass_texture2d);
     }
 
     bool setup_pipeline_test_fbo() {
@@ -2477,48 +2721,7 @@ namespace vulkan {
       }
 
       return ret;
-    }
-
-    bool setup_framebuffers_from_render_pass(render_pass_external_data& ext_data,
-					     const darray<VkImageView>& io_image_views,
-					     const attachment_index_info& attach_info,
-					     int rpass_index) {
-      return
-        ext_data.make_framebuffers(make_device_resource_properties(),
-				   { // image params
-				    make_render_pass_image_params(),
-				    m_vk_swapchain_image_views,
-				    attach_info,
-				    render_pass(rpass_index),
-				    m_depthbuffer.image_view,
-				    [this](size_t framebuffer_index,
-					   attachment_list_t& attachments,
-					   const darray<image_pool::index_type>& images,
-					   const render_pass_framebuffer_create_params& self) {
-					  
-				      attachments[self.attach_info.io_image] =
-					self.io_image_views.at(framebuffer_index);
-				      
-				      switch (self.attach_info.color_source) {
-				      case attachment_index_info::image_source::pool:
-
-					attachments[self.attach_info.color_image] =
-					  self.image_params.p_image_pool->image_view(images.at(framebuffer_index));
-
-					break;
-				      case attachment_index_info::image_source::swapchain:
-					
-					attachments[self.attach_info.color_image] =
-					  this->m_vk_swapchain_image_views.at(framebuffer_index);
-
-					break;
-				      }
-
-				      attachments[self.attach_index_info.depth_image] =
-					self.depth_image_view;
-				    }
-				   });	  
-    }
+    }	  
     
     void setup_framebuffers() {
       if (ok_vertex_buffer()) {
@@ -2545,14 +2748,57 @@ namespace vulkan {
 		    {
 		     vk_test_type::test_fbo,
 		     [this]() -> bool {
-		       attachment_index_info info{};
+		       constexpr size_t k_color_image = 0;
+		       constexpr size_t k_depth_image = 1;
 
-		       
-		       
+		       darray<VkImageView> io_image_views =
+			 m_pass_ext_data
+			 .at(k_pass_texture2d)
+			 .out_image_views(m_image_pool);
+
 		       return
-			 setup_framebuffers_from_render_pass(m_pass_ext_data.at(k_pass_texture2d),
-							     
-							     k_pass_texture_2d);
+			 c_assert(m_pass_ext_data
+				  .at(k_pass_texture2d)
+				  .make_framebuffers(make_device_resource_properties(),
+										
+						     {// image params 
+						      make_render_pass_image_params(),
+						      // attachment info
+						      {
+						       k_color_image,
+						       k_depth_image,
+						       // io image is output 
+						       true,
+						       // is final pass
+						       false
+						      },
+						      io_image_views.data(),
+						      io_image_views.size(),
+						      render_pass(k_pass_texture2d),
+						      m_depthbuffer.image_view
+						     }))
+			 &&
+		       
+			 c_assert(m_pass_ext_data
+				  .at(k_pass_test_fbo)
+				  .make_framebuffers(make_device_resource_properties(),									       
+						     {
+						      // image params
+						      make_render_pass_image_params(),
+						      {
+						       k_color_image,
+						       k_depth_image,
+						       // io image is output
+						       false,
+						       // is final pass
+						       true
+						      },
+						      io_image_views.data(),
+						      io_image_views.size(),
+						      render_pass(k_pass_test_fbo),
+						      m_depthbuffer.image_view
+						     }));		       			
+
 		     }
 		    }
 	    });       
@@ -2570,7 +2816,7 @@ namespace vulkan {
 
 	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
 
-	m_ok_command_pool = true;
+	m_ok_command_pool = true;	
       }      
     }
 
@@ -2650,91 +2896,198 @@ namespace vulkan {
 			   &render_pass_info,
 			   VK_SUBPASS_CONTENTS_INLINE);      
     }
-    
-    void setup_render_commands(darray<VkCommandBuffer>& command_buffers,
-			       const darray<VkDescriptorSet>& descriptor_sets,
-			       VkPipeline pipeline,
-			       VkPipelineLayout pipeline_layout) {
-      ASSERT(!command_buffers.empty());
+
+    void commands_draw_inner_objects(VkCommandBuffer cmd_buffer) const {
+      // first 3 objects: two triangles and one small cube
+      vkCmdDraw(cmd_buffer,
+		(m_instance_count - 12) * 3, // num vertices
+		m_instance_count - 12, // num instances
+		0, // first vertex
+		0); // first instance
+    }
+
+    void commands_draw_room(VkCommandBuffer cmd_buffer) const {
+      // big cube encompassing the scene
+      vkCmdDraw(cmd_buffer,
+		36,
+		12, // (6 faces, 12 triangles)
+		42, // 3 vertices + 3 vertices + 36 vertices
+		14); // 2 triangles + one cube (6 faces, 12 triangles)
+    }
+
+    bool commands_begin_buffer(VkCommandBuffer cmd_buffer) {
+      bool ret = ok();
       
-      VkCommandBufferAllocateInfo alloc_info = {};
-      alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-      alloc_info.commandPool = m_vk_command_pool;
-      alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-      alloc_info.commandBufferCount = static_cast<uint32_t>(command_buffers.size());
-
-      VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, command_buffers.data()));
-	
-      size_t i = 0;
-
-      auto draw_inner_objects =
-	[this](VkCommandBuffer cmd_buffer) {
-	  // first 3 objects: two triangles and one small cube
-	  vkCmdDraw(cmd_buffer,
-		    (m_instance_count - 12) * 3, // num vertices
-		    m_instance_count - 12, // num instances
-		    0, // first vertex
-		    0); // first instance
-
-	};
-
-      auto draw_room =
-	[](VkCommandBuffer cmd_buffer) {
-	  // big cube encompassing the scene
-	  vkCmdDraw(cmd_buffer,
-		    36,
-		    12, // (6 faces, 12 triangles)
-		    42, // 3 vertices + 3 vertices + 36 vertices
-		    14); // 2 triangles + one cube (6 faces, 12 triangles)
-	};
-	
-      while (i < command_buffers.size() && ok()) {
+      if (ret) {
 	VkCommandBufferBeginInfo begin_info = {};
+	  
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	begin_info.flags = 0;
 	begin_info.pInheritanceInfo = nullptr;
 
-	VK_FN(vkBeginCommandBuffer(command_buffers[i], &begin_info));	  
+	VK_FN(vkBeginCommandBuffer(cmd_buffer, &begin_info));
+
+	ret = ok();
+      }
+
+      return ret;
+    }
+
+    void commands_copy_image(VkCommandBuffer cmd_buffer, image_pool::index_type src, image_pool::index_type dst) const {
+
+      VkImageCopy copy_region = m_image_pool.image_copy(src);
+      
+      vkCmdCopyImage(cmd_buffer,
+		     m_image_pool.image(src),
+		     m_image_pool.layout_final(src),
+		     m_image_pool.image(dst),
+		     m_image_pool.layout_final(dst),
+		     1,
+		     &copy_region);		     
+    }
+
+    bool commands_layout_transition(VkCommandBuffer cmd_buffer,
+				    image_pool::index_type image) const {
+      bool ret = ok();
+      if (ret) {
+	auto layout_transition =
+	  m_image_pool.make_layout_transition(image);
+
+        ret = c_assert(layout_transition.ok());
 	  
-	if (ok()) {
-	  commands_begin_pipeline(command_buffers[i],
-				  pipeline,
-				  pipeline_layout,
-				  descriptor_sets);
-	  
-	  commands_start_render_pass(command_buffers[i],
-				     m_vk_swapchain_framebuffers[i],
-				     render_pass(k_pass_texture2d));
+	if (ret) {
+	  layout_transition.via(cmd_buffer);
+	  ret = c_assert(ok());
+	}
+      }
+      return ret;
+    }
+
+    void commands_draw_main(VkCommandBuffer cmd_buffer,
+			    VkPipelineLayout pipeline_layout) const {
+      // Note that instances are per-triangle
+      uint32_t sampler0 = 0;
+      vkCmdPushConstants(cmd_buffer,
+			 pipeline_layout,
+			 VK_SHADER_STAGE_FRAGMENT_BIT,
+			 0,
+			 sizeof(sampler0),
+			 &sampler0);
 	    
-	  // note that instances are per-triangle
-	  {
-	    uint32_t sampler0 = 0;
-	    vkCmdPushConstants(command_buffers[i],
-			       pipeline_layout,
-			       VK_SHADER_STAGE_FRAGMENT_BIT,
-			       0,
-			       sizeof(sampler0),
-			       &sampler0);
-	    
-	    draw_inner_objects(command_buffers[i]);
+      commands_draw_inner_objects(cmd_buffer);
 	  
-	    uint32_t sampler1 = 1;
-	    vkCmdPushConstants(command_buffers[i],
-			       pipeline_layout,
-			       VK_SHADER_STAGE_FRAGMENT_BIT,
-			       0,
-			       sizeof(sampler1),
-			       &sampler1);
-	    draw_room(command_buffers[i]);
+      uint32_t sampler1 = 1;
+      vkCmdPushConstants(cmd_buffer,
+			 pipeline_layout,
+			 VK_SHADER_STAGE_FRAGMENT_BIT,
+			 0,
+			 sizeof(sampler1),
+			 &sampler1);
+      
+      commands_draw_room(cmd_buffer);
+    }
+
+    //
+    // we always use the command pool here to allocate command buffer memory
+    //
+    bool make_command_buffers(darray<VkCommandBuffer>& command_buffers) const {
+      bool ret =
+	c_assert(!command_buffers.empty()) &&
+	c_assert(ok_command_pool());
+      
+      if (ret) {
+	VkCommandBufferAllocateInfo alloc_info = {};
+
+	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	alloc_info.commandPool = m_vk_command_pool;
+	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	alloc_info.commandBufferCount = static_cast<uint32_t>(command_buffers.size());
+
+	VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, command_buffers.data()));
+
+	ret = ok() && !command_buffers.empty();
+      }
+      return ret;
+    }
+
+    bool setup_commands_for_render_output_pass(int pass_in,
+					       darray<VkCommandBuffer>& command_buffers,
+					       const darray<VkDescriptorSet>& descriptor_sets,
+					       VkPipeline pipeline,
+					       VkPipelineLayout pipeline_layout) {
+      
+      bool good = c_assert(make_command_buffers(command_buffers));
+
+      if (good) {			
+	size_t i{0};
+	    
+	const auto& out_image_indices =
+	  m_pass_ext_data
+	  .at(pass_in)
+	  .out_image_indices();
+
+	const auto& pool_color_attachments =
+	  m_pass_ext_data
+	  .at(pass_in)
+	  .pool_color_attachments();
+
+	const auto& framebuffers =
+	  m_pass_ext_data
+	  .at(pass_in)
+	  .framebuffers();
+		      
+        good = !out_image_indices.empty();
+      
+	while (i < command_buffers.size() && c_assert(good)) {
+	  
+	  good = c_assert(commands_begin_buffer(command_buffers.at(i)));
+	
+	  if (good) {
+	    commands_begin_pipeline(command_buffers[i],
+				    pipeline,
+				    pipeline_layout,
+				    descriptor_sets);
+
+	    good = c_assert(ok());
+	    
+	    if (good) {
+	      commands_start_render_pass(command_buffers[i],
+					 framebuffers.at(i),
+					 render_pass(pass_in));
+	    
+	      commands_draw_main(command_buffers.at(i),
+				 pipeline_layout);
 	  	    
-	    vkCmdEndRenderPass(command_buffers[i]);
+	      vkCmdEndRenderPass(command_buffers[i]);
+	     
+	      // Transition from color attachment layout to
+	      // transfer src layout	     
+	      good = c_assert(commands_layout_transition(command_buffers.at(i),
+							 pool_color_attachments.at(i)));
+
+	      if (good) {		
+		commands_copy_image(command_buffers.at(i),
+				    pool_color_attachments.at(i),
+				    out_image_indices.at(i));
+
+		// This sets up our output image layout transition
+		// that we use to perform the transfer after the render pass
+		// and copy from the color attachment to the
+		// draw buffer is finished is finished
+		good = c_assert(commands_layout_transition(command_buffers.at(i),
+							   out_image_indices.at(i)));
+	      }
+	      
+	    }	   
+	  	      	  
+	    VK_FN(vkEndCommandBuffer(command_buffers[i]));
 	  }
 
-	  VK_FN(vkEndCommandBuffer(command_buffers[i]));
+	  i++;
 	}
-
-	i++;
       }
+
+      return good;
     }
 
     // ---------------------
@@ -2760,37 +3113,24 @@ namespace vulkan {
       if (ok_command_pool()) {
 	// bind sampler[i] to test_texture_indices[i] via
 	// test_texture_index's array element index (should be i)
-	darray<texture_pool::index_type> tex_indices(m_test_texture_indices.begin(), m_test_texture_indices.end());
+	darray<texture_pool::index_type> tex_indices(m_test_texture_indices.begin(),
+						     m_test_texture_indices.end());
 	
 	if (c_assert(m_texture_pool.update_descriptor_sets(m_vk_curr_ldevice,
 							   std::move(tex_indices)))) {
 
 	  vkDeviceWaitIdle(m_vk_curr_ldevice);	
 
+	  //
 	  // perform the image layout transition for
 	  // test_image_indices[i]
+	  //
 	  run_cmds(
 		   [this](VkCommandBuffer cmd_buf) {
-		     puts("image_layout_transition");
-
-		     size_t i{0};
-		     bool good = true;
-
-		     while (i < m_test_image_indices.size() && good) {
-		       auto image_index = m_test_image_indices[i];
-		     
-		       auto layout_transition = m_image_pool.make_layout_transition(image_index);		    
-
-		       good = layout_transition.ok();
-
-		       if (good) {
-			 layout_transition.via(cmd_buf);
-		       }
-
-		       i++;
-		     }
-		   
-		     m_ok_scene = good;
+		     puts("image_layout_transition");		     
+		     m_ok_scene =
+		       m_image_pool.make_layout_transitions(cmd_buf,
+							    m_test_image_indices);
 		   },
 		   [this]() {
 		     puts("run_cmds ERROR");
@@ -2806,16 +3146,20 @@ namespace vulkan {
 	       m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks])
 	      };
 
-	    m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
 	    
-	    setup_render_commands(m_vk_command_buffers,
-				  descriptor_sets,
-				  m_pipeline_pool.pipeline(m_pipeline_indices[0]),
-				  pipeline_layout(k_pass_texture2d));	  
-	
-	    if (ok()) {
-	      m_ok_command_buffers = true;
-	    }
+	    //m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
+
+	    m_vk_command_buffers.resize(m_vk_swapchain_image_views.size());
+	    
+	    m_ok_scene =
+	      c_assert(setup_commands_for_render_output_pass(k_pass_texture2d,
+							     m_vk_command_buffers,
+							     descriptor_sets,
+							     pipeline(k_pass_texture2d),
+							     pipeline_layout(k_pass_texture2d)));
+
+	      
+	    m_ok_command_buffers = false;
 	  }
 	}
       }
@@ -2992,7 +3336,7 @@ namespace vulkan {
       }
 
       for (auto& pass_info: m_pass_ext_data) {
-	m_pass_ext_data.free_mem(m_vk_curr_ldevice);
+        pass_info.free_mem(m_vk_curr_ldevice);
       }
       
       free_vk_ldevice_handle<VkDeviceMemory, &vkFreeMemory>(m_vk_vertex_buffer_mem);

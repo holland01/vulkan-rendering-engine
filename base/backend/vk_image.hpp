@@ -7,7 +7,7 @@ namespace vulkan {
 					 VkImageLayout attachment_layout) {
     return ((is_image_usage_attachment(usage_flags) &&
 	     !c_in(attachment_layout,
-		k_invalid_attachment_layouts))
+		   k_invalid_attachment_layouts))
 
 	    ||
 
@@ -520,6 +520,37 @@ namespace vulkan {
 			    VkImageView);
     }
 
+    darray<VkImageView> image_views(const darray<index_type>& indices) const {
+      darray<VkImageView> ret;
+      for (const auto& i: indices) {
+	ret.push_back(image_view(i));
+      }
+      return ret;
+    }
+
+    VkImageCopy image_copy(index_type index) const {
+      VkImageCopy copy = {};
+      
+      copy.srcSubresource.aspectMask = m_aspect_flags.at(index);
+      copy.srcSubresource.mipLevel = 0;
+      copy.srcSubresource.baseArrayLayer = 0;
+      copy.srcSubresource.layerCount = 1;
+
+      copy.dstSubresource = copy.srcSubresource;
+      
+      copy.srcOffset.x = 0;
+      copy.srcOffset.y = 0;
+      copy.srcOffset.z = 0;
+      
+      copy.dstOffset = copy.srcOffset;
+
+      copy.extent.width = m_widths.at(index);
+      copy.extent.height = m_heights.at(index);
+      copy.extent.depth = m_depths.at(index);
+
+      return copy;
+    }
+
     image_layout_transition make_layout_transition(index_type index) const {
       auto ret = image_layout_transition(false);
 
@@ -537,6 +568,29 @@ namespace vulkan {
       }
 
       return ret;
+    }
+
+    bool make_layout_transitions(VkCommandBuffer cmd_buf, const darray<index_type>& indices) const {
+      size_t i{0};
+      bool good = true;
+
+      while (i < indices.size() && good) {
+	auto image_index = indices.at(i);
+		     
+	auto layout_transition = make_layout_transition(image_index);		    
+
+	good =
+	  c_assert(layout_transition.ok()) &&
+	  c_assert(api_ok());
+
+	if (c_assert(good)) {
+	  layout_transition.via(cmd_buf);
+	}
+
+	i++;
+      }
+
+      return c_assert(good);
     }
     
   };
