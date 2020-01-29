@@ -734,7 +734,9 @@ namespace vulkan {
       model_triangle(R3v(-2.25, 0, 0)) + // offset: 0, length: 3
       model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) + // offset: 3, length: 3
       model_cube(k_mirror_cube_center, R3(1), k_mirror_cube_size) + // offset: 6, length: 36
-      model_cube(k_room_cube_center, R3(1), k_room_cube_size); // offset: 42, length: 36
+      model_cube(k_room_cube_center,
+		 R3(1),
+		 k_room_cube_size); // offset: 42, length: 36
       
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
@@ -2063,13 +2065,13 @@ namespace vulkan {
 			    {
 			     m_vk_khr_swapchain_format.format,	       				
 			     // load op
-			     VK_ATTACHMENT_LOAD_OP_LOAD,
+			     VK_ATTACHMENT_LOAD_OP_CLEAR,
 			     // store op
 			     VK_ATTACHMENT_STORE_OP_STORE,
 			     // layout info
 			     {
 			      // initial
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			      // attachment layout
 			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			      // final layout
@@ -2080,13 +2082,13 @@ namespace vulkan {
 			    {
 			     depthbuffer_data::k_format,				
 			     // load op
-			     VK_ATTACHMENT_LOAD_OP_LOAD,
+			     VK_ATTACHMENT_LOAD_OP_CLEAR,
 			     // store op
 			     VK_ATTACHMENT_STORE_OP_STORE,
 			     // layout info
 			     {
 			      // initial
-			      depthbuffer_layouts::primary(),
+			      depthbuffer_data::k_initial_layout,
 			      // attachment layout
 			      depthbuffer_layouts::primary(),
 			      // final layout
@@ -2094,8 +2096,48 @@ namespace vulkan {
 			     }			       
 			    }
 			   },
+			   
+			   //
 			   // additional dependencies
-			   {}
+			   //
+			   {
+			    // this is the image transfer/subpass input attachment
+			    {
+			     // src subpass
+			     VK_SUBPASS_EXTERNAL,
+			     // dst subpass
+			     0,
+			     // src stage mask
+			     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			     // dst stage mask
+			     VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			     // src access mask
+			     VK_ACCESS_TRANSFER_WRITE_BIT,
+			     // dst access mask
+			     VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+			     // dependency flags
+			     0
+			    },
+
+			    // this is the color attachment's dependency
+			    // on the image transfer/subpass input attachment
+			    {
+			     // src subpass
+			     0,
+			     // dst subpass
+			     0,
+			     // src stage mask
+			     VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			     // dst stage mask
+			     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			     // src access mask
+			     VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+			     // dst access mask
+			     VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			     // dependency flags
+			     0
+			    }
+			   }
 			  });
 
     }
@@ -2331,14 +2373,17 @@ namespace vulkan {
 
 			 c_assert(setup_render_pass_test_fbo()) &&
 
-			 c_assert(m_pass_ext_data[k_pass_texture2d].make_color_images(make_device_resource_properties(),
-										      make_render_pass_image_params())) &&
+			 c_assert(m_pass_ext_data[k_pass_texture2d]
+				  .make_color_images(make_device_resource_properties(),
+						     make_render_pass_image_params())) &&
 			 
-			 c_assert(m_pass_ext_data[k_pass_texture2d].make_out_images(make_device_resource_properties(),
-										    make_render_pass_image_params())) &&
+			 c_assert(m_pass_ext_data[k_pass_texture2d]
+				  .make_out_images(make_device_resource_properties(),
+						   make_render_pass_image_params())) &&
 
-			 c_assert(m_pass_ext_data[k_pass_test_fbo].make_in_images(make_device_resource_properties(),
-										  make_render_pass_image_params())) &&
+			 c_assert(m_pass_ext_data[k_pass_test_fbo]
+				  .make_in_images(make_device_resource_properties(),
+						  make_render_pass_image_params())) &&
 									   
 			 c_assert(m_pass_ext_data[k_pass_test_fbo].set_images(m_vk_swapchain_image_views));			 
 		     }
@@ -2633,8 +2678,8 @@ namespace vulkan {
 
       return success;
     }
-
-    bool setup_default_pipeline(int pass_index) {
+    
+    bool setup_default_pipeline(int pass_index, const std::string& program) {
       return setup_pipeline(pass_index,
 			    // pipeline layout
 			    {
@@ -2658,9 +2703,9 @@ namespace vulkan {
 			     // viewport extent
 			     m_vk_swapchain_extent,	   
 			     // vert spv path
-			     realpath_spv("tri_ubo.vert.spv"),
+			     realpath_spv(program + ".vert.spv"),
 			     // frag spv path
-			     realpath_spv("tri_ubo.frag.spv")
+			     realpath_spv(program + ".frag.spv")
 
 			     // remaining index parameters handled in setup_pipeline()
 			    });
@@ -2668,11 +2713,33 @@ namespace vulkan {
     }
     
     bool setup_pipeline_texture2d() {
-      return setup_default_pipeline(k_pass_texture2d);
+      return setup_default_pipeline(k_pass_texture2d, "tri_ubo");
     }
 
     bool setup_pipeline_test_fbo() {
-      return setup_default_pipeline(k_pass_test_fbo);
+      return setup_pipeline(k_pass_test_fbo,
+			    // pipeline layout
+			    {
+			     // descriptor set layouts
+			     {
+			      descriptor_set_layout(k_descriptor_set_input_attachment),
+			      
+			      descriptor_set_layout(k_descriptor_set_uniform_blocks)
+			     },
+			     // push constant ranges
+			     {
+			     }
+			    },
+			    // pipeline
+			    {
+			     // viewport extent
+			     m_vk_swapchain_extent,	   
+			     // vert spv path
+			     realpath_spv("quad.vert.spv"),
+			     // frag spv path
+			     realpath_spv("quad.frag.spv")
+			     // remaining index parameters handled in setup_pipeline()
+			    });
     }
     
     bool setup_pipeline_cubemap() {
@@ -2971,6 +3038,14 @@ namespace vulkan {
 		14); // 2 triangles + one cube (6 faces, 12 triangles)
     }
 
+    void commands_draw_quad_no_vb(VkCommandBuffer cmd_buffer) const {
+      vkCmdDraw(cmd_buffer,
+		4,
+		1,
+		0,
+		0);
+    }
+
     bool commands_begin_buffer(VkCommandBuffer cmd_buffer) {
       bool ret = ok();
       
@@ -3102,7 +3177,7 @@ namespace vulkan {
 	// transfer src layout	     
 	good = c_assert(commands_layout_transition(cmd_buffer,
 						   color_attachment_image));
-
+	
 	if (good) {		
 	  commands_copy_image(cmd_buffer,
 			      color_attachment_image,
@@ -3155,21 +3230,14 @@ namespace vulkan {
 	good = c_assert(commands_layout_transition(cmd_buffer,
 						   curr_in_transfer_image));
 	
-	// TODO: add draw quad here
-        ASSERT(false);
-	
-	//commands_draw_main(cmd_buffer,
-	//		   pipeline_layout);
+        commands_draw_quad_no_vb(cmd_buffer);       
 	  	    
 	vkCmdEndRenderPass(cmd_buffer);
 	     
 	// Transition from color attachment layout to
 	// transfer src layout	     
 
-	good = c_assert(ok());
-	
-	
-	      
+	good = c_assert(ok());      	      
       }	   
 
       return good;
@@ -3224,6 +3292,13 @@ namespace vulkan {
 		     m_ok_scene = false;
 		   });
 
+	  //
+	  // update the descriptor sets here to include the input attachment
+	  // for the shader
+	  //
+
+	  
+	  
 	  if (ok_scene()) {
 	    
 	    //m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
@@ -3233,7 +3308,6 @@ namespace vulkan {
 	    bool good = c_assert(make_command_buffers(m_vk_command_buffers));
 	    
 	    if (good) {
-
 	      //
 	      // images and framebuffers for pass one
 	      //
@@ -3250,21 +3324,14 @@ namespace vulkan {
 	      const auto& framebuffers_tex2d =
 		m_pass_ext_data
 		.at(k_pass_texture2d)
-		.framebuffers();
-	      
+		.framebuffers();	      
 	      //
 	      // images and framebuffers for pass two
-	      //
-	      
+	      //	      
 	      const auto& in_image_indices_test_fbo =
 		m_pass_ext_data
 		.at(k_pass_test_fbo)
 		.in_image_indices();
-
-	      const auto& ext_view_color_attachments_test_fbo =
-		m_pass_ext_data
-		.at(k_pass_test_fbo)
-		.ext_view_color_attachments();
 
 	      const auto& framebuffers_test_fbo =
 		m_pass_ext_data
