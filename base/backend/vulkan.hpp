@@ -462,7 +462,8 @@ namespace vulkan {
 	i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
 	
 	i_params.usage_flags =
-	  VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	  VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+	  VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
       
 	i_params.type = VK_IMAGE_TYPE_2D;
 	i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
@@ -603,6 +604,11 @@ namespace vulkan {
       // to have output images already set
       ASSERT(!m_out_images.empty());
       return m_out_images;
+    }
+
+    const darray<image_pool::index_type>& in_image_indices() const {
+      ASSERT(!m_in_images.empty());
+      return m_in_images;
     }
 
     bool is_pool_color_attachments() const {
@@ -782,12 +788,14 @@ namespace vulkan {
     static constexpr inline int k_descriptor_set_samplers = 0;
     static constexpr inline int k_descriptor_set_uniform_blocks = 1; 
     static constexpr inline int k_descriptor_set_sampler_cubemap = 2;
+    static constexpr inline int k_descriptor_set_input_attachment = 3;
     
     darray<descriptor_set_pool::index_type> m_test_descriptor_set_indices =
       {
        descriptor_set_pool::k_unset,  // pipeline 0
        descriptor_set_pool::k_unset,  // pipeline 0, pipeline 1
-       descriptor_set_pool::k_unset   // pipeline 1
+       descriptor_set_pool::k_unset,  // pipeline 1
+       descriptor_set_pool::k_unset
       };   
     
     static constexpr inline int k_pass_texture2d = 0;
@@ -824,6 +832,7 @@ namespace vulkan {
     
     bool m_ok_present{false};
     bool m_ok_descriptor_pool{false};
+    bool m_ok_input_attachment{false};
     bool m_ok_render_pass{false};
     bool m_ok_uniform_block_data{false};
     bool m_ok_texture_data{false};
@@ -967,10 +976,25 @@ namespace vulkan {
 	m_pipeline_pool.pipeline(m_pipeline_indices.at(index));
     }
 
+    VkDescriptorSet descriptor_set(int index) const {
+      return
+	m_descriptor_set_pool
+	.descriptor_set(m_test_descriptor_set_indices.at(index));
+    }
+
+    darray<VkDescriptorSet> descriptor_sets(const darray<descriptor_set_pool::index_type>& indices) const {
+      return c_fmap<descriptor_set_pool::index_type,
+		    VkDescriptorSet>(indices,
+				     [this](const descriptor_set_pool::index_type& i)
+				     {
+				       return descriptor_set(i);
+				     });
+    }
+
     VkDescriptorSetLayout descriptor_set_layout(int index) const {
       return
-	m_descriptor_set_pool.
-	descriptor_set_layout(m_test_descriptor_set_indices.at(index));
+	m_descriptor_set_pool
+	.descriptor_set_layout(m_test_descriptor_set_indices.at(index));
     }
 
     void print_physical_device_memory_types() {
@@ -1084,8 +1108,9 @@ namespace vulkan {
       buffer_info.pNext = nullptr;
       buffer_info.flags = 0;
 
-      buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-	  VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      buffer_info.usage =
+	VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+	VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
       buffer_info.size = size;
       
@@ -1692,6 +1717,12 @@ namespace vulkan {
       return r;
     }
 
+    bool ok_input_attachment() const {
+      bool r = ok() && m_ok_input_attachment;
+      ASSERT(r);
+      return r;
+    }
+
     bool ok_uniform_block_data() const {
       bool r = ok() && m_ok_uniform_block_data;
       ASSERT(r);
@@ -1914,11 +1945,12 @@ namespace vulkan {
     
     void setup_descriptor_pool() {
       if (ok_present()) {       
-	std::vector<VkDescriptorPoolSize> pool_sizes =
+        darray<VkDescriptorPoolSize> pool_sizes =
 	  {
 	   // type, descriptorCount
 	   { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 },
 	   { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
+	   { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1 }
 	  };
 
 	uint32_t max_sets = sum<uint32_t,
@@ -1949,6 +1981,30 @@ namespace vulkan {
 					      params);       
 
       return m_render_pass_pool.ok_render_pass(m_render_pass_indices[index]);
+    }
+
+    void setup_input_attachment() {
+      if (ok_descriptor_pool()) {
+
+	descriptor_set_gen_params input_attach_params =
+	  {
+	   // stages
+	   { VK_SHADER_STAGE_FRAGMENT_BIT },
+	   // descriptor_counts
+	   { 1 },
+	   // type
+	   VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
+	  };
+
+	m_test_descriptor_set_indices[k_descriptor_set_input_attachment] =
+	  m_descriptor_set_pool
+	  .make_descriptor_set(make_device_resource_properties(),
+			       input_attach_params);
+	
+	m_ok_input_attachment =
+	  m_test_descriptor_set_indices.at(k_descriptor_set_input_attachment)
+	  != descriptor_set_pool::k_unset;
+      }
     }
 
     bool setup_render_pass_texture2d() {
@@ -2243,7 +2299,7 @@ namespace vulkan {
     }
     
     void setup_render_pass() {
-      if (ok_descriptor_pool()) {
+      if (ok_input_attachment()) {
 	//
 	// this code brought to you by
 	// Lambda gang
@@ -2933,6 +2989,11 @@ namespace vulkan {
       return ret;
     }
 
+    bool commands_end_buffer(VkCommandBuffer cmd_buffer) {
+      VK_FN(vkEndCommandBuffer(cmd_buffer));
+      return ok();
+    }
+
     void commands_copy_image(VkCommandBuffer cmd_buffer, image_pool::index_type src, image_pool::index_type dst) const {
 
       VkImageCopy copy_region = m_image_pool.image_copy(src);
@@ -3010,85 +3071,109 @@ namespace vulkan {
       return ret;
     }
 
-    bool setup_commands_for_render_output_pass(int pass_in,
-					       darray<VkCommandBuffer>& command_buffers,
-					       const darray<VkDescriptorSet>& descriptor_sets,
-					       VkPipeline pipeline,
-					       VkPipelineLayout pipeline_layout) {
+    bool commands_render_pass_one(int pass_in,
+				  VkCommandBuffer cmd_buffer,
+				  VkFramebuffer framebuffer,
+				  image_pool::index_type color_attachment_image,
+				  image_pool::index_type out_transfer_image,
+				  const darray<VkDescriptorSet>& descriptor_sets,
+				  VkPipeline pipeline,
+				  VkPipelineLayout pipeline_layout) {
+      bool good = false;
       
-      bool good = c_assert(make_command_buffers(command_buffers));
+      commands_begin_pipeline(cmd_buffer,
+			      pipeline,
+			      pipeline_layout,
+			      descriptor_sets);
 
-      if (good) {			
-	size_t i{0};
+      good = c_assert(ok());
 	    
-	const auto& out_image_indices =
-	  m_pass_ext_data
-	  .at(pass_in)
-	  .out_image_indices();
-
-	const auto& pool_color_attachments =
-	  m_pass_ext_data
-	  .at(pass_in)
-	  .pool_color_attachments();
-
-	const auto& framebuffers =
-	  m_pass_ext_data
-	  .at(pass_in)
-	  .framebuffers();
-		      
-        good = !out_image_indices.empty();
-      
-	while (i < command_buffers.size() && c_assert(good)) {
-	  
-	  good = c_assert(commands_begin_buffer(command_buffers.at(i)));
-	
-	  if (good) {
-	    commands_begin_pipeline(command_buffers[i],
-				    pipeline,
-				    pipeline_layout,
-				    descriptor_sets);
-
-	    good = c_assert(ok());
+      if (good) {
+	commands_start_render_pass(cmd_buffer,
+				   framebuffer,
+				   render_pass(pass_in));
 	    
-	    if (good) {
-	      commands_start_render_pass(command_buffers[i],
-					 framebuffers.at(i),
-					 render_pass(pass_in));
-	    
-	      commands_draw_main(command_buffers.at(i),
-				 pipeline_layout);
+	commands_draw_main(cmd_buffer,
+			   pipeline_layout);
 	  	    
-	      vkCmdEndRenderPass(command_buffers[i]);
+	vkCmdEndRenderPass(cmd_buffer);
 	     
-	      // Transition from color attachment layout to
-	      // transfer src layout	     
-	      good = c_assert(commands_layout_transition(command_buffers.at(i),
-							 pool_color_attachments.at(i)));
+	// Transition from color attachment layout to
+	// transfer src layout	     
+	good = c_assert(commands_layout_transition(cmd_buffer,
+						   color_attachment_image));
 
-	      if (good) {		
-		commands_copy_image(command_buffers.at(i),
-				    pool_color_attachments.at(i),
-				    out_image_indices.at(i));
+	if (good) {		
+	  commands_copy_image(cmd_buffer,
+			      color_attachment_image,
+			      out_transfer_image);
 
-		// This sets up our output image layout transition
-		// that we use to perform the transfer after the render pass
-		// and copy from the color attachment to the
-		// draw buffer is finished is finished
-		good = c_assert(commands_layout_transition(command_buffers.at(i),
-							   out_image_indices.at(i)));
-	      }
-	      
-	    }	   
-	  	      	  
-	    VK_FN(vkEndCommandBuffer(command_buffers[i]));
-	  }
-
-	  i++;
+	  // This sets up our output image layout transition
+	  // that we use to perform the transfer after the render pass
+	  // and copy from the color attachment to the
+	  // draw buffer is finished
+	  good = c_assert(commands_layout_transition(cmd_buffer,
+						     out_transfer_image));
 	}
-      }
+	      
+      }	   
 
       return good;
     }
+
+    bool commands_render_pass_final(int pass_in,
+				    VkCommandBuffer cmd_buffer,
+				    VkFramebuffer framebuffer,
+				    image_pool::index_type prev_out_transfer_image,
+				    image_pool::index_type curr_in_transfer_image,
+				    const darray<VkDescriptorSet>& desc_sets,
+				    VkPipeline pipeline,
+				    VkPipelineLayout layout) {
+      
+      bool good = false;
+      
+      commands_begin_pipeline(cmd_buffer,
+			      pipeline,
+			      layout,
+			      desc_sets);
+
+      good = c_assert(ok());
+	    
+      if (good) {
+	commands_start_render_pass(cmd_buffer,
+				   framebuffer,
+				   render_pass(pass_in));
+
+	commands_copy_image(cmd_buffer,
+			    prev_out_transfer_image,
+			    curr_in_transfer_image);
+	  
+	  // This sets up our output image layout transition
+	  // that we use to perform the transfer after the render pass
+	  // and copy from the color attachment to the
+	  // draw buffer is finished
+	good = c_assert(commands_layout_transition(cmd_buffer,
+						   curr_in_transfer_image));
+	
+	// TODO: add draw quad here
+        ASSERT(false);
+	
+	//commands_draw_main(cmd_buffer,
+	//		   pipeline_layout);
+	  	    
+	vkCmdEndRenderPass(cmd_buffer);
+	     
+	// Transition from color attachment layout to
+	// transfer src layout	     
+
+	good = c_assert(ok());
+	
+	
+	      
+      }	   
+
+      return good;
+    }   
 
     // ---------------------
     // WRT descriptor sets
@@ -3111,8 +3196,10 @@ namespace vulkan {
     // pipeline layout created earlier.
     void setup_command_buffers() {
       if (ok_command_pool()) {
+	//
 	// bind sampler[i] to test_texture_indices[i] via
 	// test_texture_index's array element index (should be i)
+	//
 	darray<texture_pool::index_type> tex_indices(m_test_texture_indices.begin(),
 						     m_test_texture_indices.end());
 	
@@ -3125,8 +3212,7 @@ namespace vulkan {
 	  // perform the image layout transition for
 	  // test_image_indices[i]
 	  //
-	  run_cmds(
-		   [this](VkCommandBuffer cmd_buf) {
+	  run_cmds([this](VkCommandBuffer cmd_buf) {
 		     puts("image_layout_transition");		     
 		     m_ok_scene =
 		       m_image_pool.make_layout_transitions(cmd_buf,
@@ -3139,27 +3225,105 @@ namespace vulkan {
 		   });
 
 	  if (ok_scene()) {
-
-	    darray<VkDescriptorSet> descriptor_sets =
-	      {
-	       m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_samplers]),
-	       m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks])
-	      };
-
 	    
 	    //m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
 
 	    m_vk_command_buffers.resize(m_vk_swapchain_image_views.size());
-	    
-	    m_ok_scene =
-	      c_assert(setup_commands_for_render_output_pass(k_pass_texture2d,
-							     m_vk_command_buffers,
-							     descriptor_sets,
-							     pipeline(k_pass_texture2d),
-							     pipeline_layout(k_pass_texture2d)));
 
+	    bool good = c_assert(make_command_buffers(m_vk_command_buffers));
+	    
+	    if (good) {
+
+	      //
+	      // images and framebuffers for pass one
+	      //
+	      const auto& out_image_indices_tex2d =
+		m_pass_ext_data
+		.at(k_pass_texture2d)
+		.out_image_indices();
+
+	      const auto& pool_color_attachments_tex2d =
+		m_pass_ext_data
+		.at(k_pass_texture2d)
+		.pool_color_attachments();
+
+	      const auto& framebuffers_tex2d =
+		m_pass_ext_data
+		.at(k_pass_texture2d)
+		.framebuffers();
 	      
-	    m_ok_command_buffers = false;
+	      //
+	      // images and framebuffers for pass two
+	      //
+	      
+	      const auto& in_image_indices_test_fbo =
+		m_pass_ext_data
+		.at(k_pass_test_fbo)
+		.in_image_indices();
+
+	      const auto& ext_view_color_attachments_test_fbo =
+		m_pass_ext_data
+		.at(k_pass_test_fbo)
+		.ext_view_color_attachments();
+
+	      const auto& framebuffers_test_fbo =
+		m_pass_ext_data
+		.at(k_pass_test_fbo)
+		.framebuffers();
+
+	      //
+	      // begin the command buffer series;
+	      // we obviously have two render passes,
+	      // and the code corresponding to each pass
+	      // is labeled in inner scope blocks as follows
+	      //
+	      size_t i{0};	      
+	      while (i < m_vk_command_buffers.size() &&
+		     c_assert(good)) {
+		
+		good = c_assert(commands_begin_buffer(m_vk_command_buffers.at(i)));
+	
+		// pass one
+		{	      
+		  good =
+		    good &&
+		    c_assert(!out_image_indices_tex2d.empty()) &&		     
+		    c_assert(commands_render_pass_one(k_pass_texture2d,
+						      m_vk_command_buffers.at(i),
+						      framebuffers_tex2d.at(i),
+						      pool_color_attachments_tex2d.at(i),
+						      out_image_indices_tex2d.at(i),
+						      descriptor_sets({k_descriptor_set_samplers,
+								       k_descriptor_set_uniform_blocks}),
+						      pipeline(k_pass_texture2d),
+						      pipeline_layout(k_pass_texture2d)));		  
+		}
+
+		// pass two
+		{
+		  good =
+		    good &&
+		    c_assert(!in_image_indices_test_fbo.empty()) &&		     
+		    c_assert(commands_render_pass_final(k_pass_test_fbo,
+							m_vk_command_buffers.at(i),
+							framebuffers_test_fbo.at(i),
+							out_image_indices_tex2d.at(i), // previous in
+							in_image_indices_test_fbo.at(i), // new out
+							descriptor_sets({k_descriptor_set_input_attachment,
+									 k_descriptor_set_uniform_blocks}),
+							pipeline(k_pass_test_fbo),
+							pipeline_layout(k_pass_test_fbo)));		  
+		}
+		  		  
+		good =
+		  good &&
+		  c_assert(commands_end_buffer(m_vk_command_buffers.at(i)));		  
+
+		i++;
+	      }
+	    }	    	    	  
+	      
+	    m_ok_command_buffers = good;
 	  }
 	}
       }
@@ -3188,7 +3352,7 @@ namespace vulkan {
 
     void setup_scene() {
       if (ok_semaphores()) {
-						 
+	
 	m_ok_scene = true;
       }
     }
@@ -3196,6 +3360,7 @@ namespace vulkan {
     void setup() {
       setup_presentation();
       setup_descriptor_pool();
+      setup_input_attachment();
       setup_render_pass();
       setup_uniform_block_data();
       setup_texture_data();

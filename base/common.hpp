@@ -371,3 +371,12 @@ public:
     return b;
   }
 };
+
+template <class srcType, class destType>
+static inline darray<destType> c_fmap(const darray<srcType>& in, std::function<destType(const srcType&)> map_fn) {
+  darray<destType> ret{};
+  for (const srcType& x: in) {
+    ret.push_back(map_fn(x));
+  }
+  return ret;
+}
