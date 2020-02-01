@@ -358,8 +358,8 @@ namespace vulkan {
 	i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
 	
 	i_params.usage_flags =
-	  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-	  VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; //|
+	  //	  VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
       
 	i_params.type = VK_IMAGE_TYPE_2D;
 	i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
@@ -413,13 +413,13 @@ namespace vulkan {
 			 params,
 			 {
 			  // initial layout
-			  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			  VK_IMAGE_LAYOUT_UNDEFINED,
 			  // attachment layout
 			  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			  // final layout
-			  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			  // usage
-			  VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+			  //			  VK_IMAGE_USAGE_TRANSFER_DST_BIT |
 			  VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
 			  // source stage;
 			  // we may get better performance by choosing
@@ -456,7 +456,7 @@ namespace vulkan {
       
 	i_params.attachment_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 	
-	i_params.initial_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;	
+	i_params.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;	
 	i_params.final_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
       
 	i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -1977,14 +1977,7 @@ namespace vulkan {
       }
     }
 
-    bool setup_render_pass(int index, render_pass_gen_params params) {
-      m_render_pass_indices[index] =
-	  m_render_pass_pool.make_render_pass(make_device_resource_properties(),
-					      params);       
-
-      return m_render_pass_pool.ok_render_pass(m_render_pass_indices[index]);
-    }
-
+    
     void setup_input_attachment() {
       if (ok_descriptor_pool()) {
 
@@ -2007,6 +2000,14 @@ namespace vulkan {
 	  m_test_descriptor_set_indices.at(k_descriptor_set_input_attachment)
 	  != descriptor_set_pool::k_unset;
       }
+    }
+    
+    bool setup_render_pass(int index, render_pass_gen_params params) {
+      m_render_pass_indices[index] =
+	  m_render_pass_pool.make_render_pass(make_device_resource_properties(),
+					      params);       
+
+      return m_render_pass_pool.ok_render_pass(m_render_pass_indices[index]);
     }
 
     bool setup_render_pass_texture2d() {
@@ -2136,6 +2137,16 @@ namespace vulkan {
 			     VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 			     // dependency flags
 			     0
+			    }
+			   },
+
+			   // input attachment reference info
+			   {
+			    {
+			     // attachment index
+			     0,
+			     // attachment layout
+			     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 			    }
 			   }
 			  });
@@ -2377,9 +2388,9 @@ namespace vulkan {
 				  .make_color_images(make_device_resource_properties(),
 						     make_render_pass_image_params())) &&
 			 
-			 c_assert(m_pass_ext_data[k_pass_texture2d]
-				  .make_out_images(make_device_resource_properties(),
-						   make_render_pass_image_params())) &&
+			 //			 c_assert(m_pass_ext_data[k_pass_texture2d]
+			 //	  .make_out_images(make_device_resource_properties(),
+			 //			   make_render_pass_image_params())) &&
 
 			 c_assert(m_pass_ext_data[k_pass_test_fbo]
 				  .make_in_images(make_device_resource_properties(),
@@ -2874,53 +2885,50 @@ namespace vulkan {
 		       constexpr size_t k_color_image = 0;
 		       constexpr size_t k_depth_image = 1;
 
-		       darray<VkImageView> io_image_views =
-			 m_pass_ext_data
-			 .at(k_pass_texture2d)
-			 .out_image_views(m_image_pool);
+		       darray<VkImageView> color_image_views =
+			 m_image_pool.image_views(m_pass_ext_data
+						  .at(k_pass_texture2d)
+						  .pool_color_attachments());
 
 		       return
 			 c_assert(m_pass_ext_data
 				  .at(k_pass_texture2d)
 				  .make_framebuffers(make_device_resource_properties(),
-										
-						     {// image params 
-						      make_render_pass_image_params(),
-						      // attachment info
-						      {
-						       k_color_image,
-						       k_depth_image,
-						       // io image is output 
-						       true,
-						       // is final pass
-						       false
-						      },
-						      io_image_views.data(),
-						      io_image_views.size(),
-						      render_pass(k_pass_texture2d),
-						      m_depthbuffer.image_view
-						     }))
+						     render_pass_framebuffer_create_params(// image params 
+											   make_render_pass_image_params(),
+											   // attachment info
+											   {
+											    k_color_image,
+											    k_depth_image,
+											    // io image is output 
+											    true,
+											    // is final pass
+											    false
+											   },
+											   color_image_views.data(),
+											   color_image_views.size(),
+											   render_pass(k_pass_texture2d),
+											   m_depthbuffer.image_view)))
 			 &&
 		       
 			 c_assert(m_pass_ext_data
 				  .at(k_pass_test_fbo)
 				  .make_framebuffers(make_device_resource_properties(),									       
-						     {
-						      // image params
-						      make_render_pass_image_params(),
-						      {
-						       k_color_image,
-						       k_depth_image,
-						       // io image is output
-						       false,
-						       // is final pass
-						       true
-						      },
-						      io_image_views.data(),
-						      io_image_views.size(),
-						      render_pass(k_pass_test_fbo),
-						      m_depthbuffer.image_view
-						     }));		       			
+						     render_pass_framebuffer_create_params(// image params
+											   make_render_pass_image_params(),
+											   // attach info
+											   {
+											    k_color_image,
+											    k_depth_image,
+											    // io image is output
+											    false,
+											    // is final pass
+											    true
+											   },
+											   m_vk_swapchain_image_views.data(),
+											   m_vk_swapchain_image_views.size(),
+											   render_pass(k_pass_test_fbo),
+											   m_depthbuffer.image_view)));		       			
 
 		     }
 		    }
@@ -3179,16 +3187,16 @@ namespace vulkan {
 						   color_attachment_image));
 	
 	if (good) {		
-	  commands_copy_image(cmd_buffer,
-			      color_attachment_image,
-			      out_transfer_image);
+	  //commands_copy_image(cmd_buffer,
+	  //		      color_attachment_image,
+	  //		      out_transfer_image);
 
 	  // This sets up our output image layout transition
 	  // that we use to perform the transfer after the render pass
 	  // and copy from the color attachment to the
 	  // draw buffer is finished
-	  good = c_assert(commands_layout_transition(cmd_buffer,
-						     out_transfer_image));
+	//  good = c_assert(commands_layout_transition(cmd_buffer,
+	  //		     out_transfer_image));
 	}
 	      
       }	   
@@ -3243,6 +3251,55 @@ namespace vulkan {
       return good;
     }   
 
+    bool update_input_attachment_descriptor_sets(int pass_index) const {
+
+      const auto& image_indices =
+	m_pass_ext_data
+	.at(pass_index)
+	.in_image_indices();
+
+      const auto& descriptor_image_infos = c_fmap<image_pool::index_type,
+						  VkDescriptorImageInfo>(image_indices,
+									 [this](const image_pool::index_type& i) {
+									   VkDescriptorImageInfo image_info = {};
+									   
+									   image_info.sampler = VK_NULL_HANDLE;
+									   image_info.imageView = m_image_pool.image_view(i);
+									   image_info.imageLayout = m_image_pool.layout_final(i);									   
+									   
+									   return image_info;
+									 });
+      bool ret = !descriptor_image_infos.empty();
+
+      if (ret) {
+	VkWriteDescriptorSet write_desc_set = {};
+	
+	write_desc_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write_desc_set.pNext = nullptr;
+
+	write_desc_set.dstSet = descriptor_set(k_descriptor_set_input_attachment);
+	write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	  
+	write_desc_set.dstBinding = 0;
+	write_desc_set.dstArrayElement = 0;
+	
+	write_desc_set.descriptorCount = descriptor_image_infos.size();
+	write_desc_set.pImageInfo = descriptor_image_infos.data();
+	
+	write_desc_set.pBufferInfo = nullptr;
+	write_desc_set.pTexelBufferView = nullptr;
+
+	
+	vkUpdateDescriptorSets(m_vk_curr_ldevice,
+			       1,
+			       &write_desc_set,
+			       0,
+			       nullptr);
+      }
+      
+      return ret;
+    }
+    
     // ---------------------
     // WRT descriptor sets
     // ---------------------
@@ -3263,6 +3320,7 @@ namespace vulkan {
     // set layout that was associated with the
     // pipeline layout created earlier.
     void setup_command_buffers() {
+      m_image_pool.print_images_info();
       if (ok_command_pool()) {
 	//
 	// bind sampler[i] to test_texture_indices[i] via
@@ -3270,38 +3328,34 @@ namespace vulkan {
 	//
 	darray<texture_pool::index_type> tex_indices(m_test_texture_indices.begin(),
 						     m_test_texture_indices.end());
-	
+
+	// first descriptor set update for textures
 	if (c_assert(m_texture_pool.update_descriptor_sets(m_vk_curr_ldevice,
 							   std::move(tex_indices)))) {
 
-	  vkDeviceWaitIdle(m_vk_curr_ldevice);	
+	  if (c_assert(update_input_attachment_descriptor_sets(k_pass_test_fbo))) {
+	    vkDeviceWaitIdle(m_vk_curr_ldevice);	
 
-	  //
-	  // perform the image layout transition for
-	  // test_image_indices[i]
-	  //
-	  run_cmds([this](VkCommandBuffer cmd_buf) {
-		     puts("image_layout_transition");		     
-		     m_ok_scene =
-		       m_image_pool.make_layout_transitions(cmd_buf,
-							    m_test_image_indices);
-		   },
-		   [this]() {
-		     puts("run_cmds ERROR");
-		     ASSERT(false);
-		     m_ok_scene = false;
-		   });
+	    //
+	    // perform the image layout transition for
+	    // test_image_indices[i]
+	    //
+	    run_cmds([this](VkCommandBuffer cmd_buf) {
+		       puts("image_layout_transition");		     
+		       m_ok_scene =
+			 m_image_pool.make_layout_transitions(cmd_buf,
+							      m_test_image_indices);
+		     },
+	      [this]() {
+		puts("run_cmds ERROR");
+		ASSERT(false);
+		m_ok_scene = false;
+	      });
 
-	  //
-	  // update the descriptor sets here to include the input attachment
-	  // for the shader
-	  //
-
-	  
-	  
-	  if (ok_scene()) {
-	    
-	    //m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
+	    //
+	    // update the descriptor sets here to include the input attachment
+	    // for the shader
+	    //	   	    
 
 	    m_vk_command_buffers.resize(m_vk_swapchain_image_views.size());
 
@@ -3351,15 +3405,17 @@ namespace vulkan {
 		good = c_assert(commands_begin_buffer(m_vk_command_buffers.at(i)));
 	
 		// pass one
-		{	      
+		{
+		  
 		  good =
 		    good &&
-		    c_assert(!out_image_indices_tex2d.empty()) &&		     
+		    //  c_assert(!out_image_indices_tex2d.empty()) &&
+		    c_assert(!pool_color_attachments_tex2d.empty()) &&
 		    c_assert(commands_render_pass_one(k_pass_texture2d,
 						      m_vk_command_buffers.at(i),
 						      framebuffers_tex2d.at(i),
 						      pool_color_attachments_tex2d.at(i),
-						      out_image_indices_tex2d.at(i),
+						      pool_color_attachments_tex2d.at(i),
 						      descriptor_sets({k_descriptor_set_samplers,
 								       k_descriptor_set_uniform_blocks}),
 						      pipeline(k_pass_texture2d),
@@ -3374,7 +3430,8 @@ namespace vulkan {
 		    c_assert(commands_render_pass_final(k_pass_test_fbo,
 							m_vk_command_buffers.at(i),
 							framebuffers_test_fbo.at(i),
-							out_image_indices_tex2d.at(i), // previous in
+							///out_image_indices_tex2d.at(i), // previous in
+							pool_color_attachments_tex2d.at(i),
 							in_image_indices_test_fbo.at(i), // new out
 							descriptor_sets({k_descriptor_set_input_attachment,
 									 k_descriptor_set_uniform_blocks}),
@@ -3388,9 +3445,10 @@ namespace vulkan {
 
 		i++;
 	      }
-	    }	    	    	  
+
+	      m_ok_command_buffers = good;
 	      
-	    m_ok_command_buffers = good;
+	    }	    
 	  }
 	}
       }

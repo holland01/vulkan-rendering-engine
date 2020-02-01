@@ -2,6 +2,7 @@
 
 #include "vk_common.hpp"
 #include "vk_image.hpp"
+#include <iostream>
 
 namespace vulkan {
   // defined in vulkan.cpp
@@ -111,9 +112,10 @@ namespace vulkan {
   };
   
   struct render_pass_gen_params {    
-    darray<rpass_attachment_params> attachment_params{};
-
+    darray<rpass_attachment_params> attachment_params{};    
     darray<VkSubpassDependency> additional_dependencies{}; // optional
+
+    darray<VkAttachmentReference> input_attach_references{}; // optional
     
     rpass_attachment_data make_attachment_data() const {
       rpass_attachment_data data{};
@@ -149,6 +151,14 @@ namespace vulkan {
       }      
 
       return data;
+    }
+
+    // HACK:
+    // we're only using this once for now, so
+    // we'll want to adjust this at somepoint to handle
+    // multiple/more arbitrary input attachments
+    const darray<VkAttachmentReference>& input_attachments() const {
+      return input_attach_references;
     }
     
     bool ok() const {
@@ -250,13 +260,22 @@ namespace vulkan {
 	const VkAttachmentReference* p_depth_ref = attach_data.depth();
 	const VkAttachmentReference* p_color_ref = attach_data.color();
 
+
+	const auto& input_attachments =
+	  params.input_attachments();
+	
+	const VkAttachmentReference* p_input_ref =
+	  input_attachments.empty()
+	  ? nullptr
+	  : input_attachments.data();
+
 	if (c_assert(p_depth_ref != nullptr) &&
 	    c_assert(p_color_ref != nullptr)) {
 	  
 	  VkSubpassDescription color_subpass = {};
 
-	  color_subpass.inputAttachmentCount = 0;
-	  color_subpass.pInputAttachments = nullptr;
+	  color_subpass.inputAttachmentCount = input_attachments.size();
+	  color_subpass.pInputAttachments = p_input_ref;
 	  color_subpass.pResolveAttachments = nullptr;
 
 	  color_subpass.preserveAttachmentCount = 0;
@@ -578,6 +597,8 @@ namespace vulkan {
 	auto spv_vshader = read_file(params.vert_spv_path);
 	auto spv_fshader = read_file(params.frag_spv_path);
 
+	std::cout << params.vert_spv_path << ", " << params.frag_spv_path << std::endl; 
+		
 	ASSERT(!spv_vshader.empty());
 	ASSERT(!spv_fshader.empty());
 	

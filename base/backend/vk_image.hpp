@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vk_common.hpp"
+#include <iostream>
 
 namespace vulkan {
   static inline bool validate_attachment(VkImageUsageFlags usage_flags,
@@ -592,9 +593,17 @@ namespace vulkan {
 
       return c_assert(good);
     }
+
+    void print_images_info() const {
+      for (index_type i{0}; i < length(); ++i) {
+	std::cout << "Image: " SS_HEX(m_images.at(i)) << "\n"
+		  << "..usage flags: " << SS_HEX(m_usage_flags.at(i)) << "\n"; 
+      }
+
+      std::cout << std::endl;
+    }
     
   };
-
   
   struct descriptor_set_gen_params {    
     darray<VkShaderStageFlags> stages;
@@ -638,6 +647,7 @@ namespace vulkan {
     darray<VkDescriptorSet> m_descriptor_sets;
     darray<VkDescriptorSetLayout> m_descriptor_set_layouts;
     darray<VkDescriptorType> m_descriptor_types;
+    darray<darray<VkDescriptorSetLayoutBinding>> m_descriptor_bindings;
 
     index_type new_descriptor_set() {
       index_type index = this->length();
@@ -645,6 +655,7 @@ namespace vulkan {
       m_descriptor_sets.push_back(VK_NULL_HANDLE);
       m_descriptor_set_layouts.push_back(VK_NULL_HANDLE);
       m_descriptor_types.push_back(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+      m_descriptor_bindings.push_back({});
 
       return index;
     }
@@ -700,6 +711,7 @@ namespace vulkan {
 	  m_descriptor_set_layouts[descriptor_set] = desc_set_layout;
 	  m_descriptor_sets[descriptor_set] = desc_set;
 	  m_descriptor_types[descriptor_set] = params.type;
+	  m_descriptor_bindings[descriptor_set] = bindings;
 	}
       }
       ASSERT(ok_descriptor_set(descriptor_set));
