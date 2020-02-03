@@ -2,6 +2,7 @@
 
 #include "vk_common.hpp"
 #include "vk_image.hpp"
+
 #include <iostream>
 
 namespace vulkan {
@@ -15,382 +16,6 @@ namespace vulkan {
   VkPipelineColorBlendStateCreateInfo default_color_blend_state_settings();
 
   VkStencilOpState default_stencilop_state();
-
-  struct rpass_layout_info {
-    VkImageLayout l_initial{VK_IMAGE_LAYOUT_UNDEFINED};
-    VkImageLayout l_attach{VK_IMAGE_LAYOUT_UNDEFINED};
-    VkImageLayout l_final{VK_IMAGE_LAYOUT_UNDEFINED};
-
-    bool ok() const {
-      bool r =
-        !c_in(l_attach, k_invalid_attachment_layouts) &&
-	(l_final != VK_IMAGE_LAYOUT_UNDEFINED);
-      ASSERT(r);
-      return r;
-    }
-  };
-  
-  struct rpass_attachment_params {
-    VkFormat format{VK_FORMAT_UNDEFINED};    
-    
-    VkAttachmentLoadOp load_op{VK_ATTACHMENT_LOAD_OP_LOAD};
-    VkAttachmentStoreOp store_op{VK_ATTACHMENT_STORE_OP_STORE};
-
-    rpass_layout_info layout_info{};
-
-    bool ok() const {
-      bool r =
-	(format != VK_FORMAT_UNDEFINED) &&       
-	layout_info.ok();
-      
-      ASSERT(r);
-      return r;
-    }
-  };
-
-  struct rpass_attachment_data {
-    darray<VkAttachmentDescription> descriptions{};
-    darray<VkAttachmentReference> references{};
-
-    bool is_depth(size_t i) const {
-      return
-	c_in(references.at(i).layout,
-	     {
-	      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-	      VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
-	     });
-    }
-
-    bool is_color(size_t i) const {
-      return references.at(i).layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-
-    bool ok() const {
-      bool depth = false;
-      bool color = false;
-      bool r = false;
-	
-      for (size_t i {0}; i < references.size(); ++i) {
-	if (is_color(i)) {
-	  color = true;
-	}
-
-	if (is_depth(i)) {
-	  depth = true;
-	}
-      }
-
-      r = depth && color;
-      
-      ASSERT(r);
-      return r;
-    }
-    
-    template<bool (rpass_attachment_data::*bool_test)(size_t) const>
-    const VkAttachmentReference* fetch_attachment() const {
-      const VkAttachmentReference* p = nullptr;
-
-      size_t i = 0;
-      while (i < references.size() && p == nullptr) {
-	if (((*this).*(bool_test))(i)) {
-	  p = &references[i];
-	}
-	
-	i++;
-      }
-      
-      return p;
-    }
-
-    const VkAttachmentReference* color() const {
-      return fetch_attachment<&rpass_attachment_data::is_color>();
-    }
-
-    const VkAttachmentReference* depth() const {
-      return fetch_attachment<&rpass_attachment_data::is_depth>();
-    }
-  };
-  
-  struct render_pass_gen_params {    
-    darray<rpass_attachment_params> attachment_params{};    
-    darray<VkSubpassDependency> additional_dependencies{}; // optional
-
-    darray<VkAttachmentReference> input_attach_references{}; // optional
-    
-    rpass_attachment_data make_attachment_data() const {
-      rpass_attachment_data data{};
-      
-      uint32_t index = 0;
-      
-      for (const auto& params: attachment_params) {
-	if (c_assert(params.ok())) {	  
-	  VkAttachmentDescription description{};
-	  VkAttachmentReference reference{};
-
-	  reference.attachment = index;
-	
-	  description.format = params.format;
-	  description.samples = VK_SAMPLE_COUNT_1_BIT;
-	
-	  description.loadOp = params.load_op;
-	  description.storeOp = params.store_op;
-	  
-	  description.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	  description.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
-	  description.initialLayout = params.layout_info.l_initial;
-	  description.finalLayout = params.layout_info.l_final;
-	  
-	  reference.layout = params.layout_info.l_attach;
-	
-	  data.descriptions.push_back(description);
-	  data.references.push_back(reference);
-
-	  index++;
-	}       
-      }      
-
-      return data;
-    }
-
-    // HACK:
-    // we're only using this once for now, so
-    // we'll want to adjust this at somepoint to handle
-    // multiple/more arbitrary input attachments
-    const darray<VkAttachmentReference>& input_attachments() const {
-      return input_attach_references;
-    }
-    
-    bool ok() const {
-      bool r =
-	(!attachment_params.empty()) &&
-	make_attachment_data().ok();
-      
-      ASSERT(r);
-      return r;
-    }
-  };
-
-  class render_pass_pool : index_traits<int16_t, darray<VkRenderPass>> {
-  public:
-    typedef index_traits_this_type::index_type index_type;
-    static constexpr inline index_type k_unset = index_traits_this_type::k_unset;
-
-  private:
-    darray<VkRenderPass> m_render_passes;
-    
-    index_type new_render_pass() {
-      index_type index{this->length()};
-
-      m_render_passes.push_back(VK_NULL_HANDLE);
-
-      return index;
-    }
-    
-  public:
-    render_pass_pool() : index_traits_this_type(m_render_passes)
-    {}
-
-    bool ok_render_pass(index_type index) const {
-      bool r =
-	ok_index(index) &&
-	m_render_passes.at(index) != VK_NULL_HANDLE;
-      ASSERT(r);
-      return r;
-    }
-    
-    void free_mem(VkDevice device) {
-      for (VkRenderPass& render_pass: m_render_passes) {
-	free_device_handle<VkRenderPass, &vkDestroyRenderPass>(device, render_pass);
-      }
-      
-      m_render_passes.clear();
-    }
-    
-    index_type make_render_pass(const device_resource_properties& properties,
-				const render_pass_gen_params& params) {
-
-      index_type render_pass_index{k_unset};
-
-      if (params.ok() &&
-	  properties.ok()) {
-	VkRenderPass render_pass_object{VK_NULL_HANDLE};
-	
-	//	auto colorbuffer = default_colorbuffer_settings(m_vk_khr_swapchain_format.format);
-
-	#if 0
-	VkAttachmentDescription colorbuffer = {};	
-	colorbuffer.format = params.swapchain_format;
-	colorbuffer.samples = VK_SAMPLE_COUNT_1_BIT;
-	colorbuffer.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	colorbuffer.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	
-	colorbuffer.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	colorbuffer.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    
-	colorbuffer.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorbuffer.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-	VkAttachmentReference colorbuffer_ref = {};
-	colorbuffer_ref.attachment = 0;
-	colorbuffer_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;       
-
-	VkAttachmentDescription depthbuffer = {};
-	depthbuffer.format = depthbuffer_data::k_format;
-    
-	depthbuffer.samples = VK_SAMPLE_COUNT_1_BIT;
-	depthbuffer.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	depthbuffer.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-	depthbuffer.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	depthbuffer.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
-	depthbuffer.initialLayout = depthbuffer_data::k_initial_layout;
-	depthbuffer.finalLayout = depthbuffer_data::k_final_layout;
-
-	VkAttachmentReference depthbuffer_ref = {};
-        depthbuffer_ref.attachment = 1;
-        depthbuffer_ref.layout = depthbuffer_data::k_final_layout;
-	#endif
-
-	// find depth and color attachments,
-	// assign accordingly
-        rpass_attachment_data attach_data = params.make_attachment_data();
-
-	const VkAttachmentReference* p_depth_ref = attach_data.depth();
-	const VkAttachmentReference* p_color_ref = attach_data.color();
-
-
-	const auto& input_attachments =
-	  params.input_attachments();
-	
-	const VkAttachmentReference* p_input_ref =
-	  input_attachments.empty()
-	  ? nullptr
-	  : input_attachments.data();
-
-	if (c_assert(p_depth_ref != nullptr) &&
-	    c_assert(p_color_ref != nullptr)) {
-	  
-	  VkSubpassDescription color_subpass = {};
-
-	  color_subpass.inputAttachmentCount = input_attachments.size();
-	  color_subpass.pInputAttachments = p_input_ref;
-	  color_subpass.pResolveAttachments = nullptr;
-
-	  color_subpass.preserveAttachmentCount = 0;
-	  color_subpass.pPreserveAttachments = nullptr;
-
-	  color_subpass.flags = 0;
-
-	  color_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	  
-	  color_subpass.colorAttachmentCount = 1;
-	  color_subpass.pColorAttachments = p_color_ref;
-	  color_subpass.pDepthStencilAttachment = p_depth_ref;
-
-	  std::array<VkSubpassDescription, 1> subpasses =
-	    {
-	     color_subpass
-	    };
-	
-	  constexpr uint32_t k_depth_subpass_index = 0;
-	  constexpr uint32_t k_color_subpass_index = 0;
-
-	  VkSubpassDependency depth_dependency = {};
-	  depth_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	  depth_dependency.dstSubpass = k_depth_subpass_index;
-
-	  depth_dependency.srcStageMask =
-	    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-
-	  depth_dependency.srcAccessMask = 0;
-
-	  depth_dependency.dstStageMask =
-	    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	
-	  depth_dependency.dstAccessMask = depthbuffer_data::k_access_flags;
-	  	
-	  VkSubpassDependency color_dependency = {};
-	  color_dependency.srcSubpass = k_depth_subpass_index;
-	  color_dependency.dstSubpass = k_color_subpass_index;
-
-	  color_dependency.srcStageMask =
-	    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-	    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-
-	  color_dependency.srcAccessMask = 0;
-
-	  color_dependency.dstStageMask =
-	    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-	  color_dependency.dstAccessMask =
-	    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-	    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-	  VkSubpassDependency self_dependency = {};	
-	  self_dependency.srcSubpass = k_color_subpass_index;
-	  self_dependency.dstSubpass = k_color_subpass_index;
-	
-	  self_dependency.srcStageMask =
-	    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-	    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-
-	  self_dependency.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	
-	  self_dependency.dstStageMask =
-	    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-	    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-
-	  self_dependency.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-	  darray<VkSubpassDependency> dependencies =
-	    {
-	     depth_dependency,
-	     color_dependency,
-	     self_dependency
-	    };
-
-	  dependencies.insert(dependencies.end(),
-			      params.additional_dependencies.begin(),
-			      params.additional_dependencies.end());
-	    	
-	  VkRenderPassCreateInfo render_pass_info = {};
-	  render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	  render_pass_info.flags = 0;
-	  render_pass_info.attachmentCount = attach_data.descriptions.size();
-	  render_pass_info.pAttachments = attach_data.descriptions.data();
-
-	  render_pass_info.subpassCount = subpasses.size();
-	  render_pass_info.pSubpasses = subpasses.data();
-	
-	  render_pass_info.dependencyCount = dependencies.size();
-	  render_pass_info.pDependencies = dependencies.data();
-
-	  VK_FN(vkCreateRenderPass(properties.device,
-				   &render_pass_info,
-				   nullptr,
-				   &render_pass_object));
-
-	  if (H_OK(render_pass_object)) {
-	    render_pass_index = new_render_pass();
-	  
-	    m_render_passes[render_pass_index] = render_pass_object;
-	  }
-	}
-      }
-      
-      return render_pass_index;
-    }
-
-    VkRenderPass render_pass(index_type index) const {
-      VK_HANDLE_GET_FN_IMPL(index,
-			    ok_render_pass,
-			    m_render_passes,
-			    VkRenderPass);
-    }
-    
-  };
 
   struct pipeline_layout_gen_params {
     darray<VkDescriptorSetLayout> descriptor_set_layouts;
@@ -478,20 +103,23 @@ namespace vulkan {
   };
   
   struct pipeline_gen_params {
+    VkRenderPass render_pass{VK_NULL_HANDLE};
     VkExtent2D viewport_extent{};
     
     std::string vert_spv_path{};
     std::string frag_spv_path{};
 
     pipeline_layout_pool::index_type pipeline_layout_index{pipeline_layout_pool::k_unset};
-    render_pass_pool::index_type render_pass_index{render_pass_pool::k_unset};
 
+    uint32_t subpass_index{UINT32_MAX};
+    
     bool ok() const {
       bool r =
-	(!vert_spv_path.empty()) &&
-	(!frag_spv_path.empty()) &&
-	(render_pass_index != render_pass_pool::k_unset) &&
-	(pipeline_layout_index != pipeline_layout_pool::k_unset);
+	c_assert(!vert_spv_path.empty()) &&
+	c_assert(!frag_spv_path.empty()) &&
+	c_assert(H_OK(render_pass)) &&
+	c_assert(pipeline_layout_index != pipeline_layout_pool::k_unset) &&
+	c_assert(subpass_index != UINT32_MAX);
 	
       ASSERT(r);	
       return r;
@@ -507,17 +135,14 @@ namespace vulkan {
   private:
     darray<VkPipeline> m_pipelines;
     darray<pipeline_layout_pool::index_type> m_pipeline_layouts;
-    darray<render_pass_pool::index_type> m_render_passes;
 
     pipeline_layout_pool* m_pipeline_layout_pool{nullptr};
-    render_pass_pool* m_render_pass_pool{nullptr};
     
     index_type new_pipeline() {
       index_type index{this->length()};
 
       m_pipelines.push_back(VK_NULL_HANDLE);
-      m_render_passes.push_back(pipeline_layout_pool::k_unset);
-      m_pipeline_layouts.push_back(render_pass_pool::k_unset);
+      m_pipeline_layouts.push_back(pipeline_layout_pool::k_unset);
       
       return index;
     }
@@ -549,12 +174,6 @@ namespace vulkan {
 	m_pipeline_layout_pool = p;
       }
     }
-
-    void set_render_pass_pool(render_pass_pool* p) {
-      if (c_assert(m_render_pass_pool == nullptr)) {
-	m_render_pass_pool = p;
-      }
-    }
     
     void free_mem(VkDevice device) {
       for (VkPipeline& pipeline: m_pipelines) {
@@ -570,11 +189,7 @@ namespace vulkan {
 	
 	c_assert(m_pipeline_layout_pool != nullptr) &&
 	m_pipeline_layout_pool->ok_pipeline_layout(m_pipeline_layouts.at(index)) &&
-
-	c_assert(m_render_pass_pool != nullptr) &&
-	m_render_pass_pool->ok_render_pass(m_render_passes.at(index)) &&
-
-	(m_pipelines.at(index) != VK_NULL_HANDLE);
+	c_assert(H_OK(m_pipelines.at(index)));
 
       ASSERT(r);
       return r;
@@ -585,7 +200,6 @@ namespace vulkan {
       index_type pipeline_index{k_unset};
 
       if (c_assert(m_pipeline_layout_pool != nullptr) &&
-	  c_assert(m_render_pass_pool != nullptr) &&
 	  properties.ok() &&
 	  params.ok()) {
 	
@@ -714,8 +328,8 @@ namespace vulkan {
 	pipeline_info.pColorBlendState = &color_blend_state;
 	pipeline_info.pDynamicState = nullptr;
 	pipeline_info.layout = m_pipeline_layout_pool->pipeline_layout(params.pipeline_layout_index);
-	pipeline_info.renderPass = m_render_pass_pool->render_pass(params.render_pass_index);
-	pipeline_info.subpass = 0;
+	pipeline_info.renderPass = params.render_pass;
+	pipeline_info.subpass = params.subpass_index;
 	pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
 	pipeline_info.basePipelineIndex = -1;
 
@@ -736,7 +350,6 @@ namespace vulkan {
 	if (H_OK(pl_object)) {
 	  pipeline_index = new_pipeline();
 
-	  m_render_passes[pipeline_index] = params.render_pass_index;
 	  m_pipeline_layouts[pipeline_index] = params.pipeline_layout_index;
 	  m_pipelines[pipeline_index] = pl_object;
 	}	

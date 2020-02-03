@@ -611,12 +611,9 @@ namespace vulkan {
     VkDescriptorType type{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
     
     bool ok() const {      
-      bool r =
-	(!stages.empty()) &&
-	(descriptor_counts.size() == stages.size());
-      
-      ASSERT(r);
-      return r;
+      return
+	c_assert(!stages.empty()) &&
+	c_assert(descriptor_counts.size() == stages.size());      
     }
 
     darray<VkDescriptorSetLayoutBinding> make_bindings() const {
@@ -676,19 +673,18 @@ namespace vulkan {
     }
 
     bool ok_descriptor_set(index_type index) const {
-      bool r =
-	ok_index(index) &&
-	(m_descriptor_set_layouts.at(index) != VK_NULL_HANDLE) &&
-	(m_descriptor_sets.at(index) != VK_NULL_HANDLE);
-      ASSERT(r);
-      return r;
+      return
+	c_assert(ok_index(index)) &&
+	c_assert(m_descriptor_set_layouts.at(index) != VK_NULL_HANDLE) &&
+	c_assert(m_descriptor_sets.at(index) != VK_NULL_HANDLE);
     }
     
     index_type make_descriptor_set(const device_resource_properties& properties,
 				   const descriptor_set_gen_params& params) {
-      index_type descriptor_set{k_unset};
+      index_type handle{k_unset};
 
-      if (properties.ok() && params.ok()) {
+      if (c_assert(properties.ok()) &&
+	  c_assert(params.ok())) {
 	VkDescriptorSetLayout desc_set_layout{VK_NULL_HANDLE};
         VkDescriptorSet desc_set{VK_NULL_HANDLE};       
 
@@ -698,25 +694,25 @@ namespace vulkan {
 						     bindings.data(),
 						     bindings.size());
 
-	if (H_OK(desc_set_layout)) {
+	if (c_assert(H_OK(desc_set_layout))) {
 	  desc_set = vulkan::make_descriptor_set(properties.device,
 						 properties.descriptor_pool,
 						 &desc_set_layout,
 						 1);
 	}
 
-	if (H_OK(desc_set)) {
-	  descriptor_set = new_descriptor_set();
+	if (c_assert(H_OK(desc_set))) {
+	  handle = new_descriptor_set();
 	  
-	  m_descriptor_set_layouts[descriptor_set] = desc_set_layout;
-	  m_descriptor_sets[descriptor_set] = desc_set;
-	  m_descriptor_types[descriptor_set] = params.type;
-	  m_descriptor_bindings[descriptor_set] = bindings;
+	  m_descriptor_set_layouts[handle] = desc_set_layout;
+	  m_descriptor_sets[handle] = desc_set;
+	  m_descriptor_types[handle] = params.type;
+	  m_descriptor_bindings[handle] = bindings;
 	}
       }
-      ASSERT(ok_descriptor_set(descriptor_set));
+      ASSERT(ok_descriptor_set(handle));
 
-      return descriptor_set;
+      return handle;
     }
 
     VkDescriptorType descriptor_type(index_type index) const {
@@ -734,11 +730,37 @@ namespace vulkan {
 			    VkDescriptorSet);
     }
 
+    darray<VkDescriptorSet> descriptor_sets(const darray<index_type>& indices) const {
+      return
+	fmap_start
+	fmap_from index_type
+	fmap_to VkDescriptorSet
+	fmap_using indices
+	fmap_via
+	[this](const index_type& index) {
+	  return descriptor_set(index);
+	}
+	fmap_end;
+    }
+
     VkDescriptorSetLayout descriptor_set_layout(index_type index) const {
       VK_HANDLE_GET_FN_IMPL(index,
 			    ok_descriptor_set,
 			    m_descriptor_set_layouts,
 			    VkDescriptorSetLayout);
+    }
+
+    darray<VkDescriptorSetLayout> descriptor_set_layouts(const darray<index_type>& indices) const {
+      return
+        fmap_start
+	fmap_from index_type
+	fmap_to VkDescriptorSetLayout
+	fmap_using indices
+	fmap_via
+	[this](const index_type& index) {
+	  return descriptor_set_layout(index);
+	}
+	fmap_end;	
     }
 
     bool write_buffer(index_type index,

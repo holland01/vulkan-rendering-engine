@@ -364,11 +364,9 @@ public:
   }
 
   bool ok_index(index_type index) const {
-    bool b =
-      index != k_unset &&
-      index < length();
-    ASSERT(b);
-    return b;
+    return
+      c_assert(index != k_unset) &&
+      c_assert(index < length());
   }
 };
 
@@ -380,3 +378,11 @@ static inline darray<destType> c_fmap(const darray<srcType>& in, std::function<d
   }
   return ret;
 }
+
+#define fmap_start c_fmap
+#define fmap_from <
+#define fmap_to ,
+#define fmap_using >(
+#define fmap_via ,
+#define fmap_end )
+

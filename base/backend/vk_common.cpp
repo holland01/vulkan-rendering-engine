@@ -254,6 +254,25 @@ namespace vulkan {
     return write;
   }
 
+  VkWriteDescriptorSet make_write_descriptor_set(VkDescriptorSet descset,
+						 const VkDescriptorImageInfo* image_info,
+						 uint32_t binding,
+						 VkDescriptorType type,
+						 uint32_t descriptor_count) {
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.pNext = nullptr;
+    write.dstSet = descset;
+    write.dstBinding = binding;
+    write.dstArrayElement = 0;
+    write.descriptorCount = descriptor_count;
+    write.descriptorType = type;
+    write.pImageInfo = image_info;
+    write.pBufferInfo = nullptr;
+    write.pTexelBufferView = nullptr;
+    return write;
+  }
+
   bool write_descriptor_set(VkDevice device,
 			    VkBuffer buffer,
 			    VkDeviceSize size,
