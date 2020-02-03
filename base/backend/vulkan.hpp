@@ -1700,7 +1700,7 @@ namespace vulkan {
 					   // type
 					   VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
 					   // descriptor count
-					   1),
+					   1)
 		};
 	    
 	      vkUpdateDescriptorSets(m_vk_curr_ldevice,
@@ -2193,12 +2193,6 @@ namespace vulkan {
 			       1,
 			       &m_vk_vertex_buffer,
 			       &vertex_buffer_ofs);
-
-	vkCmdUpdateBuffer(cmd_buffer,
-			  m_vk_vertex_buffer,
-			  0,
-			  sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
-			  m_vertex_buffer_vertices.data());
       }
 
       vkCmdBindDescriptorSets(cmd_buffer,
@@ -2209,19 +2203,6 @@ namespace vulkan {
 			      descriptor_sets.data(),
 			      0,
 			      nullptr);
-
-      #if 0
-      image_layout_transition().
-	from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-	to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-	for_aspect(depthbuffer_data::k_image_aspect_flags).
-	from_access(0).
-	to_access(depthbuffer_data::k_access_flags).
-	from(depthbuffer_data::k_initial_layout).
-	to(depthbuffer_layouts::primary()).
-	for_image(m_depthbuffer.image).
-	via(cmd_buffer);
-      #endif
     }
 
     void commands_start_render_pass(VkCommandBuffer cmd_buffer,
@@ -2237,15 +2218,20 @@ namespace vulkan {
       render_pass_info.renderArea.offset = {0, 0};
       render_pass_info.renderArea.extent = m_vk_swapchain_extent;
 
-      std::array<VkClearValue, 2> clear_values;
+      std::array<VkClearValue, 3> clear_values;
 	    
       clear_values[0].color.float32[0] = 1.0f;
       clear_values[0].color.float32[1] = 0.0f;
       clear_values[0].color.float32[2] = 0.0f;
       clear_values[0].color.float32[3] = 1.0f;
 
-      clear_values[1].depthStencil.depth = 1.0f;
-      clear_values[1].depthStencil.stencil = 0;
+      clear_values[1].color.float32[0] = 1.0f;
+      clear_values[1].color.float32[1] = 0.0f;
+      clear_values[1].color.float32[2] = 0.0f;
+      clear_values[1].color.float32[3] = 1.0f;
+      
+      clear_values[2].depthStencil.depth = 1.0f;
+      clear_values[2].depthStencil.stencil = 0;
 	    
       // for the color attachment's VK_ATTACHMENT_LOAD_OP_CLEAR
       // operation
@@ -2405,6 +2391,7 @@ namespace vulkan {
     void setup_command_buffers() {
       m_image_pool.print_images_info();
       if (ok_command_pool()) {
+	
 	//
 	// bind sampler[i] to test_texture_indices[i] via
 	// test_texture_index's array element index (should be i)
@@ -2456,6 +2443,12 @@ namespace vulkan {
 	      good = c_assert(commands_begin_buffer(cmd_buff));
 	      
 	      if (good) {
+		vkCmdUpdateBuffer(cmd_buff,
+				  m_vk_vertex_buffer,
+				  0,
+				  sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
+				  m_vertex_buffer_vertices.data());
+		
 		commands_start_render_pass(cmd_buff,
 					   m_vk_swapchain_framebuffers.at(i),
 					   m_vk_render_pass);
@@ -2467,7 +2460,7 @@ namespace vulkan {
 		commands_begin_pipeline(cmd_buff,
 					pipeline(k_pass_texture2d),
 					pipeline_layout(k_pass_texture2d),
-					true, // do bind vertex buffer
+					true,
 				        {
 					 descriptor_set(k_descriptor_set_samplers),
 					 descriptor_set(k_descriptor_set_uniform_blocks)
@@ -2476,6 +2469,9 @@ namespace vulkan {
 		commands_draw_main(cmd_buff,
 				   pipeline_layout(k_pass_texture2d));
 
+
+		vkCmdNextSubpass(cmd_buff, VK_SUBPASS_CONTENTS_INLINE);
+		
 		//
 		// subpass 2: read depth and color attachments
 		//
@@ -2485,9 +2481,23 @@ namespace vulkan {
 					pipeline_layout(k_pass_test_fbo),
 					false, // do not bind vertex buffer
 					m_descriptor_set_pool.descriptor_sets(m_descriptors.attachment_read));		
-
+		
 		commands_draw_quad_no_vb(cmd_buff);
 
+		vkCmdEndRenderPass(cmd_buff);
+#if 0
+		image_layout_transition().
+		  from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+		  to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+		  for_aspect(depthbuffer_data::k_image_aspect_flags).
+		  from_access(0).
+		  to_access(depthbuffer_data::k_access_flags).
+		  from(depthbuffer_data::k_initial_layout).
+		  to(depthbuffer_layouts::primary()).
+		  for_image(m_depthbuffer.image).
+		  via(cmd_buffer);
+#endif
+		
 		good = c_assert(commands_end_buffer(cmd_buff));
 	      }
 	      	      
