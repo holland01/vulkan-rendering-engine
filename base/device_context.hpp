@@ -12,6 +12,9 @@ class device_context {
 private:
   GLFWwindow* glfw_window{nullptr};
 
+  int m_screen_width{0};
+  int m_screen_height{0};
+
   bool initialized{false};
 
   void free_glfw() {
@@ -29,6 +32,15 @@ public:
     free_glfw();
   }
 
+  int width() const { return m_screen_width; }
+  int height() const { return m_screen_height; }
+
+  template <typename T>
+  T width() const { return static_cast<T>(m_screen_width); }
+  
+  template <typename T>
+  T height() const { return static_cast<T>(m_screen_height); }
+  
   const GLFWwindow* window() const { 
     return glfw_window; 
   }
@@ -42,7 +54,7 @@ public:
   }
 
   void glfw_settings() {
-    switch (g_conf.backend) {
+    switch (g_conf.api_backend) {
       case gapi::backend::opengl:
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OPENGL_VERSION_MAJOR);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OPENGL_VERSION_MINOR);
@@ -72,6 +84,9 @@ public:
     bool success = true;
     bool glfw_init = false;
 
+    m_screen_width = screen_width;
+    m_screen_height = screen_height;
+
     if (glfwInit()) {
       glfw_init = true;
 
@@ -100,6 +115,9 @@ public:
             printf("Glew ERROR: %s\n", glewGetErrorString(init_result));
           }
         }
+	else {
+	  success = true;
+	}
 
         if (success) {
           glfwSetKeyCallback(glfw_window, key_callback);

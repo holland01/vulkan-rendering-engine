@@ -17,14 +17,15 @@ OUT = renderer
 
 LIBS := $(shell pkg-config --libs glfw3)
 LIBS += $(shell pkg-config --libs glew)
-LIBS += -lstdc++fs
+LIBS += -lstdc++fs -lvulkan
 
-CPPFLAGS=-I./base -DGLM_ENABLE_EXPERIMENTAL
-CXXFLAGS=-std=c++17 -Wall -Wpedantic -Werror -Wno-unused-function
+CPPFLAGS=-I./base -DGLM_ENABLE_EXPERIMENTAL -DBASE_ENABLE_VULKAN
+CXXFLAGS=-std=c++17 -Wall -Wpedantic -Werror -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable
 CFLAGS=
 
 ifdef DEBUG
-	CXXFLAGS += -g -ggdb -O0 -DBASE_DEBUG=1 -DBASE_ON_DIE_TRIGGER_SEGFAULT
+	CPPFLAGS += -DBASE_DEBUG=1 -DBASE_ON_DIE_TRIGGER_SEGFAULT
+	CXXFLAGS += -g -ggdb -O0 
 	CFLAGS += -g -ggdb -O0
 else
 	CXXFLAGS += -O2

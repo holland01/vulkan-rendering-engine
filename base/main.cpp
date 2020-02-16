@@ -27,6 +27,10 @@
 #include "device_context.hpp"
 #include "gapi.hpp"
 
+#include "backend/vulkan.hpp"
+
+#include "render_loop.hpp"
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -39,23 +43,48 @@
 
 const real_t PI_OVER_6 = (PI_OVER_2 / R(6));
 
+struct render_loop_triangle : public render_loop {
+  vulkan::renderer m_renderer;
+
+  void init();
+  void update();
+  void render();
+};
+
+struct render_loop_complete : public render_loop {
+  void init();
+  void update();
+  void render();
+};
+
+
 bool modules::init() {
   device_ctx = new device_context();
   
   if (device_ctx->init(SCREEN_WIDTH, SCREEN_HEIGHT)) {
-    gpu = new gapi::device();
-
-    framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
-    programs = new module_programs();
-    textures = new module_textures();
-    vertex_buffer = new module_vertex_buffer();
-    models = new module_models();
-    geom = new module_geom();
-
     view = new view_data(SCREEN_WIDTH, SCREEN_HEIGHT);
-    graph = new scene_graph();
+    
+    if (g_conf.api_backend == gapi::backend::opengl) {
+      gpu = new gapi::device();
 
-    uniform_store = new shader_uniform_storage();
+      framebuffer = new framebuffer_ops(SCREEN_WIDTH, SCREEN_HEIGHT);
+      programs = new module_programs();
+      textures = new module_textures();
+      vertex_buffer = new module_vertex_buffer();
+      models = new module_models();
+      geom = new module_geom();
+
+
+      graph = new scene_graph();
+
+      uniform_store = new shader_uniform_storage();
+    }
+
+    switch (g_conf.loop) {
+    case render_loop_type::complete: loop = new render_loop_complete(); break;
+    case render_loop_type::triangle: loop = new render_loop_triangle(); break;
+    default: break;
+    }
   }
 
   return device_ctx->ok();
@@ -63,16 +92,26 @@ bool modules::init() {
 
 void modules::free() {
   if (device_ctx->ok()) {
-    delete view;
-    delete framebuffer;
-    delete uniform_store;
-    delete programs;
-    delete textures;
-    delete geom;
-    delete models;
-    delete graph;
-    delete vertex_buffer;
-    delete gpu;
+    delete loop;
+    
+    switch (g_conf.api_backend) {
+    case gapi::backend::opengl:{
+      delete view;
+      delete framebuffer;
+      delete uniform_store;
+      delete programs;
+      delete textures;
+      delete geom;
+      delete models;
+      delete graph;
+      delete vertex_buffer;
+      delete gpu;
+    } break;
+      
+    case gapi::backend::vulkan:
+      delete view;
+      break;
+    }
   }
 
   delete device_ctx;
@@ -719,31 +758,6 @@ static darray<uint8_t> g_debug_cubemap_buf;
 
 static int screen_cube_index = 0;
 
-static void render() {
-  auto update_pickbuffer = []() -> void {
-    g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
-  };
-
-  switch (g_conf.dmode) {
-  case runtime_config::drawmode_normal:
-  {
-    for (const auto& kv: g_render_passes) {
-      kv.second.apply();
-    }
-    update_pickbuffer();
-  } break;
-
-  case runtime_config::drawmode_debug_mousepick:
-  {
-    const auto& pass_pick = get_render_pass("mousepick");
-    const auto& pass_quad = get_render_pass("rendered_quad");
-    pass_pick.apply();
-    update_pickbuffer();
-    pass_quad.apply();
-  } break;
-  }
-}
-
 
 
 // origin for coordinates is the top left
@@ -1103,7 +1117,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 }
 
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-  ypos = g_m.framebuffer->height - ypos;
+  ypos = g_m.device_ctx->height() - ypos;
 
   if (g_cam_orient.active) {
     double testdx = xpos - g_cam_orient.prev_xpos;
@@ -1118,14 +1132,14 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     g_cam_orient.sdx = (g_cam_orient.dx > 0.0
                                         ? 1.0
                                         : (g_cam_orient.dx == 0.0
-                                           ? 0.0
-                                           : -1.0));
+                                          ? 0.0
+                                          : -1.0));
 
     g_cam_orient.sdy = (g_cam_orient.dy < 0.0
                                         ? 1.0
                                         : (g_cam_orient.dy == 0.0
-                                           ? 0.0
-                                           : -1.0));
+                                          ? 0.0
+                                          : -1.0));
     mat4_t xRot = glm::rotate(mat4_t(R(1.0)),
                               R(g_cam_orient.dy),
                               R3v(1.0, 0.0, 0.0));
@@ -1140,9 +1154,11 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
   g_cam_orient.prev_xpos = xpos;
   g_cam_orient.prev_ypos = ypos;
 
-  if (g_conf.quad_click_cursor) {
-    g_m.uniform_store->set_uniform("unif_ToggleQuadScreenXY",
-                                    vec2_t {g_cam_orient.prev_xpos, g_cam_orient.prev_ypos});
+  if (g_m.uniform_store != nullptr) {
+    if (g_conf.quad_click_cursor) {
+      g_m.uniform_store->set_uniform("unif_ToggleQuadScreenXY",
+                                      vec2_t {g_cam_orient.prev_xpos, g_cam_orient.prev_ypos});
+    }
   }
 }
 
@@ -1218,29 +1234,96 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mmods
   }
 }
 
+void render_loop_triangle::init() {
+  if (m_renderer.init_context()) {
+    for (uint32_t i = 0; i < m_renderer.num_devices(); ++i) {
+      m_renderer.print_device_info(i);
+    }
+
+    m_renderer.set_physical_device(0);
+    m_renderer.setup();
+  }
+    
+  if (m_renderer.ok_semaphores()) {
+    // moves the camera backward 5 units on the z axis - right handed system
+    g_m.view->position = R3v(0, 0, 5);
+    g_m.view->reset_proj();
+    post_init();
+  }
+}
+
+void render_loop_triangle::update() {
+  glfwPollEvents();
+  
+  g_m.view->update(g_cam_move_state);
+
+  m_renderer.set_world_to_view_transform(g_m.view->view());
+  m_renderer.set_view_to_clip_transform(g_m.view->proj);
+}
+
+void render_loop_triangle::render() {
+  m_renderer.render();
+}
+
+void render_loop_complete::init() {
+  init_api_data();
+  init_render_passes();
+  post_init();
+}
+
+void render_loop_complete::update() {
+  glfwPollEvents();
+  
+  g_m.view->update(g_cam_move_state);
+
+  if (g_obj_manip->has_select_model_state()) {
+    g_obj_manip->update_select_model_state();
+  }
+}
+
+void render_loop_complete::render() {
+  auto update_pickbuffer = []() -> void {
+			     g_m.graph->pickbufferdata = g_m.framebuffer->fbos->dump(g_m.graph->pickfbo);
+			   };
+
+  switch (g_conf.dmode) {
+  case runtime_config::drawmode_normal:
+    {
+      for (const auto& kv: g_render_passes) {
+        kv.second.apply();
+      }
+      update_pickbuffer();
+    } break;
+
+  case runtime_config::drawmode_debug_mousepick:
+    {
+      const auto& pass_pick = get_render_pass("mousepick");
+      const auto& pass_quad = get_render_pass("rendered_quad");
+      pass_pick.apply();
+      update_pickbuffer();
+      pass_quad.apply();
+    } break;
+  }
+
+  glfwSwapBuffers(g_m.device_ctx->window());
+}
+
+
 int main(void) {
   g_key_states.fill(false);
 
   if (g_m.init()) {
     maybe_enable_cursor(g_m.device_ctx->window());
+    
+    g_m.loop->init();
 
-    init_api_data();
-    init_render_passes();
-
-    while (!glfwWindowShouldClose(g_m.device_ctx->window())) {
-      g_m.view->update(g_cam_move_state);
-
-      if (g_obj_manip->has_select_model_state()) {
-        g_obj_manip->update_select_model_state();
-      }
-
-      render();
-      glfwSwapBuffers(g_m.device_ctx->window());
-      glfwPollEvents();
+    while (g_m.loop->running()) {
+      g_m.loop->update();
+      g_m.loop->render();
     }
   }
 
   g_m.free();
-
+  
   return 0;
 }

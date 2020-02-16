@@ -1,4 +1,17 @@
 #pragma once
+#if !defined(BASE_ENABLE_VULKAN)
+#define BASE_ENABLE_VULKAN
+#endif // BASE_ENABLE_VULKAN
+
+// We need to include the Vulkan headers here,
+// since GLFW3 contains vulkan specific
+// information that's dependent on the inclusion of a 
+// Vulkan header. At some point, reorganizing header includes
+// will definitely be the way to go. For now,
+// this works.
+#if defined(BASE_ENABLE_VULKAN)
+  #include <vulkan/vulkan.h>
+#endif // BASE_USE_VULKAN
 
 #include <GL/glew.h>
 #include <GL/glu.h>
@@ -26,11 +39,14 @@
 #include <algorithm>
 #include <limits>
 #include <sstream>
+#include <iomanip>
 #include <array>
-
+#include <functional>
 #include <stdint.h>
+#include <initializer_list>
 
 #include "util.hpp"
+
 
 namespace fs = std::experimental::filesystem;
 
@@ -53,6 +69,10 @@ namespace fs = std::experimental::filesystem;
 
 #define AS_STRING_SS(v) #v << ": " << v
 #define SEP_SS << ", " <<
+
+#define SS_HEX(value) "0x" << std::uppercase << std::setfill('0') << std::setw((sizeof(value)) << 1) << std::hex << (value) << std::dec
+
+#define SS_HEX_NAME(value) #value << ":" << SS_HEX(value)
 
 #define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
 
@@ -89,6 +109,7 @@ using darray = std::vector<T>;
 
 #define R4v(x,y,z,w) vec4_t{R(x), R(y), R(z), R(w)}
 #define R3v(x,y,z) vec3_t{R(x), R(y), R(z)}
+#define R2v(x,y) vec2_t{R(x), R(y)}
 
 #define PI_OVER_2 glm::half_pi<real_t>()
 #define PI glm::pi<real_t>()
@@ -153,6 +174,8 @@ enum class backend : uint8_t {
 
 class device_context;
 
+struct render_loop;
+
 struct modules {
   framebuffer_ops* framebuffer {nullptr};
   module_programs* programs {nullptr};
@@ -165,17 +188,23 @@ struct modules {
   view_data* view {nullptr};
   device_context* device_ctx {nullptr};
   gapi::device* gpu {nullptr};
+  render_loop* loop{nullptr};
 
   bool init();
   void free();
 } extern g_m;
+
+enum class render_loop_type {
+  complete,
+  triangle
+};
 
 struct runtime_config {
   enum drawmode {
     drawmode_normal,
     drawmode_debug_mousepick
   };
-
+ 
 #if CONFIG_QUAD_CLICK_CURSOR == 1
   bool quad_click_cursor {true};
 #else
@@ -185,6 +214,8 @@ struct runtime_config {
   bool fullscreen {false};
 
   gapi::backend api_backend{gapi::backend::vulkan};
+
+  render_loop_type loop {render_loop_type::triangle};
 
   drawmode dmode {drawmode_normal};
 } extern g_conf;
@@ -203,9 +234,19 @@ static inline mat4_t m4i() {
   return mat4_t {R(1)};
 }
 
-
-
 static const real_t k_to_rgba8 = R(1) / R(255);
+
+template <typename T>
+static inline bool c_in(const T& needle, const darray<T>& haystack) {
+  bool k = false;
+  for (const T& x: haystack) {
+    if (needle == x) {
+      k = true;
+      break;
+    }
+  }
+  return k;
+}
 
 template <typename T>
 static inline bool vec_contains(const std::vector<T>& v, const T& t) {
@@ -223,6 +264,11 @@ static inline std::vector<T> vec_join(const std::vector<T>& a, const std::vector
 template <typename T>
 static inline std::vector<T> operator+(const std::vector<T>& a, const std::vector<T>& b) {
   return vec_join(a, b);
+}
+
+template <typename T>
+static inline const T* null_if_empty(const std::vector<T>& v) {
+  return v.empty() ? nullptr : v.data();
 }
 
 template <class Type>
@@ -249,3 +295,94 @@ static inline bool reqeps(real_t a, real_t b) {
   real_t d = a - b;
   return -e <= d && d <= e;
 }
+
+template <class intType>
+static inline intType next_power_2(const intType& x) {
+  static_assert(std::is_integral<intType>::value, "type must be integral");
+
+  constexpr size_t max_bits = sizeof(x) * 8;
+  constexpr size_t term_bits = max_bits / 2;
+  
+  intType y{x};
+  y--;
+
+  intType iter{1};
+
+  while (iter <= term_bits) {
+    y = y | (y >> iter);
+    iter <<= 1;
+  }
+
+  y++;
+  
+  return y;
+}
+
+template <class intType>
+static inline bool is_power_2(const intType& x) {
+  return x == next_power_2(x);
+}
+
+template <class numType>
+static constexpr inline numType num_max() {
+  return std::numeric_limits<numType>::max();
+}
+
+template <class intType, class structType, template <class T> class containerType>
+static intType sum(const containerType<structType>& v, std::function<intType (const structType&)> f) {
+  intType k = intType(0);
+  for (const auto& u: v) {
+    k += f(u);
+  }
+  return k;
+}
+
+template <class intType, class sizeDriverType>
+class index_traits {
+private:
+  const sizeDriverType& m_size_driver;
+  
+public:
+  typedef intType index_type;
+  typedef index_traits<intType, sizeDriverType> index_traits_this_type;
+
+  index_traits(const sizeDriverType& driver)
+    : m_size_driver{driver}
+  {}
+  
+  static_assert(std::is_integral<index_type>::value, "indices must be an integer type.");
+  static constexpr inline index_type k_unset = static_cast<index_type>(-1);
+
+  template <class T>
+  T length() const {
+    static_assert(std::is_integral<T>::value, "T must be an integer.");
+    return static_cast<T>(m_size_driver.size());
+  }
+
+  index_type length() const {
+    return length<index_type>();
+  }
+
+  bool ok_index(index_type index) const {
+    return
+      c_assert(index != k_unset) &&
+      c_assert(index < length());
+  }
+};
+
+template <class srcType, class destType>
+static inline darray<destType> c_fmap(const darray<srcType>& in, std::function<destType(const srcType&)> map_fn) {
+  darray<destType> ret{};
+  for (const srcType& x: in) {
+    ret.push_back(map_fn(x));
+  }
+  return ret;
+}
+
+#define fmap_start c_fmap
+#define fmap_from <
+#define fmap_to ,
+#define fmap_using >(
+#define fmap_via ,
+#define fmap_end )
+

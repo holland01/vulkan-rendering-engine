@@ -1,4 +1,8 @@
-#include "util.hpp"
+#include "common.hpp"
+#include "device_context.hpp"
+#include "render_loop.hpp"
+
+#include <fstream>
 
 #if defined(BASE_DEBUG)
 unsigned long long g_log_mask = 
@@ -17,12 +21,13 @@ static std::vector<std::string> g_msg_cache;
 static constexpr bool g_cache_disabled = true;
 
 static void die() {
-#if defined(BASE_ON_DIE_TRIGGER_SEGFAULT)
-  volatile unsigned* tmp = 0x0;
-  *tmp = 1;
-#else 
-  exit(EXIT_FAILURE);
-#endif
+  if (g_m.loop != nullptr) {
+    write_logf("%s", "Terminating main loop...");
+    g_m.loop->set_running(false);
+  }
+  else {
+    exit(1);
+  }
 }
 
 static void maybe_print(std::vector<std::string>& cache, const std::string& msg, int line, const char* func, const char* file) {
@@ -85,4 +90,24 @@ void report_gl_error(GLenum err, int line, const char* func, const char* file,
 
     die();
   }
+}
+
+std::vector<uint8_t> read_file(const std::string& path) {
+  // std::ios::ate opens the file already seeked
+  // to the very end
+  std::ifstream file(path, std::ios::ate | std::ios::binary);
+
+  std::vector<uint8_t> ret{};
+  
+  if (file.is_open()) {
+    size_t fsz = file.tellg();
+
+    ret.resize(fsz);
+    
+    file.seekg(0);
+    file.read(reinterpret_cast<char*>(ret.data()), fsz);
+    file.close();
+  }
+
+  return ret;
 }

@@ -13,6 +13,8 @@
 #include <inttypes.h>
 
 
+#include <vector>
+
 // We use the set of flags shown here to group/categorize
 // arbitrary log function calls. For any flag defined, simply add it 
 // as a bitwise OR to the variable g_log_mask (initialized in base/util.cpp).
@@ -28,6 +30,11 @@ enum {
 };
 
 #define write_logf(...) logf_impl(__LINE__, __func__, __FILE__, __VA_ARGS__) 
+
+#define LOGFN puts(__func__)
+
+#define LOGI32(x) printf("%s = %" PRId32 "\n", #x, x)
+#define LOGP(x) printf("%s = %p\n", #x, static_cast<void*>(x))
 
 #define CLOG(flag, ...) do { if ((g_log_mask & (flag)) != 0) { write_logf("CLOG|" __VA_ARGS__); } } while (0)
 #define CLOG_CODE(code) code
@@ -53,6 +60,15 @@ void assert_impl(bool cond,
                  const char* file,
                  const char* expr);
 
+static inline bool c_assert_impl(bool cond,
+				 int line,
+				 const char* func,
+				 const char* file,
+				 const char* expr) { assert_impl(cond, line, func, file, expr);
+  return cond; }
+
+#define c_assert(cond) c_assert_impl((cond), __LINE__, __func__, __FILE__, #cond)
+
 void logf_impl(int line,
                const char* func,
                const char* file,
@@ -64,6 +80,10 @@ void report_gl_error(GLenum err,
                      const char* func,
                      const char* file,
                      const char* expr);
+
+std::vector<uint8_t> read_file(const std::string& path); 
+
+
 
 // https://stackoverflow.com/a/8498694
 //
