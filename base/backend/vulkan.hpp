@@ -22,8 +22,11 @@
 #include <iomanip>
 #include <iostream>
 #include <functional>
+#include <variant>
 
 #include <glm/gtc/matrix_transform.hpp>
+
+#define STOP(x) std::cout << "made it" << std::endl; if (false) { x } 
 
 namespace vulkan {
   struct image_requirements;
@@ -43,37 +46,6 @@ namespace vulkan {
   depthbuffer_data make_depthbuffer(const device_resource_properties& properties,
 				    uint32_t width,
 				    uint32_t height);
-
-  static inline constexpr bool k_test_multipass = false;
-
-  enum class vk_test_type
-    {
-     basic_shapes = 0,
-     skybox,
-     test_fbo
-    };
-
-  static inline constexpr vk_test_type k_vk_test = vk_test_type::test_fbo;
-
-  using vk_test_fn_t =
-    std::function<bool()>;
-  
-  struct vk_test_params {
-    vk_test_type test;
-    vk_test_fn_t fn;
-    
-  };
-  
-  static inline bool vk_match(const darray<vk_test_params>& params) {
-    bool ret = false;
-    for (const auto& p: params) {
-      if (p.test == k_vk_test) {
-	ret = p.fn();
-	break;
-      }
-    }
-    return ret;
-  }
   
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
@@ -94,6 +66,34 @@ namespace vulkan {
     darray<VkPresentModeKHR> present_modes;
   };
 
+  struct framebuffer_attachments {
+
+    struct color_depth_pair {
+      image_pool::index_type color_attachment;
+      image_pool::index_type depth_attachment;
+    };
+    
+    darray<color_depth_pair> data{};
+
+    image_pool* p_image_pool{nullptr};
+    
+    VkImageView image_view(image_pool::index_type image) const {
+      VkImageView img{VK_NULL_HANDLE};
+      if (c_assert(p_image_pool != nullptr)) {
+	img = p_image_pool->image_view(image);
+      }
+      return img;
+    }
+    
+    VkImageView color_image_view(int index) const {
+      return image_view(data.at(index).color_attachment);
+    }
+
+    VkImageView depth_image_view(int index) const {
+      return image_view(data.at(index).depth_attachment);
+    }
+  };
+
   struct transform_data {
     mat4_t view_to_clip{R(1.0)};
     mat4_t world_to_view{R(1.0)};    
@@ -107,326 +107,13 @@ namespace vulkan {
     vec3_t axes;
     real_t rad;
   };
+
+  struct descriptors {
+    darray<descriptor_set_pool::index_type> attachment_read;
+  };
   
   using vertex_list_t = darray<vertex_data>;
-  
-  struct pass_create_params {
-    image_pool* pool{nullptr};
-    render_pass_pool* rpass_pool{nullptr};
-
-    render_pass_pool::index_type render_pass{render_pass_pool::k_unset};
     
-    uint32_t width{UINT32_MAX};
-    uint32_t height{UINT32_MAX};
-    
-    const darray<VkImageView>& next_pass_image_views;
-    
-    VkImageView depth_image_view{VK_NULL_HANDLE};
-    VkFormat format{VK_FORMAT_UNDEFINED};
-
-    bool ok() const {
-      bool r =
-	(pool != nullptr) &&
-	(rpass_pool != nullptr) &&
-	(width != UINT32_MAX) &&
-	(height != UINT32_MAX) &&
-	(!next_pass_image_views.empty()) &&
-	(depth_image_view != VK_NULL_HANDLE) &&
-	(rpass_pool->ok_render_pass(render_pass)) &&
-	(format != VK_FORMAT_UNDEFINED);
-      
-      ASSERT(r);
-      return r;
-    }
-  };
-
-  struct render_pass_image_create_params {
-    image_pool* p_image_pool{nullptr};
-    size_t num_images{num_max<size_t>()};
-    uint32_t width{UINT32_MAX};
-    uint32_t height{UINT32_MAX};
-    VkFormat format{VK_FORMAT_UNDEFINED};
-    
-    bool ok() const {
-      bool r =
-	(p_image_pool != nullptr) &&
-	(num_images != num_max<size_t>()) &&
-	(width != UINT32_MAX) &&
-	(height != UINT32_MAX) &&
-	(format != VK_FORMAT_UNDEFINED);      
-      ASSERT(r);      
-      return r;
-    }
-  };
-
-  using attachment_list_t =
-    std::array<VkImageView, 3>;
-
-  struct render_pass_framebuffer_create_params;
-  
-  using attachment_setup_fn_type =
-    std::function<void(size_t framebuffer_index,
-		       attachment_list_t& attachments,
-		       const darray<image_pool::index_type>& images,
-		       const render_pass_framebuffer_create_params& self
-		       )>;
-
-  struct attachment_index_info {
-    enum class image_source
-      {
-       pool,
-       swapchain
-      };
-
-    image_source color_source;
-    
-    int io_image{0};
-    int color_image{1};
-    int depth_image{2};
-
-    bool io_is_output{true}
-    bool is_final_pass{false};
-  }; 
-  
-  struct render_pass_framebuffer_create_params {
-    const render_pass_image_create_params& image_params;
-    const darray<VkImageView>& io_image_views;
-    const attachment_index_info attach_info;
-    
-    VkRenderPass render_pass{VK_NULL_HANDLE};
-    VkImageView  depth_image_view{VK_NULL_HANDLE};
-
-    attachment_setup_fn_type fn_attachment_setup;
-
-    render_pass_framebuffer_create_params(const render_pass_image_create_params& image_params,
-					  const darray<VkImageView>& io_image_views,
-					  const attachment_index_info& attach_info,
-					  VkRenderPass render_pass,
-					  VkImageView  depth_image_view,
-					  attachment_setup_fn_type fn_attachment_setup)
-      
-      : image_params{image_params},
-	io_image_views{io_image_views},
-	attach_info{attach_index_info},
-	render_pass{render_pass},
-	depth_image_view{depth_image_view},
-	fn_attachment_setup{fn_attachment_setup}
-    {}
-
-    bool ok() const {
-      bool r =
-        image_params.ok() &&
-	(render_pass != VK_NULL_HANDLE) &&
-	(depth_image_view != VK_NULL_HANDLE) &&
-	(fn_attachment_setup != nullptr) &&
-	(!io_image_views.empty());
-      ASSERT(r);
-      return r;
-    }
-  };
-  
-  class render_pass_external_data {
-  private:  
-    darray<image_pool::index_type> m_images; // color attachment images
-    darray<image_pool::index_type> m_out_images_opt; // for transfer (optional)
-    darray<VkFramebuffer> m_framebuffers;
-    
-    size_t m_expected_count{num_max<size_t>()};
-    
-  public:
-    bool make_images(const device_resource_properties& properties,
-		     const render_pass_image_create_params& params) {
-      bool good =
-	properties.ok() &&
-	params.ok();
-      
-      if (good) {
-	m_expected_count = params.num_images;
-	
-	image_gen_params i_params{};
-
-	i_params.memory_property_flags =
-	  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-	i_params.format = params.format;
-      
-	i_params.attachment_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	i_params.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-	i_params.final_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      
-	i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
-	i_params.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-      
-	i_params.type = VK_IMAGE_TYPE_2D;
-	i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
-	i_params.aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
-      
-	i_params.source_pipeline_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	i_params.dest_pipeline_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      
-	i_params.source_access_flags = 0;
-
-	i_params.dest_access_flags =
-	  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-	  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-	  VK_ACCESS_TRANSFER_READ_BIT;
-
-	i_params.width = params.width;
-	i_params.height = params.height;
-	i_params.depth = 1;
-            
-	m_images.resize(m_expected_count);
-      
-	for (size_t i = 0; i < m_images.size() && good; ++i) {
-	  m_images[i] = params.p_image_pool->make_image(properties,
-							i_params);
-
-	  good = params.p_image_pool->ok_image(m_images[i]);
-	}
-      }
-
-      return good;
-    }
-
-    bool make_out_images(const device_resource_properties& properties) {
-            bool good =
-	properties.ok() &&
-	params.ok();
-      
-      if (good) {
-	m_expected_count = params.num_images;
-	
-	image_gen_params i_params{};
-
-	i_params.memory_property_flags =
-	  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-	i_params.format = params.format;
-      
-	i_params.attachment_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-	i_params.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-	i_params.final_layout = VK_IMAGE_LAYOUT_TRANSFER_DEST_OPTIMAL;
-      
-	i_params.tiling = VK_IMAGE_TILING_OPTIMAL;
-	i_params.usage_flags =
-	  VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-	  VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-      
-	i_params.type = VK_IMAGE_TYPE_2D;
-	i_params.view_type = VK_IMAGE_VIEW_TYPE_2D;
-	i_params.aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
-      
-	i_params.source_pipeline_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	i_params.dest_pipeline_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      
-	i_params.source_access_flags = 0;
-
-	i_params.dest_access_flags =
-	  VK_ACCESS_TRANSFER_WRITE_BIT | 
-	  VK_ACCESS_TRANSFER_READ_BIT;
-
-	i_params.width = params.width;
-	i_params.height = params.height;
-	i_params.depth = 1;
-            
-	m_images.resize(m_expected_count);
-      
-	for (size_t i = 0; i < m_images.size() && good; ++i) {
-	  m_images[i] = params.p_image_pool->make_image(properties,
-							i_params);
-
-	  good = params.p_image_pool->ok_image(m_images[i]);
-	}
-      }
-
-      return good;
-    }
-
-    darray<VkImageView> out_image_views(image_pool* pool) const {
-      darray<VkImageView> ret{};
-      for (auto i: m_out_images) {
-	ret.push_back(pool->image_view(i));
-      }
-      return ret;
-    }
-
-    bool make_framebuffers(const device_resource_properties& properties,
-			   const render_pass_framebuffer_create_params& params) {
-
-      bool good =
-	properties.ok() &&
-	params.ok() &&
-	(m_expected_count != num_max<size_t>() && m_expected_count != 0) &&
-	(((!m_images.empty()) && (m_images.size() == m_expected_count))
-	 ||
-	 params.attach_info.is_final_pass);
-
-      if (good) {      
-	std::array<VkImageView, 3> attachments{};
-	attachments.fill(VK_NULL_HANDLE);
-      
-	VkFramebufferCreateInfo framebuffer_info = {};
-      
-	framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	framebuffer_info.pNext = nullptr;
-	
-	framebuffer_info.flags = 0;
-
-	framebuffer_info.renderPass = params.render_pass;
-
-	framebuffer_info.attachmentCount = attachments.size();
-
-	framebuffer_info.width = params.image_params.width;
-	framebuffer_info.height = params.image_params.height;
-	framebuffer_info.layers = 1;
-
-	m_framebuffers.resize(m_expected_count, VK_NULL_HANDLE);
-       	
-	for (size_t i = 0; i < m_framebuffers.size() && good; ++i) {
-	  params.fn_attachment_setup(i,
-				     attachments,
-				     m_images,
-				     params);
-	
-	  framebuffer_info.pAttachments = attachments.data();
-	  
-	  VK_FN(vkCreateFramebuffer(properties.device,
-				    &framebuffer_info,
-				    nullptr,
-				    &m_framebuffers[i]));
-
-	  good = H_OK(m_framebuffers[i]);
-	}
-
-	if (!good) {
-	  free_mem(properties.device);	
-	}
-      }
-
-      return good;
-    }    
-
-    void free_mem(VkDevice device) {
-      for (VkFramebuffer& fb: m_framebuffers) {
-	free_device_handle<VkFramebuffer, &vkDestroyFramebuffer>(device,
-								 fb);
-      }
-
-      m_framebuffers.clear();
-      m_images.clear();
-    }
-    
-    bool ok() const {
-      bool r =
-	(m_expected_count != num_max<size_t>()) &&
-	(m_images.size() == m_expected_count) &&
-	(m_images.size() == m_framebuffers.size());
-      
-      ASSERT(r);
-      return r;
-    }
-  };
-  
   class renderer {    
     uint32_t m_instance_count{0};   
     
@@ -442,6 +129,10 @@ namespace vulkan {
 
     darray<VkCommandBuffer> m_vk_command_buffers;   
 
+    framebuffer_attachments m_framebuffer_attachments;
+
+    descriptors m_descriptors;
+    
     descriptor_set_pool m_descriptor_set_pool{};
     
     image_pool m_image_pool{};
@@ -449,8 +140,6 @@ namespace vulkan {
     texture_pool m_texture_pool{};
 
     uniform_block_pool m_uniform_block_pool{};
-
-    render_pass_pool m_render_pass_pool{};
 
     pipeline_layout_pool m_pipeline_layout_pool{};
 
@@ -480,7 +169,9 @@ namespace vulkan {
       model_triangle(R3v(-2.25, 0, 0)) + // offset: 0, length: 3
       model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) + // offset: 3, length: 3
       model_cube(k_mirror_cube_center, R3(1), k_mirror_cube_size) + // offset: 6, length: 36
-      model_cube(k_room_cube_center, R3(1), k_room_cube_size); // offset: 42, length: 36
+      model_cube(k_room_cube_center,
+		 R3(1),
+		 k_room_cube_size); // offset: 42, length: 36
       
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
@@ -494,6 +185,8 @@ namespace vulkan {
 
     VkPhysicalDevice m_vk_curr_pdevice{VK_NULL_HANDLE};
 
+    VkRenderPass m_vk_render_pass{VK_NULL_HANDLE};
+    
     VkDevice m_vk_curr_ldevice{VK_NULL_HANDLE};
 
     VkQueue m_vk_graphics_queue{VK_NULL_HANDLE};
@@ -508,13 +201,13 @@ namespace vulkan {
     VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
     VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
 
-    std::array<image_pool::index_type, 2> m_test_image_indices =
+    darray<image_pool::index_type> m_test_image_indices =
       {
        image_pool::k_unset,
        image_pool::k_unset
       };
     
-    std::array<texture_pool::index_type, 2> m_test_texture_indices =
+    darray<texture_pool::index_type> m_test_texture_indices =
       {
        texture_pool::k_unset,
        texture_pool::k_unset
@@ -534,31 +227,19 @@ namespace vulkan {
     static constexpr inline int k_descriptor_set_samplers = 0;
     static constexpr inline int k_descriptor_set_uniform_blocks = 1; 
     static constexpr inline int k_descriptor_set_sampler_cubemap = 2;
+    static constexpr inline int k_descriptor_set_input_attachment = 3;
     
-    std::array<descriptor_set_pool::index_type, 3> m_test_descriptor_set_indices =
+    darray<descriptor_set_pool::index_type> m_test_descriptor_set_indices =
       {
        descriptor_set_pool::k_unset,  // pipeline 0
        descriptor_set_pool::k_unset,  // pipeline 0, pipeline 1
-       descriptor_set_pool::k_unset   // pipeline 1
+       descriptor_set_pool::k_unset,  // pipeline 1
+       descriptor_set_pool::k_unset
       };   
     
     static constexpr inline int k_pass_texture2d = 0;
     static constexpr inline int k_pass_cubemap = 1;
-    static constexpr inline int k_pass_test_fbo = 2; // test FBO pass
-
-    darray<render_pass_external_data> m_pass_ext_data =
-      {
-       render_pass_external_data{},
-       render_pass_external_data{},
-       render_pass_external_data{}
-      }
-    
-    darray<render_pass_pool::index_type> m_render_pass_indices =
-      {
-       render_pass_pool::k_unset,
-       render_pass_pool::k_unset,
-       render_pass_pool::k_unset
-      };
+    static constexpr inline int k_pass_test_fbo = 2; // test FBO pass   
 
     darray<pipeline_layout_pool::index_type> m_pipeline_layout_indices =
       {
@@ -577,6 +258,7 @@ namespace vulkan {
     bool m_ok_present{false};
     bool m_ok_descriptor_pool{false};
     bool m_ok_render_pass{false};
+    bool m_ok_attachment_read_descriptors{false};
     bool m_ok_uniform_block_data{false};
     bool m_ok_texture_data{false};
     bool m_ok_depthbuffer_data{false};
@@ -703,11 +385,6 @@ namespace vulkan {
 		   scale,
 		   {});
     }
-
-    VkRenderPass render_pass(int index) const {
-      return
-	m_render_pass_pool.render_pass(m_render_pass_indices.at(index));
-    }
     
     VkPipelineLayout pipeline_layout(int index) const {
       return
@@ -719,10 +396,25 @@ namespace vulkan {
 	m_pipeline_pool.pipeline(m_pipeline_indices.at(index));
     }
 
+    VkDescriptorSet descriptor_set(int index) const {
+      return
+	m_descriptor_set_pool
+	.descriptor_set(m_test_descriptor_set_indices.at(index));
+    }
+
+    darray<VkDescriptorSet> descriptor_sets(const darray<descriptor_set_pool::index_type>& indices) const {
+      return c_fmap<descriptor_set_pool::index_type,
+		    VkDescriptorSet>(indices,
+				     [this](const descriptor_set_pool::index_type& i)
+				     {
+				       return descriptor_set(i);
+				     });
+    }
+
     VkDescriptorSetLayout descriptor_set_layout(int index) const {
       return
-	m_descriptor_set_pool.
-	descriptor_set_layout(m_test_descriptor_set_indices.at(index));
+	m_descriptor_set_pool
+	.descriptor_set_layout(m_test_descriptor_set_indices.at(index));
     }
 
     void print_physical_device_memory_types() {
@@ -836,8 +528,9 @@ namespace vulkan {
       buffer_info.pNext = nullptr;
       buffer_info.flags = 0;
 
-      buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-	  VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      buffer_info.usage =
+	VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+	VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
       buffer_info.size = size;
       
@@ -850,6 +543,94 @@ namespace vulkan {
 
       return buffer_info;
     }
+
+    // Create a frame buffer attachment
+    image_pool::index_type make_framebuffer_attachment(VkFormat format, VkImageUsageFlags usage)
+    {
+      image_pool::index_type ret{image_pool::k_unset};
+
+      VkImageAspectFlags aspect_mask = 0;
+      VkImageLayout image_layout;
+
+      if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+	aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
+	image_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      }
+      
+      if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+	aspect_mask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	image_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      }
+
+      image_gen_params gen_image {};
+
+      gen_image.memory_property_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+      gen_image.format = format;
+      gen_image.attachment_layout = image_layout;
+      gen_image.final_layout = image_layout;
+      gen_image.width = m_vk_swapchain_extent.width;
+      gen_image.height = m_vk_swapchain_extent.height;
+      gen_image.depth = 1;
+      gen_image.aspect_flags = aspect_mask;
+      gen_image.usage_flags = usage | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+
+      ret = m_image_pool.make_image(make_device_resource_properties(),
+				    gen_image);
+
+      ASSERT(ret != image_pool::k_unset);
+
+      return ret;
+      
+      /*
+      VkImageAspectFlags aspectMask = 0;
+      VkImageLayout imageLayout;
+
+      if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+	aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      }
+      if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+	aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      }
+
+      VkImageCreateInfo imageCI = vks::initializers::imageCreateInfo();
+      imageCI.imageType = VK_IMAGE_TYPE_2D;
+      imageCI.format = format;
+      imageCI.extent.width = width;
+      imageCI.extent.height = height;
+      imageCI.extent.depth = 1;
+      imageCI.mipLevels = 1;
+      imageCI.arrayLayers = 1;
+      imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
+      imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
+      // VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT flag is required for input attachments;
+      imageCI.usage = usage | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+      imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      VK_CHECK_RESULT(vkCreateImage(device, &imageCI, nullptr, &attachment->image));
+
+      VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
+      VkMemoryRequirements memReqs;
+      vkGetImageMemoryRequirements(device, attachment->image, &memReqs);
+      memAlloc.allocationSize = memReqs.size;
+      memAlloc.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+      VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &attachment->memory));
+      VK_CHECK_RESULT(vkBindImageMemory(device, attachment->image, attachment->memory, 0));
+
+      VkImageViewCreateInfo imageViewCI = vks::initializers::imageViewCreateInfo();
+      imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
+      imageViewCI.format = format;
+      imageViewCI.subresourceRange = {};
+      imageViewCI.subresourceRange.aspectMask = aspectMask;
+      imageViewCI.subresourceRange.baseMipLevel = 0;
+      imageViewCI.subresourceRange.levelCount = 1;
+      imageViewCI.subresourceRange.baseArrayLayer = 0;
+      imageViewCI.subresourceRange.layerCount = 1;
+      imageViewCI.image = attachment->image;
+      VK_CHECK_RESULT(vkCreateImageView(device, &imageViewCI, nullptr, &attachment->view));
+      */
+    }
+
 
     std::optional<VkMemoryRequirements> query_vertex_buffer_memory_requirements(VkDeviceSize size) const {
       std::optional<VkMemoryRequirements> ret{};
@@ -902,9 +683,9 @@ namespace vulkan {
             ASSERT(present_mode_count != 0);
             details.present_modes.resize(present_mode_count);
             VK_FN(vkGetPhysicalDeviceSurfacePresentModesKHR(device,
-                                                              m_vk_khr_surface,
-                                                              &present_mode_count,
-                                                              details.present_modes.data()));
+							    m_vk_khr_surface,
+							    &present_mode_count,
+							    details.present_modes.data()));
           }
         }
       }
@@ -1432,14 +1213,21 @@ namespace vulkan {
       return r;
     }
 
+    
+    bool ok_descriptor_pool() const {
+      bool r = ok() && m_ok_descriptor_pool;
+      ASSERT(r);
+      return r;
+    }
+    
     bool ok_render_pass() const {
       bool r = ok() && m_ok_render_pass;
       ASSERT(r);
       return r;
     }
 
-    bool ok_descriptor_pool() const {
-      bool r = ok() && m_ok_descriptor_pool;
+    bool ok_attachment_read_descriptors() const {
+      bool r = ok() && m_ok_attachment_read_descriptors;
       ASSERT(r);
       return r;
     }
@@ -1666,11 +1454,12 @@ namespace vulkan {
     
     void setup_descriptor_pool() {
       if (ok_present()) {       
-	std::vector<VkDescriptorPoolSize> pool_sizes =
+        darray<VkDescriptorPoolSize> pool_sizes =
 	  {
 	   // type, descriptorCount
 	   { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 },
 	   { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
+	   { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 2 }
 	  };
 
 	uint32_t max_sets = sum<uint32_t,
@@ -1694,361 +1483,243 @@ namespace vulkan {
 	m_ok_descriptor_pool = api_ok() && m_vk_descriptor_pool != VK_NULL_HANDLE;
       }
     }
-
-    bool setup_render_pass(int index, render_pass_gen_params params) {
-      m_render_pass_indices[index] =
-	  m_render_pass_pool.make_render_pass(make_device_resource_properties(),
-					      params);       
-
-      return m_render_pass_pool.ok_render_pass(m_render_pass_indices[index]);
-    }
-
-    bool setup_render_pass_texture2d() {
-      return
-	setup_render_pass(k_pass_texture2d,
-			  {
-			   // attachment params
-			   {
-			    // color buffer info
-			    {
-			     m_vk_khr_swapchain_format.format,	       				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_LOAD,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			      // attachment layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			      // final layout
-			      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-			     }
-			    },
-			    // depth buffer info
-			    {
-			     depthbuffer_data::k_format,				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_LOAD,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      depthbuffer_layouts::primary(),
-			      // attachment layout
-			      depthbuffer_layouts::primary(),
-			      // final layout
-			      depthbuffer_layouts::primary()
-			     }			       
-			    }
-			   },
-			   // additional dependencies
-			   {}
-			  });
-    }
-
-    bool setup_render_pass_test_fbo() {
-      return
-	setup_render_pass(k_pass_test_fbo,
-			  {
-			   // attachment params
-			   {
-			    // color buffer info
-			    {
-			     m_vk_khr_swapchain_format.format,	       				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_LOAD,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			      // attachment layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			      // final layout
-			      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-			     }
-			    },
-			    // depth buffer info
-			    {
-			     depthbuffer_data::k_format,				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_LOAD,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      depthbuffer_layouts::primary(),
-			      // attachment layout
-			      depthbuffer_layouts::primary(),
-			      // final layout
-			      depthbuffer_layouts::primary()
-			     }			       
-			    }
-			   },
-			   // additional dependencies
-			   {}
-			  });
-
-    }
-
-    bool setup_render_pass_texture2d_initial() {
-      return
-	setup_render_pass(k_pass_texture2d,
-			  {
-			   // attachment params
-			   {
-			    // swapchain color buffer info
-			    {
-			     m_vk_khr_swapchain_format.format,	       				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      VK_IMAGE_LAYOUT_UNDEFINED,
-			      // attachment layout
-			      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			      // final layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			     
-			     }
-			    },
-			    // main pass color buffer info
-			    { 
-			     m_vk_khr_swapchain_format.format,	       				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      VK_IMAGE_LAYOUT_UNDEFINED,
-			      // attachment layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			      // final layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			      
-			     }
-			    },
-			    // depth buffer info
-			    {
-			     depthbuffer_data::k_format,				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      depthbuffer_data::k_initial_layout,
-			      // attachment layout
-			      depthbuffer_layouts::primary(),
-			      // final layout
-			      depthbuffer_layouts::primary()
-			     }			       
-			    }
-			   },
-			   // additional dependencies
-			   {// for swapchain image
-			    {
-			     // src subpass index
-			     0,
-			     // dst subpass index
-			     0,
-			     // src stage mask
-			     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-			     // dst stage mask
-			     VK_PIPELINE_STAGE_TRANSFER_BIT,
-			     // src access mask
-			     VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-			     // dst access mask
-			     VK_ACCESS_TRANSFER_WRITE_BIT
-			    }
-			   }
-			  });
-
-    }
-    
-    bool setup_render_pass_texture2d_standalone() {
-      return
-	setup_render_pass(k_pass_texture2d,
-			  {
-			   // attachment params
-			   {
-			    // color buffer info
-			    {
-			     m_vk_khr_swapchain_format.format,	       				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      VK_IMAGE_LAYOUT_UNDEFINED,
-			      // attachment layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			      // final layout
-			      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-			     }
-			    },
-			    // depth buffer info
-			    {
-			     depthbuffer_data::k_format,				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      depthbuffer_data::k_initial_layout,
-			      // attachment layout
-			      depthbuffer_layouts::primary(),
-			      // final layout
-			      depthbuffer_layouts::primary()
-			     }			       
-			    }
-			   },
-			   // additional dependencies
-			   {}
-			  });
-    } 
-
-    bool setup_render_pass_cubemap() {
-      return
-	setup_render_pass(k_pass_cubemap,
-			  {
-			   // attachment params
-			   {
-			    // swapchain color buffer info
-			    {
-			     m_vk_khr_swapchain_format.format,	       				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      VK_IMAGE_LAYOUT_UNDEFINED,
-			      // attachment layout
-			      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			      // final layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			     
-			     }
-			    },
-			    // main pass color buffer info
-			    { 
-			     m_vk_khr_swapchain_format.format,	       				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      VK_IMAGE_LAYOUT_UNDEFINED,
-			      // attachment layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			      // final layout
-			      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			      
-			     }
-			    },
-			    // depth buffer info
-			    {
-			     depthbuffer_data::k_format,				
-			     // load op
-			     VK_ATTACHMENT_LOAD_OP_CLEAR,
-			     // store op
-			     VK_ATTACHMENT_STORE_OP_STORE,
-			     // layout info
-			     {
-			      // initial
-			      depthbuffer_data::k_initial_layout,
-			      // attachment layout
-			      depthbuffer_layouts::primary(),
-			      // final layout
-			      depthbuffer_layouts::primary()
-			     }			       
-			    }
-			   },
-			   // additional dependencies
-			   {// for swapchain image
-			    {
-			     // src subpass index
-			     0,
-			     // dst subpass index
-			     0,
-			     // src stage mask
-			     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-			     // dst stage mask
-			     VK_PIPELINE_STAGE_TRANSFER_BIT,
-			     // src access mask
-			     VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-			     // dst access mask
-			     VK_ACCESS_TRANSFER_WRITE_BIT
-			    }
-			   }
-			  });
-    }
-
-    render_pass_image_create_params make_render_pass_image_params() {
-      return render_pass_image_create_params
-	{									
-	 &m_image_pool,								
-	 m_vk_swapchain_image_views.size(),		
-	 m_vk_swapchain_extent.width,			
-	 m_vk_swapchain_extent.height,			
-	 m_vk_khr_swapchain_format.format				    
-	};
-    }
     
     void setup_render_pass() {
       if (ok_descriptor_pool()) {
-	// this code brought to you Lambda gang
-	m_ok_render_pass =
-	  vk_match({
-		    {
-		     vk_test_type::basic_shapes,
-		     [this]() -> bool {
-		       return setup_render_pass_texture2d_standalone();
-		     }
-		    },
-		    {
-		     vk_test_type::skybox,
-		     [this]() -> bool {
-		       return
-			 setup_render_pass_texture2d() &&
-			 setup_render_pass_cubemap() &&
-			 m_pass_ext_data[k_pass_cubemap].make_images(make_device_resource_properties(),
-								     make_render_pass_image_params());
-		     }		       
-		    },
-		    {
-		     vk_test_type::test_fbo,
-		     [this]() -> bool {
-		       return
-			 setup_render_pass_texture2d_initial() &&
+	ASSERT(!m_vk_swapchain_images.empty());
+	
+	const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
+	const VkFormat depth_format = depthbuffer_data::query_format();
+	
+	m_framebuffer_attachments.data.resize(m_vk_swapchain_images.size());
+	
+	for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
 
-			 setup_render_pass_test_fbo() &&
+	  m_framebuffer_attachments.data[i].color_attachment =
+	    make_framebuffer_attachment(color_format,
+					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 
-			 m_pass_ext_data[k_pass_texture2d].make_images(make_device_resource_properties(),
-								       make_render_pass_image_params());			 
-		     }
-		    }
-	    });
+	  m_framebuffer_attachments.data[i].depth_attachment =
+	    make_framebuffer_attachment(depth_format,
+					VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	  
+	  
+	}
+
+	std::array<VkAttachmentDescription, 3> attachments{};
+
+	// Swap chain image color attachment
+	// Will be transitioned to present layout
+	attachments[0].format = m_vk_khr_swapchain_format.format;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	// Input attachments
+	// These will be written in the first subpass, transitioned to input attachments 
+	// and then read in the secod subpass
+
+	// Color
+	attachments[1].format = color_format;
+	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	// Depth
+	attachments[2].format = depth_format;
+	attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	std::array<VkSubpassDescription,2> subpass_descriptions{};
+
+	/*
+	  First subpass
+	  Fill the color and depth attachments
+	*/
+	VkAttachmentReference colorReference = { 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+	VkAttachmentReference depthReference = { 2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+
+	subpass_descriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass_descriptions[0].colorAttachmentCount = 1;
+	subpass_descriptions[0].pColorAttachments = &colorReference;
+	subpass_descriptions[0].pDepthStencilAttachment = &depthReference;
+
+	/*
+	  Second subpass
+	  Input attachment read and swap chain color attachment write
+	*/
+
+	// Color reference (target) for this sub pass is the swap chain color attachment
+	VkAttachmentReference color_reference_swapchain = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+
+	subpass_descriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass_descriptions[1].colorAttachmentCount = 1;
+	subpass_descriptions[1].pColorAttachments = &color_reference_swapchain;
+
+	// Color and depth attachment written to in first sub pass will
+	// be used as input attachments to be read in the fragment shader
+	VkAttachmentReference input_references[2];
+	input_references[0] = { 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+	input_references[1] = { 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+		
+	// Use the attachments filled in the first pass as input attachments
+	subpass_descriptions[1].inputAttachmentCount = 2;
+	subpass_descriptions[1].pInputAttachments = input_references;
+
+	/*
+	  Subpass dependencies for layout transitions
+	*/
+	std::array<VkSubpassDependency, 3> dependencies;
+
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	// This dependency transitions the input attachment from color attachment to shader read
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = 1;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[2].srcSubpass = 0;
+	dependencies[2].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[2].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[2].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[2].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	VkRenderPassCreateInfo render_pass_info_ci{};
+	render_pass_info_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	render_pass_info_ci.attachmentCount = static_cast<uint32_t>(attachments.size());
+	render_pass_info_ci.pAttachments = attachments.data();
+	render_pass_info_ci.subpassCount = static_cast<uint32_t>(subpass_descriptions.size());
+	render_pass_info_ci.pSubpasses = subpass_descriptions.data();
+	render_pass_info_ci.dependencyCount = static_cast<uint32_t>(dependencies.size());
+	render_pass_info_ci.pDependencies = dependencies.data();
+	VK_FN(vkCreateRenderPass(m_vk_curr_ldevice, &render_pass_info_ci, nullptr, &m_vk_render_pass));
+	
+	if (H_OK(m_vk_render_pass)) {
+	  m_framebuffer_attachments.p_image_pool = &m_image_pool;
+	  m_ok_render_pass = true;
+	}
       }
     }
 
-    void setup_uniform_block_data() {
+    void setup_attachment_read_descriptors() {
       if (ok_render_pass()) {
+
+	bool good = true;
+
+	{
+	  descriptor_set_gen_params attachment_read_params =
+	    {
+	     // stages
+	     {
+	      // binding 0: color attachment input
+	      VK_SHADER_STAGE_FRAGMENT_BIT,
+	      // binding 1: depth attachment input
+	      VK_SHADER_STAGE_FRAGMENT_BIT
+	     },
+	     // descriptor counts
+	     {
+	      // binding 0: color attachment input
+	      1,
+	      // binding 1: depth attachment input
+	      1
+	     },
+	     // type for this set
+	     VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
+	    };
+
+	  m_descriptors
+	    .attachment_read
+	    .resize(m_framebuffer_attachments.data.size());
+	  
+	  size_t i{0};
+	  while (i < m_framebuffer_attachments.data.size() && good) {
+	    
+	    m_descriptors.attachment_read[i] =
+	      m_descriptor_set_pool
+	      .make_descriptor_set(make_device_resource_properties(),
+				   attachment_read_params);
+
+	    good = m_descriptor_set_pool.ok_descriptor_set(m_descriptors.attachment_read.at(i));
+
+	    if (c_assert(good)) {
+	    
+	      VkImageView color = m_framebuffer_attachments.color_image_view(i);	      	       
+	      VkImageView depth = m_framebuffer_attachments.depth_image_view(i);
+	    
+	      darray<VkDescriptorImageInfo> descriptor_image_infos =
+		{
+		 // sampler,          imageView,  imageLayout
+		 { VK_NULL_HANDLE,    color,      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+		 { VK_NULL_HANDLE,    depth,      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+		};
+
+	      VkDescriptorSet descset = m_descriptor_set_pool.descriptor_set(m_descriptors.attachment_read.at(i));
+	    
+	      darray<VkWriteDescriptorSet> write_descriptor_sets =
+		{
+		 // color input attachment
+		 make_write_descriptor_set(descset,
+					   // corresponding image info
+					   descriptor_image_infos.data(),
+					   // binding
+					   0,
+					   // type
+					   VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+					   // descriptor count
+					   1),
+		 // depth input attachment
+		 make_write_descriptor_set(descset,
+					   // corresponding image info
+					   descriptor_image_infos.data() + 1,
+					   // binding
+					   1,
+					   // type
+					   VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+					   // descriptor count
+					   1)
+		};
+	    
+	      vkUpdateDescriptorSets(m_vk_curr_ldevice,
+				     static_cast<uint32_t>(write_descriptor_sets.size()),
+				     write_descriptor_sets.data(),
+				     0,
+				     nullptr);
+	    }
+
+	    i++;
+	  }
+
+	  m_ok_attachment_read_descriptors = good;
+	}	
+      }
+    }
+    
+    void setup_uniform_block_data() {
+      if (ok_attachment_read_descriptors()) {
 	{
 	  descriptor_set_gen_params uniform_block_desc_set_params =
 	    {
@@ -2310,16 +1981,16 @@ namespace vulkan {
 
 
     bool setup_pipeline(int render_phase_index,
+			int subpass_index,
 			pipeline_layout_gen_params layout_params,
 			pipeline_gen_params params) {
       bool success = false;
-
-      params.render_pass_index = m_render_pass_indices.at(render_phase_index);
       
       m_pipeline_layout_indices[render_phase_index] =
 	m_pipeline_layout_pool.make_pipeline_layout(make_device_resource_properties(),
 						    layout_params);
-      
+
+      params.subpass_index = subpass_index;
       params.pipeline_layout_index = m_pipeline_layout_indices.at(render_phase_index);
       
       if (m_pipeline_layout_pool.ok_pipeline_layout(m_pipeline_layout_indices[0])) {
@@ -2333,9 +2004,11 @@ namespace vulkan {
 
       return success;
     }
-
-    bool setup_default_pipeline(int pass_index) {
-      return setup_pipeline(pass_index,
+        
+    bool setup_pipeline_texture2d() {
+      return setup_pipeline(k_pass_texture2d,
+			    // subpass index
+			    0, 
 			    // pipeline layout
 			    {
 			     // descriptor set layouts
@@ -2355,6 +2028,8 @@ namespace vulkan {
 			    },
 			    // pipeline
 			    {
+			     // render pass
+			     m_vk_render_pass,
 			     // viewport extent
 			     m_vk_swapchain_extent,	   
 			     // vert spv path
@@ -2362,20 +2037,36 @@ namespace vulkan {
 			     // frag spv path
 			     realpath_spv("tri_ubo.frag.spv")
 
-			     // remaining index parameters handled in setup_pipeline()
 			    });
-
-    }
-    
-    bool setup_pipeline_texture2d() {
-      return setup_default_pipeline(k_pass_texture2d)
     }
 
     bool setup_pipeline_test_fbo() {
-      return setup_default_pipeline(k_pass_test_fbo);
+      return setup_pipeline(k_pass_test_fbo,
+			    // subpass index
+			    1,
+			    // pipeline layout
+			    {
+			     m_descriptor_set_pool.descriptor_set_layouts(m_descriptors.attachment_read),
+			     // push constant ranges
+			     {
+			     }
+			    },
+			    // pipeline
+			    {
+			     // render pass
+			     m_vk_render_pass,
+			     // viewport extent
+			     m_vk_swapchain_extent,	   
+			     // vert spv path
+			     realpath_spv("attachment_read.vert.spv"),
+			     // frag spv path
+			     realpath_spv("attachment_read.frag.spv")			     
+			    });
     }
     
     bool setup_pipeline_cubemap() {
+      return false;
+      /*
       return setup_pipeline(k_pass_cubemap,
 			    // pipeline layout
 			    {
@@ -2390,6 +2081,8 @@ namespace vulkan {
 			    },
 			    // pipeline
 			    {
+			     // render pass
+			     m_vk_render_pass,
 			     // viewport extent
 			     m_vk_swapchain_extent,	   
 			     // vert spv path
@@ -2399,39 +2092,16 @@ namespace vulkan {
 
 			     // remaining index parameters handled in setup_pipeline()
 			    });
+      */
     }
     
     void setup_graphics_pipeline() {      
       if (ok_depthbuffer_data()) {
 	m_pipeline_pool.set_pipeline_layout_pool(&m_pipeline_layout_pool);
-	m_pipeline_pool.set_render_pass_pool(&m_render_pass_pool);
 
 	m_ok_graphics_pipeline =
-	  vk_match({
-		    {
-		     vk_test_type::basic_shapes,
-		     [this]() -> bool {
-		       return setup_pipeline_texture2d();
-		     }
-		    },
-		    {
-		     vk_test_type::skybox,
-		     [this]() -> bool {
-		       return
-			 setup_pipeline_texture2d() &&
-			 setup_pipeline_cubemap();
-		     }		       
-		    },
-		    {
-		     vk_test_type::test_fbo,
-		     [this]() -> bool {
-		       return
-			 setup_pipeline_texture2d() &&
-			 setup_pipeline_test_fbo();
-		     }
-		    }
-	    });
-       
+	  setup_pipeline_texture2d() &&
+	  setup_pipeline_test_fbo();       
       }
     }
 
@@ -2439,14 +2109,15 @@ namespace vulkan {
 						const darray<VkImageView>& color_image_views) {
       darray<VkFramebuffer> ret(color_image_views.size(), VK_NULL_HANDLE);
 
-      size_t i = 0;
-      bool good = true;
+      size_t i{0};
+      bool good{true};
       
       while (i < ret.size() && good) {
-	std::array<VkImageView, 2> attachments =
+	std::array<VkImageView, 3> attachments =
 	  {
-	   color_image_views[i],
-	   m_depthbuffer.image_view
+	   color_image_views.at(i),
+	   m_framebuffer_attachments.color_image_view(i),
+	   m_framebuffer_attachments.depth_image_view(i)
 	  };
 
 	VkFramebufferCreateInfo framebuffer_info = {};
@@ -2468,7 +2139,7 @@ namespace vulkan {
 				  &framebuffer_info,
 				  nullptr,
 				  &ret[i]));
-	good = api_ok();
+	good = H_OK(ret.at(i));
 	i++;
       }
 
@@ -2477,85 +2148,15 @@ namespace vulkan {
       }
 
       return ret;
-    }
-
-    bool setup_framebuffers_from_render_pass(render_pass_external_data& ext_data,
-					     const darray<VkImageView>& io_image_views,
-					     const attachment_index_info& attach_info,
-					     int rpass_index) {
-      return
-        ext_data.make_framebuffers(make_device_resource_properties(),
-				   { // image params
-				    make_render_pass_image_params(),
-				    m_vk_swapchain_image_views,
-				    attach_info,
-				    render_pass(rpass_index),
-				    m_depthbuffer.image_view,
-				    [this](size_t framebuffer_index,
-					   attachment_list_t& attachments,
-					   const darray<image_pool::index_type>& images,
-					   const render_pass_framebuffer_create_params& self) {
-					  
-				      attachments[self.attach_info.io_image] =
-					self.io_image_views.at(framebuffer_index);
-				      
-				      switch (self.attach_info.color_source) {
-				      case attachment_index_info::image_source::pool:
-
-					attachments[self.attach_info.color_image] =
-					  self.image_params.p_image_pool->image_view(images.at(framebuffer_index));
-
-					break;
-				      case attachment_index_info::image_source::swapchain:
-					
-					attachments[self.attach_info.color_image] =
-					  this->m_vk_swapchain_image_views.at(framebuffer_index);
-
-					break;
-				      }
-
-				      attachments[self.attach_index_info.depth_image] =
-					self.depth_image_view;
-				    }
-				   });	  
-    }
+    }	  
     
     void setup_framebuffers() {
       if (ok_vertex_buffer()) {
-	
-	m_ok_framebuffers =
-	  vk_match({
-		    {
-		     vk_test_type::basic_shapes,
-		     [this]() -> bool {
-		       	m_vk_swapchain_framebuffers =
-			  make_framebuffer_list(render_pass(k_pass_texture2d),
-						m_vk_swapchain_image_views);	
+	m_vk_swapchain_framebuffers =
+	  make_framebuffer_list(m_vk_render_pass,
+				m_vk_swapchain_image_views);	
 
-		       return !m_vk_swapchain_framebuffers.empty(); 
-		     }
-		    },
-		    {
-		     vk_test_type::skybox,
-		     [this]() -> bool {
-		       return
-			 false; // TODO
-		     }		       
-		    },
-		    {
-		     vk_test_type::test_fbo,
-		     [this]() -> bool {
-		       attachment_index_info info{};
-
-		       
-		       
-		       return
-			 setup_framebuffers_from_render_pass(m_pass_ext_data.at(k_pass_texture2d),
-							     
-							     k_pass_texture_2d);
-		     }
-		    }
-	    });       
+	m_ok_framebuffers = !m_vk_swapchain_framebuffers.empty(); 
       }
     }
 
@@ -2570,13 +2171,14 @@ namespace vulkan {
 
 	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
 
-	m_ok_command_pool = true;
+	m_ok_command_pool = true;	
       }      
     }
 
     void commands_begin_pipeline(VkCommandBuffer cmd_buffer,
 				 VkPipeline pipeline,
 				 VkPipelineLayout pipeline_layout,
+				 bool with_vertex_buffer,
 				 const darray<VkDescriptorSet>& descriptor_sets) {
 
       VkDeviceSize vertex_buffer_ofs = 0;
@@ -2584,18 +2186,14 @@ namespace vulkan {
       vkCmdBindPipeline(cmd_buffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			pipeline);
-	    
-      vkCmdBindVertexBuffers(cmd_buffer,
-			     0,
-			     1,
-			     &m_vk_vertex_buffer,
-			     &vertex_buffer_ofs);
 
-      vkCmdUpdateBuffer(cmd_buffer,
-			m_vk_vertex_buffer,
-			0,
-			sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
-			m_vertex_buffer_vertices.data());
+      if (with_vertex_buffer) {
+	vkCmdBindVertexBuffers(cmd_buffer,
+			       0,
+			       1,
+			       &m_vk_vertex_buffer,
+			       &vertex_buffer_ofs);
+      }
 
       vkCmdBindDescriptorSets(cmd_buffer,
 			      VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -2605,17 +2203,6 @@ namespace vulkan {
 			      descriptor_sets.data(),
 			      0,
 			      nullptr);
-
-      image_layout_transition().
-	from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-	to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-	for_aspect(depthbuffer_data::k_image_aspect_flags).
-	from_access(0).
-	to_access(depthbuffer_data::k_access_flags).
-	from(depthbuffer_data::k_initial_layout).
-	to(depthbuffer_layouts::primary()).
-	for_image(m_depthbuffer.image).
-	via(cmd_buffer);
     }
 
     void commands_start_render_pass(VkCommandBuffer cmd_buffer,
@@ -2631,15 +2218,20 @@ namespace vulkan {
       render_pass_info.renderArea.offset = {0, 0};
       render_pass_info.renderArea.extent = m_vk_swapchain_extent;
 
-      std::array<VkClearValue, 2> clear_values;
+      std::array<VkClearValue, 3> clear_values;
 	    
       clear_values[0].color.float32[0] = 1.0f;
       clear_values[0].color.float32[1] = 0.0f;
       clear_values[0].color.float32[2] = 0.0f;
       clear_values[0].color.float32[3] = 1.0f;
 
-      clear_values[1].depthStencil.depth = 1.0f;
-      clear_values[1].depthStencil.stencil = 0;
+      clear_values[1].color.float32[0] = 1.0f;
+      clear_values[1].color.float32[1] = 0.0f;
+      clear_values[1].color.float32[2] = 0.0f;
+      clear_values[1].color.float32[3] = 1.0f;
+      
+      clear_values[2].depthStencil.depth = 1.0f;
+      clear_values[2].depthStencil.stencil = 0;
 	    
       // for the color attachment's VK_ATTACHMENT_LOAD_OP_CLEAR
       // operation
@@ -2650,93 +2242,133 @@ namespace vulkan {
 			   &render_pass_info,
 			   VK_SUBPASS_CONTENTS_INLINE);      
     }
-    
-    void setup_render_commands(darray<VkCommandBuffer>& command_buffers,
-			       const darray<VkDescriptorSet>& descriptor_sets,
-			       VkPipeline pipeline,
-			       VkPipelineLayout pipeline_layout) {
-      ASSERT(!command_buffers.empty());
+
+    void commands_draw_inner_objects(VkCommandBuffer cmd_buffer) const {
+      // first 3 objects: two triangles and one small cube
+      vkCmdDraw(cmd_buffer,
+		(m_instance_count - 12) * 3, // num vertices
+		m_instance_count - 12, // num instances
+		0, // first vertex
+		0); // first instance
+    }
+
+    void commands_draw_room(VkCommandBuffer cmd_buffer) const {
+      // big cube encompassing the scene
+      vkCmdDraw(cmd_buffer,
+		36,
+		12, // (6 faces, 12 triangles)
+		42, // 3 vertices + 3 vertices + 36 vertices
+		14); // 2 triangles + one cube (6 faces, 12 triangles)
+    }
+
+    void commands_draw_quad_no_vb(VkCommandBuffer cmd_buffer) const {
+      vkCmdDraw(cmd_buffer,
+		4,
+		1,
+		0,
+		0);
+    }
+
+    bool commands_begin_buffer(VkCommandBuffer cmd_buffer) {
+      bool ret = ok();
       
-      VkCommandBufferAllocateInfo alloc_info = {};
-      alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-      alloc_info.commandPool = m_vk_command_pool;
-      alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-      alloc_info.commandBufferCount = static_cast<uint32_t>(command_buffers.size());
-
-      VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, command_buffers.data()));
-	
-      size_t i = 0;
-
-      auto draw_inner_objects =
-	[this](VkCommandBuffer cmd_buffer) {
-	  // first 3 objects: two triangles and one small cube
-	  vkCmdDraw(cmd_buffer,
-		    (m_instance_count - 12) * 3, // num vertices
-		    m_instance_count - 12, // num instances
-		    0, // first vertex
-		    0); // first instance
-
-	};
-
-      auto draw_room =
-	[](VkCommandBuffer cmd_buffer) {
-	  // big cube encompassing the scene
-	  vkCmdDraw(cmd_buffer,
-		    36,
-		    12, // (6 faces, 12 triangles)
-		    42, // 3 vertices + 3 vertices + 36 vertices
-		    14); // 2 triangles + one cube (6 faces, 12 triangles)
-	};
-	
-      while (i < command_buffers.size() && ok()) {
+      if (ret) {
 	VkCommandBufferBeginInfo begin_info = {};
+	  
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	begin_info.flags = 0;
 	begin_info.pInheritanceInfo = nullptr;
 
-	VK_FN(vkBeginCommandBuffer(command_buffers[i], &begin_info));	  
-	  
-	if (ok()) {
-	  commands_begin_pipeline(command_buffers[i],
-				  pipeline,
-				  pipeline_layout,
-				  descriptor_sets);
-	  
-	  commands_start_render_pass(command_buffers[i],
-				     m_vk_swapchain_framebuffers[i],
-				     render_pass(k_pass_texture2d));
-	    
-	  // note that instances are per-triangle
-	  {
-	    uint32_t sampler0 = 0;
-	    vkCmdPushConstants(command_buffers[i],
-			       pipeline_layout,
-			       VK_SHADER_STAGE_FRAGMENT_BIT,
-			       0,
-			       sizeof(sampler0),
-			       &sampler0);
-	    
-	    draw_inner_objects(command_buffers[i]);
-	  
-	    uint32_t sampler1 = 1;
-	    vkCmdPushConstants(command_buffers[i],
-			       pipeline_layout,
-			       VK_SHADER_STAGE_FRAGMENT_BIT,
-			       0,
-			       sizeof(sampler1),
-			       &sampler1);
-	    draw_room(command_buffers[i]);
-	  	    
-	    vkCmdEndRenderPass(command_buffers[i]);
-	  }
+	VK_FN(vkBeginCommandBuffer(cmd_buffer, &begin_info));
 
-	  VK_FN(vkEndCommandBuffer(command_buffers[i]));
-	}
-
-	i++;
+	ret = ok();
       }
+
+      return ret;
     }
 
+    bool commands_end_buffer(VkCommandBuffer cmd_buffer) {
+      VK_FN(vkEndCommandBuffer(cmd_buffer));
+      return ok();
+    }
+
+    void commands_copy_image(VkCommandBuffer cmd_buffer, image_pool::index_type src, image_pool::index_type dst) const {
+
+      VkImageCopy copy_region = m_image_pool.image_copy(src);
+      
+      vkCmdCopyImage(cmd_buffer,
+		     m_image_pool.image(src),
+		     m_image_pool.layout_final(src),
+		     m_image_pool.image(dst),
+		     m_image_pool.layout_final(dst),
+		     1,
+		     &copy_region);		     
+    }
+
+    bool commands_layout_transition(VkCommandBuffer cmd_buffer,
+				    image_pool::index_type image) const {
+      bool ret = ok();
+      if (ret) {
+	auto layout_transition =
+	  m_image_pool.make_layout_transition(image);
+
+        ret = c_assert(layout_transition.ok());
+	  
+	if (ret) {
+	  layout_transition.via(cmd_buffer);
+	  ret = c_assert(ok());
+	}
+      }
+      return ret;
+    }
+
+    void commands_draw_main(VkCommandBuffer cmd_buffer,
+			    VkPipelineLayout pipeline_layout) const {
+      // Note that instances are per-triangle
+      uint32_t sampler0 = 0;
+      vkCmdPushConstants(cmd_buffer,
+			 pipeline_layout,
+			 VK_SHADER_STAGE_FRAGMENT_BIT,
+			 0,
+			 sizeof(sampler0),
+			 &sampler0);
+	    
+      commands_draw_inner_objects(cmd_buffer);
+	  
+      uint32_t sampler1 = 1;
+      vkCmdPushConstants(cmd_buffer,
+			 pipeline_layout,
+			 VK_SHADER_STAGE_FRAGMENT_BIT,
+			 0,
+			 sizeof(sampler1),
+			 &sampler1);
+      
+      commands_draw_room(cmd_buffer);
+    }
+
+    //
+    // we always use the command pool here to allocate command buffer memory
+    //
+    bool make_command_buffers(darray<VkCommandBuffer>& command_buffers) const {
+      bool ret =
+	c_assert(!command_buffers.empty()) &&
+	c_assert(ok_command_pool());
+      
+      if (ret) {
+	VkCommandBufferAllocateInfo alloc_info = {};
+
+	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	alloc_info.commandPool = m_vk_command_pool;
+	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	alloc_info.commandBufferCount = static_cast<uint32_t>(command_buffers.size());
+
+	VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice, &alloc_info, command_buffers.data()));
+
+	ret = ok() && !command_buffers.empty();
+      }
+      return ret;
+    }
+    
     // ---------------------
     // WRT descriptor sets
     // ---------------------
@@ -2757,66 +2389,123 @@ namespace vulkan {
     // set layout that was associated with the
     // pipeline layout created earlier.
     void setup_command_buffers() {
+      m_image_pool.print_images_info();
       if (ok_command_pool()) {
+	
+	//
 	// bind sampler[i] to test_texture_indices[i] via
 	// test_texture_index's array element index (should be i)
-	darray<texture_pool::index_type> tex_indices(m_test_texture_indices.begin(), m_test_texture_indices.end());
-	
+	//
+	darray<texture_pool::index_type> tex_indices(m_test_texture_indices.begin(),
+						     m_test_texture_indices.end());
+
+	// first descriptor set update for textures
 	if (c_assert(m_texture_pool.update_descriptor_sets(m_vk_curr_ldevice,
 							   std::move(tex_indices)))) {
-
-	  vkDeviceWaitIdle(m_vk_curr_ldevice);	
-
+	  //
 	  // perform the image layout transition for
 	  // test_image_indices[i]
-	  run_cmds(
-		   [this](VkCommandBuffer cmd_buf) {
-		     puts("image_layout_transition");
-
-		     size_t i{0};
-		     bool good = true;
-
-		     while (i < m_test_image_indices.size() && good) {
-		       auto image_index = m_test_image_indices[i];
-		     
-		       auto layout_transition = m_image_pool.make_layout_transition(image_index);		    
-
-		       good = layout_transition.ok();
-
-		       if (good) {
-			 layout_transition.via(cmd_buf);
-		       }
-
-		       i++;
-		     }
-		   
-		     m_ok_scene = good;
+	  //
+	  run_cmds([this](VkCommandBuffer cmd_buf) {
+		     puts("image_layout_transition");		     
+		     m_ok_scene =
+		       m_image_pool.make_layout_transitions(cmd_buf,
+							    m_test_image_indices);
 		   },
-		   [this]() {
-		     puts("run_cmds ERROR");
-		     ASSERT(false);
-		     m_ok_scene = false;
-		   });
+	    [this]() {
+	      puts("run_cmds ERROR");
+	      ASSERT(false);
+	      m_ok_scene = false;
+	    });
 
-	  if (ok_scene()) {
+	  //
+	  // update the descriptor sets here to include the input attachment
+	  // for the shader
+	  //	   	    
 
-	    darray<VkDescriptorSet> descriptor_sets =
-	      {
-	       m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_samplers]),
-	       m_descriptor_set_pool.descriptor_set(m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks])
-	      };
+	  m_vk_command_buffers.resize(m_vk_swapchain_image_views.size());
 
-	    m_vk_command_buffers.resize(m_vk_swapchain_framebuffers.size());
+	  bool good = c_assert(make_command_buffers(m_vk_command_buffers));
 	    
-	    setup_render_commands(m_vk_command_buffers,
-				  descriptor_sets,
-				  m_pipeline_pool.pipeline(m_pipeline_indices[0]),
-				  pipeline_layout(k_pass_texture2d));	  
-	
-	    if (ok()) {
-	      m_ok_command_buffers = true;
+	  if (good) {	    
+	    //
+	    // begin the command buffer series;
+	    // we obviously have two render passes,
+	    // and the code corresponding to each pass
+	    // is labeled in inner scope blocks as follows
+	    //
+	    size_t i{0};	      
+	    while (i < m_vk_command_buffers.size() &&
+		   c_assert(good)) {			        
+
+	      VkCommandBuffer cmd_buff = m_vk_command_buffers.at(i);
+
+	      good = c_assert(commands_begin_buffer(cmd_buff));
+	      
+	      if (good) {
+		vkCmdUpdateBuffer(cmd_buff,
+				  m_vk_vertex_buffer,
+				  0,
+				  sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
+				  m_vertex_buffer_vertices.data());
+		
+		commands_start_render_pass(cmd_buff,
+					   m_vk_swapchain_framebuffers.at(i),
+					   m_vk_render_pass);
+
+		//
+		// subpass 1: fill depth and color attachments
+		//
+
+		commands_begin_pipeline(cmd_buff,
+					pipeline(k_pass_texture2d),
+					pipeline_layout(k_pass_texture2d),
+					true,
+				        {
+					 descriptor_set(k_descriptor_set_samplers),
+					 descriptor_set(k_descriptor_set_uniform_blocks)
+					});
+
+		commands_draw_main(cmd_buff,
+				   pipeline_layout(k_pass_texture2d));
+
+
+		vkCmdNextSubpass(cmd_buff, VK_SUBPASS_CONTENTS_INLINE);
+		
+		//
+		// subpass 2: read depth and color attachments
+		//
+
+		commands_begin_pipeline(cmd_buff,
+					pipeline(k_pass_test_fbo),
+					pipeline_layout(k_pass_test_fbo),
+					false, // do not bind vertex buffer
+					m_descriptor_set_pool.descriptor_sets(m_descriptors.attachment_read));		
+		
+		commands_draw_quad_no_vb(cmd_buff);
+
+		vkCmdEndRenderPass(cmd_buff);
+#if 0
+		image_layout_transition().
+		  from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+		  to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
+		  for_aspect(depthbuffer_data::k_image_aspect_flags).
+		  from_access(0).
+		  to_access(depthbuffer_data::k_access_flags).
+		  from(depthbuffer_data::k_initial_layout).
+		  to(depthbuffer_layouts::primary()).
+		  for_image(m_depthbuffer.image).
+		  via(cmd_buffer);
+#endif
+		
+		good = c_assert(commands_end_buffer(cmd_buff));
+	      }
+	      	      
+	      i++;
 	    }
-	  }
+
+	    m_ok_command_buffers = good;	      
+	  }	    	  
 	}
       }
     }
@@ -2844,7 +2533,7 @@ namespace vulkan {
 
     void setup_scene() {
       if (ok_semaphores()) {
-						 
+	
 	m_ok_scene = true;
       }
     }
@@ -2853,6 +2542,7 @@ namespace vulkan {
       setup_presentation();
       setup_descriptor_pool();
       setup_render_pass();
+      setup_attachment_read_descriptors();
       setup_uniform_block_data();
       setup_texture_data();
       setup_depthbuffer_data();
@@ -2990,10 +2680,6 @@ namespace vulkan {
       if (m_vk_curr_ldevice != VK_NULL_HANDLE) {
 	vkDeviceWaitIdle(m_vk_curr_ldevice);
       }
-
-      for (auto& pass_info: m_pass_ext_data) {
-	m_pass_ext_data.free_mem(m_vk_curr_ldevice);
-      }
       
       free_vk_ldevice_handle<VkDeviceMemory, &vkFreeMemory>(m_vk_vertex_buffer_mem);
       
@@ -3010,7 +2696,9 @@ namespace vulkan {
       
       m_pipeline_layout_pool.free_mem(m_vk_curr_ldevice);
 
-      m_render_pass_pool.free_mem(m_vk_curr_ldevice);
+      free_vk_ldevice_handle<VkRenderPass, &vkDestroyRenderPass>(m_vk_render_pass);
+      
+      //      m_render_pass_pool.free_mem(m_vk_curr_ldevice);
       
       m_texture_pool.free_mem(m_vk_curr_ldevice);
       m_image_pool.free_mem(m_vk_curr_ldevice);

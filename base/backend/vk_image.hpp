@@ -1,13 +1,14 @@
 #pragma once
 
 #include "vk_common.hpp"
+#include <iostream>
 
 namespace vulkan {
   static inline bool validate_attachment(VkImageUsageFlags usage_flags,
 					 VkImageLayout attachment_layout) {
     return ((is_image_usage_attachment(usage_flags) &&
 	     !c_in(attachment_layout,
-		k_invalid_attachment_layouts))
+		   k_invalid_attachment_layouts))
 
 	    ||
 
@@ -520,6 +521,37 @@ namespace vulkan {
 			    VkImageView);
     }
 
+    darray<VkImageView> image_views(const darray<index_type>& indices) const {
+      darray<VkImageView> ret;
+      for (const auto& i: indices) {
+	ret.push_back(image_view(i));
+      }
+      return ret;
+    }
+
+    VkImageCopy image_copy(index_type index) const {
+      VkImageCopy copy = {};
+      
+      copy.srcSubresource.aspectMask = m_aspect_flags.at(index);
+      copy.srcSubresource.mipLevel = 0;
+      copy.srcSubresource.baseArrayLayer = 0;
+      copy.srcSubresource.layerCount = 1;
+
+      copy.dstSubresource = copy.srcSubresource;
+      
+      copy.srcOffset.x = 0;
+      copy.srcOffset.y = 0;
+      copy.srcOffset.z = 0;
+      
+      copy.dstOffset = copy.srcOffset;
+
+      copy.extent.width = m_widths.at(index);
+      copy.extent.height = m_heights.at(index);
+      copy.extent.depth = m_depths.at(index);
+
+      return copy;
+    }
+
     image_layout_transition make_layout_transition(index_type index) const {
       auto ret = image_layout_transition(false);
 
@@ -538,9 +570,40 @@ namespace vulkan {
 
       return ret;
     }
+
+    bool make_layout_transitions(VkCommandBuffer cmd_buf, const darray<index_type>& indices) const {
+      size_t i{0};
+      bool good = true;
+
+      while (i < indices.size() && good) {
+	auto image_index = indices.at(i);
+		     
+	auto layout_transition = make_layout_transition(image_index);		    
+
+	good =
+	  c_assert(layout_transition.ok()) &&
+	  c_assert(api_ok());
+
+	if (c_assert(good)) {
+	  layout_transition.via(cmd_buf);
+	}
+
+	i++;
+      }
+
+      return c_assert(good);
+    }
+
+    void print_images_info() const {
+      for (index_type i{0}; i < length(); ++i) {
+	std::cout << "Image: " SS_HEX(m_images.at(i)) << "\n"
+		  << "..usage flags: " << SS_HEX(m_usage_flags.at(i)) << "\n"; 
+      }
+
+      std::cout << std::endl;
+    }
     
   };
-
   
   struct descriptor_set_gen_params {    
     darray<VkShaderStageFlags> stages;
@@ -548,12 +611,9 @@ namespace vulkan {
     VkDescriptorType type{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
     
     bool ok() const {      
-      bool r =
-	(!stages.empty()) &&
-	(descriptor_counts.size() == stages.size());
-      
-      ASSERT(r);
-      return r;
+      return
+	c_assert(!stages.empty()) &&
+	c_assert(descriptor_counts.size() == stages.size());      
     }
 
     darray<VkDescriptorSetLayoutBinding> make_bindings() const {
@@ -584,6 +644,7 @@ namespace vulkan {
     darray<VkDescriptorSet> m_descriptor_sets;
     darray<VkDescriptorSetLayout> m_descriptor_set_layouts;
     darray<VkDescriptorType> m_descriptor_types;
+    darray<darray<VkDescriptorSetLayoutBinding>> m_descriptor_bindings;
 
     index_type new_descriptor_set() {
       index_type index = this->length();
@@ -591,6 +652,7 @@ namespace vulkan {
       m_descriptor_sets.push_back(VK_NULL_HANDLE);
       m_descriptor_set_layouts.push_back(VK_NULL_HANDLE);
       m_descriptor_types.push_back(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+      m_descriptor_bindings.push_back({});
 
       return index;
     }
@@ -611,19 +673,18 @@ namespace vulkan {
     }
 
     bool ok_descriptor_set(index_type index) const {
-      bool r =
-	ok_index(index) &&
-	(m_descriptor_set_layouts.at(index) != VK_NULL_HANDLE) &&
-	(m_descriptor_sets.at(index) != VK_NULL_HANDLE);
-      ASSERT(r);
-      return r;
+      return
+	c_assert(ok_index(index)) &&
+	c_assert(m_descriptor_set_layouts.at(index) != VK_NULL_HANDLE) &&
+	c_assert(m_descriptor_sets.at(index) != VK_NULL_HANDLE);
     }
     
     index_type make_descriptor_set(const device_resource_properties& properties,
 				   const descriptor_set_gen_params& params) {
-      index_type descriptor_set{k_unset};
+      index_type handle{k_unset};
 
-      if (properties.ok() && params.ok()) {
+      if (c_assert(properties.ok()) &&
+	  c_assert(params.ok())) {
 	VkDescriptorSetLayout desc_set_layout{VK_NULL_HANDLE};
         VkDescriptorSet desc_set{VK_NULL_HANDLE};       
 
@@ -633,24 +694,25 @@ namespace vulkan {
 						     bindings.data(),
 						     bindings.size());
 
-	if (H_OK(desc_set_layout)) {
+	if (c_assert(H_OK(desc_set_layout))) {
 	  desc_set = vulkan::make_descriptor_set(properties.device,
 						 properties.descriptor_pool,
 						 &desc_set_layout,
 						 1);
 	}
 
-	if (H_OK(desc_set)) {
-	  descriptor_set = new_descriptor_set();
+	if (c_assert(H_OK(desc_set))) {
+	  handle = new_descriptor_set();
 	  
-	  m_descriptor_set_layouts[descriptor_set] = desc_set_layout;
-	  m_descriptor_sets[descriptor_set] = desc_set;
-	  m_descriptor_types[descriptor_set] = params.type;
+	  m_descriptor_set_layouts[handle] = desc_set_layout;
+	  m_descriptor_sets[handle] = desc_set;
+	  m_descriptor_types[handle] = params.type;
+	  m_descriptor_bindings[handle] = bindings;
 	}
       }
-      ASSERT(ok_descriptor_set(descriptor_set));
+      ASSERT(ok_descriptor_set(handle));
 
-      return descriptor_set;
+      return handle;
     }
 
     VkDescriptorType descriptor_type(index_type index) const {
@@ -668,11 +730,37 @@ namespace vulkan {
 			    VkDescriptorSet);
     }
 
+    darray<VkDescriptorSet> descriptor_sets(const darray<index_type>& indices) const {
+      return
+	fmap_start
+	fmap_from index_type
+	fmap_to VkDescriptorSet
+	fmap_using indices
+	fmap_via
+	[this](const index_type& index) {
+	  return descriptor_set(index);
+	}
+	fmap_end;
+    }
+
     VkDescriptorSetLayout descriptor_set_layout(index_type index) const {
       VK_HANDLE_GET_FN_IMPL(index,
 			    ok_descriptor_set,
 			    m_descriptor_set_layouts,
 			    VkDescriptorSetLayout);
+    }
+
+    darray<VkDescriptorSetLayout> descriptor_set_layouts(const darray<index_type>& indices) const {
+      return
+        fmap_start
+	fmap_from index_type
+	fmap_to VkDescriptorSetLayout
+	fmap_using indices
+	fmap_via
+	[this](const index_type& index) {
+	  return descriptor_set_layout(index);
+	}
+	fmap_end;	
     }
 
     bool write_buffer(index_type index,

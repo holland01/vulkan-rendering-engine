@@ -249,7 +249,7 @@ namespace vulkan {
 	  write_desc_set.dstSet = m_descriptor_set_pool->descriptor_set(m_descriptor_sets.at(index));
 	  write_desc_set.descriptorType = m_descriptor_set_pool->descriptor_type(m_descriptor_sets.at(index));
 	  
-	  write_desc_set.dstBinding = m_desc_layout_binding_indices.at(index);
+	  write_desc_set.dstBinding = 0;
 	  write_desc_set.dstArrayElement = 0;
 	
 	  write_desc_set.descriptorCount = v_image_info.size();

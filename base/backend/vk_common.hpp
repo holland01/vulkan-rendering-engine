@@ -451,6 +451,12 @@ namespace vulkan {
       free_device_handle<VkImage, &vkDestroyImage>(device, image);
       free_device_handle<VkDeviceMemory, vkFreeMemory>(device, memory);
     }
+
+    // TODO: query valid device format
+    // using API
+    static VkFormat query_format() {
+      return VK_FORMAT_D24_UNORM_S8_UINT;
+    }
   };
   
   std::string to_string(VkExtent3D e);
@@ -508,6 +514,12 @@ namespace vulkan {
 							uint32_t binding_index,
 							uint32_t array_element,
 							VkDescriptorType descriptor_type);
+
+  VkWriteDescriptorSet make_write_descriptor_set(VkDescriptorSet descset,
+						 const VkDescriptorImageInfo* image_info,
+						 uint32_t binding,
+						 VkDescriptorType type,
+						 uint32_t descriptor_count = 1);
   
   bool write_descriptor_set(VkDevice device,
 			    VkBuffer buffer,
