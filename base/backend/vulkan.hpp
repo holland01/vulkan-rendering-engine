@@ -111,6 +111,48 @@ namespace vulkan {
   struct descriptors {
     darray<descriptor_set_pool::index_type> attachment_read;
   };
+
+  namespace push_constant {
+    struct standard_surface {
+      vec3_t opacity{R(1)};
+      float transparency{R(1)};
+      uint32_t sampler{0};
+    };
+    
+    template <class T, VkShaderStageFlags flags>
+    static inline VkPushConstantRange range(uint32_t offset = 0) {
+      return
+	{
+	 flags,
+	 offset,
+	 sizeof(T)
+	};
+    }
+
+    template <class T, VkShaderStageFlags flags>
+    static inline void upload(T* ptr, VkCommandBuffer cmd_buffer, VkPipelineLayout layout, uint32_t offset=0) {
+      vkCmdPushConstants(cmd_buffer,
+			 layout,
+			 flags,
+			 offset,
+			 sizeof(T),
+			 ptr);
+    }
+
+    static inline VkPushConstantRange standard_surface_range() {
+      return range<standard_surface,
+		   VK_SHADER_STAGE_FRAGMENT_BIT>();
+    }
+
+    static inline void standard_surface_upload(standard_surface& pc,
+				 VkCommandBuffer cmd_buffer,
+				 VkPipelineLayout layout) {
+      upload<standard_surface,
+	     VK_SHADER_STAGE_FRAGMENT_BIT>(&pc,
+					   cmd_buffer,
+					   layout);
+    }
+  }
   
   using vertex_list_t = darray<vertex_data>;
     
@@ -2024,11 +2066,7 @@ namespace vulkan {
 			     },
 			     // push constant ranges
 			     {
-			      {
-			       VK_SHADER_STAGE_FRAGMENT_BIT,
-			       0,
-			       sizeof(int)
-			      }
+			      push_constant::standard_surface_range()
 			     }
 			    },
 			    // pipeline
@@ -2329,25 +2367,24 @@ namespace vulkan {
 
     void commands_draw_main(VkCommandBuffer cmd_buffer,
 			    VkPipelineLayout pipeline_layout) const {
+      push_constant::standard_surface pc{};
+
+      pc.opacity.r = R(0);
+      pc.opacity.g = R(0);
+      pc.opacity.b = R(0.25);
+
+      pc.transparency = R(0.5);
+      
       // Note that instances are per-triangle
-      uint32_t sampler0 = 0;
-      vkCmdPushConstants(cmd_buffer,
-			 pipeline_layout,
-			 VK_SHADER_STAGE_FRAGMENT_BIT,
-			 0,
-			 sizeof(sampler0),
-			 &sampler0);
-	    
+      pc.sampler = 0;
+      push_constant::standard_surface_upload(pc, cmd_buffer, pipeline_layout);
       commands_draw_inner_objects(cmd_buffer);
 	  
-      uint32_t sampler1 = 1;
-      vkCmdPushConstants(cmd_buffer,
-			 pipeline_layout,
-			 VK_SHADER_STAGE_FRAGMENT_BIT,
-			 0,
-			 sizeof(sampler1),
-			 &sampler1);
+      pc.sampler = 1;
+
+      pc.transparency = R(0.1);
       
+      push_constant::standard_surface_upload(pc, cmd_buffer, pipeline_layout);      
       commands_draw_room(cmd_buffer);
     }
 
