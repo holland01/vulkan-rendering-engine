@@ -35,6 +35,8 @@ quad: quad.vert.spv quad.frag.spv
 
 attachment_read: attachment_read.vert.spv attachment_read.frag.spv
 
+main: tri_ubo attachment_read
+
 clean:
 	rm -rf bin
 	rm -f *~
