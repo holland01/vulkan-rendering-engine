@@ -202,6 +202,8 @@ namespace vulkan {
       if (c_assert(m_pipeline_layout_pool != nullptr) &&
 	  properties.ok() &&
 	  params.ok()) {
+
+	std::cout << "BEGIN PIPELINE CREATION FOR " << params.vert_spv_path << ", " << params.frag_spv_path << std::endl; 
 	
 	VkPipeline pl_object{VK_NULL_HANDLE};
 
@@ -210,8 +212,6 @@ namespace vulkan {
 	// 
 	auto spv_vshader = read_file(params.vert_spv_path);
 	auto spv_fshader = read_file(params.frag_spv_path);
-
-	std::cout << params.vert_spv_path << ", " << params.frag_spv_path << std::endl; 
 		
 	ASSERT(!spv_vshader.empty());
 	ASSERT(!spv_fshader.empty());
@@ -352,7 +352,9 @@ namespace vulkan {
 
 	  m_pipeline_layouts[pipeline_index] = params.pipeline_layout_index;
 	  m_pipelines[pipeline_index] = pl_object;
-	}	
+	}
+
+	std::cout << "END PIPELINE CREATION FOR " << params.vert_spv_path << ", " << params.frag_spv_path << std::endl; 
       }
 
       return pipeline_index;

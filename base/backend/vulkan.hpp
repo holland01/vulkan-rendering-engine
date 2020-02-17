@@ -166,9 +166,13 @@ namespace vulkan {
     // so positive rotation about a given axis
     // is counter-clockwise
     vertex_list_t m_vertex_buffer_vertices =
+      // triangle on the left
       model_triangle(R3v(-2.25, 0, 0)) + // offset: 0, length: 3
+      // triangle on the right
       model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) + // offset: 3, length: 3
+      // center cube
       model_cube(k_mirror_cube_center, R3(1), k_mirror_cube_size) + // offset: 6, length: 36
+      // room cube, containing all objects
       model_cube(k_room_cube_center,
 		 R3(1),
 		 k_room_cube_size); // offset: 42, length: 36
@@ -1362,8 +1366,8 @@ namespace vulkan {
           m_vk_physical_devs.resize(device_count);
 
           VK_FN(vkEnumeratePhysicalDevices(m_vk_instance,
-                                            &device_count,
-                                            &m_vk_physical_devs[0]));
+					   &device_count,
+					   &m_vk_physical_devs[0]));
         }
       }
     }
@@ -1777,14 +1781,15 @@ namespace vulkan {
 	{
 	  descriptor_set_gen_params descriptor_set_params =
 	    {
-	     // darray<VkShaderStageFlags> stages
+	     // stages
 	     {
 	      VK_SHADER_STAGE_FRAGMENT_BIT
 	     },
+	     // descriptor_counts
 	     {
 	      2
 	     },
-	     // VkDescriptorType type
+	     // type
 	     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
 	    };
 
@@ -1800,14 +1805,15 @@ namespace vulkan {
 	{
 	  descriptor_set_gen_params descriptor_set_params =
 	    {
-	     // darray<VkShaderStageFlags> stages
+	     // stages
 	     {
 	      VK_SHADER_STAGE_FRAGMENT_BIT
 	     },
+	     // descriptor_counts
 	     {
 	      1
 	     },
-	     // VkDescriptorType type
+	     // type
 	     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
 	    };
 
@@ -1882,8 +1888,7 @@ namespace vulkan {
 	   // type
 	   VK_IMAGE_TYPE_2D,
 	   // view type
-	   VK_IMAGE_VIEW_TYPE_2D,
-	    
+	   VK_IMAGE_VIEW_TYPE_2D,	  
 	   // aspect flags
 	   VK_IMAGE_ASPECT_COLOR_BIT,
 	   // source pipeline stage
