@@ -94,11 +94,6 @@ namespace vulkan {
     }
   };
 
-  struct transform_data {
-    mat4_t view_to_clip{R(1.0)};
-    mat4_t world_to_view{R(1.0)};    
-  };
-
   struct sampler_data {
     int sampler_index;
   };
@@ -112,7 +107,64 @@ namespace vulkan {
     darray<descriptor_set_pool::index_type> attachment_read;
   };
 
+  namespace uniform_block {
+    struct transform {
+      mat4_t view_to_clip{R(1.0)};
+      mat4_t world_to_view{R(1.0)};    
+    };
+
+    struct surface {
+      vec3_t albedo;
+      float metallic;
+      float roughness;
+      float ao; // ambient occlusion
+    };
+
+    static constexpr inline uint32_t k_binding_transform = 0;
+    static constexpr inline uint32_t k_binding_surface = 1;
+
+    struct series_gen {
+      device_resource_properties properties;
+      descriptor_set_pool::index_type series_index{descriptor_set_pool::k_unset};
+      uniform_block_pool* pool{nullptr};
+      
+
+      template <class blockStructType>
+      bool make(uniform_block_data<blockStructType>& block,
+		uint32_t binding_index,
+		uint32_t array_elem_index = 0) {
+	bool ret{false};
+	if (c_assert(properties.ok()) &&
+	    c_assert(pool != nullptr) &&
+	    c_assert(series_index != descriptor_set_pool::k_unset)) {
+	  block.index = pool->make_uniform_block(properties,
+						 {
+						  // descriptor set index
+						  series_index,
+						  // block upload address
+						  static_cast<void*>(&block.data),
+						  // block upload size
+						  sizeof(block.data),
+						  //
+						  array_elem_index,
+						  //
+						  binding_index
+						 });
+
+	  block.pool = pool;
+	  
+	  ret = block.ok();
+	  
+	}
+	return ret;
+      }
+
+    };
+    
+  }
+
   namespace push_constant {
+    // autodesk - WIP
     struct standard_surface {
       vec3_t opacity{R(1)};
       float transparency{R(1)};
@@ -189,8 +241,9 @@ namespace vulkan {
     
     depthbuffer_data m_depthbuffer{};
     
-    uniform_block_data<transform_data> m_transform_uniform_block{};
-
+    uniform_block_data<uniform_block::transform> m_transform_uniform_block{};
+    uniform_block_data<uniform_block::surface> m_surface_uniform_block{};
+    
     static inline constexpr vec3_t k_room_cube_center = R3v(0, 0, 0);
     static inline constexpr vec3_t k_room_cube_size = R3(20);
     static inline constexpr vec3_t k_mirror_cube_center = R3v(0, 0, 0);
@@ -1764,15 +1817,18 @@ namespace vulkan {
     
     void setup_uniform_block_data() {
       if (ok_attachment_read_descriptors()) {
+	// setup descriptor set for all uniform blocks
 	{
 	  descriptor_set_gen_params uniform_block_desc_set_params =
 	    {
 	     {
-	      VK_SHADER_STAGE_VERTEX_BIT // binding 0: transform block
+	      VK_SHADER_STAGE_VERTEX_BIT, // binding 0: transform block
+	      VK_SHADER_STAGE_VERTEX_BIT // binding 1: surface block
 	     },
-	     // separate descriptors
+	     // descriptor counts for each binding
 	     {
-	      1
+	      1, // binding 0
+	      1 // binding 1
 	     },
 	     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
 	    };
@@ -1782,30 +1838,26 @@ namespace vulkan {
 						      uniform_block_desc_set_params);
 	}
 
+	// the pool will forward descriptor set info when
+	// creating a uniform block
 	m_uniform_block_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
-	
-	{
-	  uniform_block_gen_params transform_block_params =
-	    {
-	     m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks],	   
 
-	     static_cast<void*>(&m_transform_uniform_block.data),
-	     sizeof(m_transform_uniform_block.data),
-	     // array element index
-	     0,
-	     // binding index
-	     0
-	    };
-	
-	  m_transform_uniform_block.index =
-	    m_uniform_block_pool.make_uniform_block(make_device_resource_properties(),
-						    transform_block_params);
+	//
+	// generate the uniform blocks.
+	//
+	// m_uniform_block_pool will be assigned to each
+	// created block data instance
+	//
+	uniform_block::series_gen gen
+	  {
+	   make_device_resource_properties(),
+	   m_test_descriptor_set_indices.at(k_descriptor_set_uniform_blocks),
+	   &m_uniform_block_pool
+	  };
 
-	  m_transform_uniform_block.pool = &m_uniform_block_pool;
-	}
-
-
-	m_ok_uniform_block_data = m_transform_uniform_block.ok();
+	m_ok_uniform_block_data =
+	  gen.make<uniform_block::transform>(m_transform_uniform_block, uniform_block::k_binding_transform) &&
+	  gen.make<uniform_block::surface>(m_surface_uniform_block, uniform_block::k_binding_surface);
       }
     }
     
