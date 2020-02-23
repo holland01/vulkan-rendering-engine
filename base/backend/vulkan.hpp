@@ -272,7 +272,6 @@ namespace vulkan {
     //
     static constexpr inline int k_descriptor_set_samplers = 0;
     static constexpr inline int k_descriptor_set_uniform_blocks = 1; 
-    static constexpr inline int k_descriptor_set_sampler_cubemap = 2;
     static constexpr inline int k_descriptor_set_input_attachment = 3;
     
     darray<descriptor_set_pool::index_type> m_test_descriptor_set_indices =
@@ -284,8 +283,7 @@ namespace vulkan {
       };   
     
     static constexpr inline int k_pass_texture2d = 0;
-    static constexpr inline int k_pass_cubemap = 1;
-    static constexpr inline int k_pass_test_fbo = 2; // test FBO pass   
+    static constexpr inline int k_pass_test_fbo = 1; // test FBO pass   
 
     darray<pipeline_layout_pool::index_type> m_pipeline_layout_indices =
       {
@@ -1841,30 +1839,6 @@ namespace vulkan {
 	}
 
 	//
-	// create our descriptor set that's used for
-	// the cubemap
-	// 
-	{
-	  descriptor_set_gen_params descriptor_set_params =
-	    {
-	     // stages
-	     {
-	      VK_SHADER_STAGE_FRAGMENT_BIT
-	     },
-	     // descriptor_counts
-	     {
-	      1
-	     },
-	     // type
-	     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-	    };
-
-	  m_test_descriptor_set_indices[k_descriptor_set_sampler_cubemap] =
-	    m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
-						      descriptor_set_params);
-	}
-
-	//
 	// make first image/texture
 	//
 
@@ -2105,37 +2079,6 @@ namespace vulkan {
 			     // frag spv path
 			     realpath_spv("attachment_read.frag.spv")			     
 			    });
-    }
-    
-    bool setup_pipeline_cubemap() {
-      return false;
-      /*
-      return setup_pipeline(k_pass_cubemap,
-			    // pipeline layout
-			    {
-			     // descriptor set layouts
-			     {
-			      descriptor_set_layout(k_descriptor_set_sampler_cubemap),
-			      
-			      descriptor_set_layout(k_descriptor_set_uniform_blocks)
-			     },
-			     // push constant ranges
-			     {}
-			    },
-			    // pipeline
-			    {
-			     // render pass
-			     m_vk_render_pass,
-			     // viewport extent
-			     m_vk_swapchain_extent,	   
-			     // vert spv path
-			     realpath_spv("cubemap.vert.spv"),
-			     // frag spv path
-			     realpath_spv("cubemap.frag.spv")
-
-			     // remaining index parameters handled in setup_pipeline()
-			    });
-      */
     }
     
     void setup_graphics_pipeline() {      
