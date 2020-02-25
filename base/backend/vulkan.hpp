@@ -14,6 +14,7 @@
 #include "vk_image.hpp"
 #include "vk_uniform_buffer.hpp"
 #include "vk_pipeline.hpp"
+#include "vk_model.hpp"
 
 #include <optional>
 #include <set>
@@ -162,7 +163,7 @@ namespace vulkan {
     };
     
   }
-
+  
   namespace push_constant {
     // autodesk - WIP
     struct standard_surface {
@@ -337,6 +338,7 @@ namespace vulkan {
       };
     
     bool m_ok_present{false};
+    bool m_ok_vertex_data{false};
     bool m_ok_descriptor_pool{false};
     bool m_ok_render_pass{false};
     bool m_ok_attachment_read_descriptors{false};
@@ -1193,6 +1195,11 @@ namespace vulkan {
       return r;
     }
 
+    bool ok_vertex_data() const {
+      return
+	ok() &&
+	c_assert(m_ok_vertex_data);
+    }
     
     bool ok_descriptor_pool() const {
       bool r = ok() && m_ok_descriptor_pool;
@@ -1431,9 +1438,66 @@ namespace vulkan {
 	m_ok_present = true;
       }
     }
+
+    void setup_vertex_data() {
+      if (ok_present()) {
+	auto add_verts =
+	  [this](mesh_builder& mb) {
+	    m_instance_count += mb.vertices.size() / 3;
+	    
+	    m_vertex_buffer_vertices =
+	      m_vertex_buffer_vertices + mb.vertices;	    
+	  };
+	
+	{
+	  mesh_builder mb{};
+
+	  mb
+	    .triangle()
+	    .with_translate(R3v(-2.25, 0, 0));
+	  
+	  add_verts(mb);
+	}
+
+	{
+	  mesh_builder mb{};
+
+	  mb
+	    .set_color(R3v(0, 0.5, 0.8))
+	    .triangle()
+	    .with_translate(R3v(2.25, 0, 1));
+	  
+	  add_verts(mb);
+	}
+
+	{
+	  mesh_builder mb{};
+
+	  mb
+	    .cube()
+	    .with_scale(k_mirror_cube_size)
+	    .with_translate(k_mirror_cube_center);
+	  
+	  add_verts(mb);
+	}
+
+	{
+	  mesh_builder mb{};
+
+	  mb
+	    .cube()
+	    .with_scale(k_room_cube_size)
+	    .with_translate(k_room_cube_center);
+
+	  add_verts(mb);
+	}
+	
+	m_ok_vertex_data = true;
+      }
+    }
     
     void setup_descriptor_pool() {
-      if (ok_present()) {       
+      if (ok_vertex_data()) {       
         darray<VkDescriptorPoolSize> pool_sizes =
 	  {
 	   // type, descriptorCount
@@ -2460,6 +2524,7 @@ namespace vulkan {
 
     void setup() {
       setup_presentation();
+      setup_vertex_data();
       setup_descriptor_pool();
       setup_render_pass();
       setup_attachment_read_descriptors();
