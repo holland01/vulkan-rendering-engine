@@ -205,8 +205,6 @@ namespace vulkan {
 					   layout);
     }
   }
-  
-  using vertex_list_t = darray<vertex_data>;
     
   class renderer {    
     uint32_t m_instance_count{0};   

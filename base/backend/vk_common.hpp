@@ -228,13 +228,14 @@ namespace vulkan {
     }
   };
 
-
-  
   struct vertex_data {
     vec3_t position;
     vec2_t st;
     vec3_t color;
+    vec3_t normal;
   };
+
+  using vertex_list_t = darray<vertex_data>;
   
   struct device_resource_properties {
     darray<uint32_t> queue_family_indices;
