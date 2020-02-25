@@ -254,24 +254,10 @@ namespace vulkan {
     static inline constexpr vec3_t k_color_blue = R3v(0, 0, 1);
 
     static inline constexpr int32_t k_sampler_checkerboard = 0;
-    static inline constexpr int32_t k_sampler_aqua = 1;
-    
-    // NOTE:
-    // right handed system,
-    // so positive rotation about a given axis
-    // is counter-clockwise
-    vertex_list_t m_vertex_buffer_vertices =
-      // triangle on the left
-      model_triangle(R3v(-2.25, 0, 0)) + // offset: 0, length: 3
-      // triangle on the right
-      model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) + // offset: 3, length: 3
-      // center cube
-      model_cube(k_mirror_cube_center, R3(1), k_mirror_cube_size) + // offset: 6, length: 36
-      // room cube, containing all objects
-      model_cube(k_room_cube_center,
-		 R3(1),
-		 k_room_cube_size); // offset: 42, length: 36
-      
+    static inline constexpr int32_t k_sampler_aqua = 1;       
+
+    vertex_list_t m_vertex_buffer_vertices{};
+
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
     VkDescriptorPool m_vk_descriptor_pool{VK_NULL_HANDLE};   
@@ -381,107 +367,6 @@ namespace vulkan {
     static inline darray<const char*> s_device_extensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
-
-    static constexpr inline real_t k_tri_ps = R(1);
-    
-    vertex_list_t model_triangle(vec3_t offset = R3(0), vec3_t color = R3(1)) {
-      m_instance_count++;
-      return
-	{
-	 { R3v(-k_tri_ps, k_tri_ps, 0.0) + offset, R2v(0.0, 0.0), color }, // top left position, top left texture
-	 { R3v(k_tri_ps, -k_tri_ps, 0.0) + offset, R2v(1.0, 1.0), color }, // bottom right position, bottom right texture
-	 { R3v(-k_tri_ps, -k_tri_ps, 0.0) + offset, R2v(0.0, 1.0), color }
-	};
-    }
-    
-    vertex_list_t model_quad(vec3_t translate = R3(0),
-			     vec3_t color = R3(1),
-			     vec3_t scale = R3(1),
-			     darray<rot_cmd> rot = darray<rot_cmd>()) {
-      
-      auto a = model_triangle(R3(0), color);
-      auto b = model_triangle(R3(0), color);
-
-      a[1].position.y = R(k_tri_ps); // flip to top
-      a[1].st.y = R(0);
-      
-      a[2].position.x = R(k_tri_ps); 
-      a[2].st.x = R(1);
-
-      auto combined = a + b;
-      
-      for (vertex_data& vertex: combined) {
-	vertex.position *= scale;
-	for (const auto& cmd: rot) {
-	  mat4_t R = glm::rotate(mat4_t(R(1)), cmd.rad, cmd.axes);
-	  vertex.position = MAT4V3(R, vertex.position);
-	}
-	vertex.position += translate * scale;
-      }
-
-      return combined;
-    }
-
-    vertex_list_t model_cube(vec3_t translate = R3(0),
-			     vec3_t color = R3(1),
-			     vec3_t scale = R3(1)) {
-      return
-	// left face
-	model_quad(translate + R3v(-1, 0, 0),
-		   color,
-		   scale,
-		   {
-		    {
-		     R3v(0, 1, 0),
-		     glm::half_pi<real_t>()
-		    }
-		   }) +
-
-	// right face
-	model_quad(translate + R3v(1, 0, 0),
-		   color,
-		   scale,
-		   {
-		    {
-		     R3v(0, 1, 0),
-		     glm::half_pi<real_t>()
-		    }
-		   }) +
-
-	// up face
-	model_quad(translate + R3v(0, 1, 0),
-		   color,
-		   scale,
-		   {
-		    {
-		     R3v(1, 0, 0),
-		     -glm::half_pi<real_t>()
-		    }
-		   }) +
-
-	// down face
-	model_quad(translate + R3v(0, -1, 0),
-		   color,
-		   scale,
-		   {
-		    {
-		     R3v(1, 0, 0),
-		     glm::half_pi<real_t>()
-		    }
-		   }) +
-      
-	// front face
-	model_quad(translate + R3v(0, 0, 1),
-		   color,
-		   scale,
-		   {}) +
-
-	// back face
-	model_quad(translate + R3v(0, 0, -1),
-		   color,
-		   scale,
-		   {});
-    }
     
     VkPipelineLayout pipeline_layout(int index) const {
       return
