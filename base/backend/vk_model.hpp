@@ -27,8 +27,10 @@ namespace vulkan {
       m = glm::rotate(m, theta, ax); return *this;
     }
 
-    transform& left(const transform& t) {
-      m = m * t.m;
+    transform& operator *=(const transform& t) {
+      m *= t.m;
+      return *this;
+    }
       return *this;
     }
 
@@ -197,7 +199,7 @@ namespace vulkan {
 	models.clear();
 
 	for (const auto& t: transforms) {
-	  taccum.left(t);
+	  taccum *= t;
 	}
 
 	transforms.clear();
