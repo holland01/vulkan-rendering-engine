@@ -38,6 +38,9 @@ namespace vulkan {
       m *= t.m;
       return *this;
     }
+
+    transform& reset() {
+      m = mat4_t{R(1.0)};
       return *this;
     }
 
@@ -190,12 +193,19 @@ namespace vulkan {
       
       return *this;
     }
+
+    mesh_builder& reset() {
+      vertices.clear();
+      taccum.reset();
+      return *this;
+    }
     
     mesh_builder& push() {
       if (c_assert(!vertices.empty())) {
 	transforms.push_back(taccum);
 	models.push_back(vertices);
-	vertices.clear();
+	
+	reset();
       }
       return *this;
     }
