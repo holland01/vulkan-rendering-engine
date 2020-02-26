@@ -20,15 +20,18 @@ namespace vulkan {
     {}
     
     transform& translate(vec3_t t) {
-      m = glm::translate(m, t); return *this;
+      m = glm::translate(m, t);
+      return *this;
     }
 
     transform& scale(vec3_t s) {
-      m = glm::scale(m, s); return *this;
+      m = glm::scale(m, s);
+      return *this;
     }
 
     transform& rotate(vec3_t ax, real_t theta) {
-      m = glm::rotate(m, theta, ax); return *this;
+      m = glm::rotate(m, theta, ax);
+      return *this;
     }
 
     transform& operator *=(const transform& t) {
