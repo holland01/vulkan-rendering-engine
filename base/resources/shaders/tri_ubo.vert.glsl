@@ -7,6 +7,8 @@ layout(location = 3) in vec3 in_Normal;
 
 layout(location = 0) out vec2 frag_TexCoord;
 layout(location = 1) out vec3 frag_Color;
+layout(location = 2) out vec3 frag_Normal;
+layout(location = 3) out vec3 frag_WorldPosition;
 
 layout(set = 1, binding = 0) uniform transforms_uniform_block {
   mat4 viewToClip;
@@ -30,4 +32,6 @@ void main() {
   
   frag_TexCoord = in_TexCoord;
   frag_Color = in_Color;
+  frag_Normal = mat3(modelBuffer.modelToWorld) * in_Normal;
+  frag_WorldPosition = fixup_position(worldPosition).xyz;
 }

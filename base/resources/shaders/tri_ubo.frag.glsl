@@ -8,6 +8,8 @@
 
 layout(location = 0) in vec2 frag_TexCoord;
 layout(location = 1) in vec3 frag_Color;
+layout(location = 2) in vec3 frag_Normal;
+layout(location = 3) in vec3 frag_WorldPosition;
 
 layout(location = 0) out vec4 out_Color;
 
