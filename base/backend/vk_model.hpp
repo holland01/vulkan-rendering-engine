@@ -12,9 +12,13 @@ namespace vulkan {
   
   struct transform {
   private:
-    mat4_t m{R(1.0)};
+    mat4_t m;
     
   public:
+    transform(const mat4_t& m = mat4_t{R(1.0)})
+      : m{m}
+    {}
+    
     transform& translate(vec3_t t) {
       m = glm::translate(m, t); return *this;
     }
@@ -38,6 +42,11 @@ namespace vulkan {
       return m;
     }
   };
+
+  static inline transform operator * (const transform& a, const transform& b) {
+    transform m(a() * b());
+    return m;
+  }
   
   struct mesh_builder {
     static constexpr inline real_t k_tri_ps = R(1);
