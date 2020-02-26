@@ -2394,24 +2394,25 @@ namespace vulkan {
     
     void commands_draw_main(VkCommandBuffer cmd_buffer,
 			    VkPipelineLayout pipeline_layout) const {
-      push_constant::standard_surface pc{};
-
-      pc.opacity.r = R(0);
-      pc.opacity.g = R(0);
-      pc.opacity.b = R(0.25);
-
-      pc.transparency = R(0.5);
       
-      // Note that instances are per-triangle
-      pc.sampler = 0;
-      push_constant::standard_surface_upload(pc, cmd_buffer, pipeline_layout);
-	  
-      pc.sampler = 1;
+      push_constant::standard_surface pc_ss{};
+
+      pc_ss.opacity.r = R(0);
+      pc_ss.opacity.g = R(0);
+      pc_ss.opacity.b = R(0.25);
+      pc_ss.transparency = R(0.5);     
+      pc_ss.sampler = 0;
+      push_constant::standard_surface_upload(pc_ss, cmd_buffer, pipeline_layout);
+      
       commands_draw_inner_objects(cmd_buffer, pipeline_layout);
 
-      pc.transparency = R(0.1);
+      pc_ss.opacity.r = R(0);
+      pc_ss.opacity.g = R(0);
+      pc_ss.opacity.b = R(0.25);
+      pc_ss.transparency = R(0.1);
+      pc_ss.sampler = 1;
+      push_constant::standard_surface_upload(pc_ss, cmd_buffer, pipeline_layout);
       
-      push_constant::standard_surface_upload(pc, cmd_buffer, pipeline_layout);      
       commands_draw_room(cmd_buffer, pipeline_layout);
     }
 
