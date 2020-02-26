@@ -68,7 +68,6 @@ namespace vulkan {
   };
 
   struct framebuffer_attachments {
-
     struct color_depth_pair {
       image_pool::index_type color_attachment;
       image_pool::index_type depth_attachment;
@@ -165,12 +164,34 @@ namespace vulkan {
   }
   
   namespace push_constant {
+    // NOTE:
+    // currently the standard_surface and
+    // model push constants
+    // are used in the same program, just at different stages.
+    // the model is used in the vertex stage, and the
+    // standard surface in the fragment shage.
+    // despite being used at different stages,
+    // the push constants are viewed as one contiguous
+    // buffer for a given pipeline layout;
+    // thus, a byte offset for at least one of these
+    // must be specified. For now, the model
+    // offset is listed here at <k_model_offset> bytes.
+    // there is a hole in the middle between the two,
+    // but that's ok since standard_surface will end
+    // up having more parameters as we move forward.
+    
     // autodesk - WIP
     struct standard_surface {
       vec3_t opacity{R(1)};
       float transparency{R(1)};
       uint32_t sampler{0};
     };
+
+    struct model {
+      mat4_t model_to_world{R(1.0)};
+    };
+
+    static inline constexpr uint32_t k_model_offset = 64;
     
     template <class T, VkShaderStageFlags flags>
     static inline VkPushConstantRange range(uint32_t offset = 0) {
@@ -197,16 +218,31 @@ namespace vulkan {
 		   VK_SHADER_STAGE_FRAGMENT_BIT>();
     }
 
+    static inline VkPushConstantRange model_range() {
+      return range<model,
+		   VK_SHADER_STAGE_VERTEX_BIT>(k_model_offset);
+    }
+
     static inline void standard_surface_upload(standard_surface& pc,
-				 VkCommandBuffer cmd_buffer,
-				 VkPipelineLayout layout) {
+					       VkCommandBuffer cmd_buffer,
+					       VkPipelineLayout layout) {
       upload<standard_surface,
 	     VK_SHADER_STAGE_FRAGMENT_BIT>(&pc,
 					   cmd_buffer,
 					   layout);
     }
+
+    static inline void model_upload(model& pc,
+				    VkCommandBuffer cmd_buffer,
+				    VkPipelineLayout layout) {
+      upload<model,
+	     VK_SHADER_STAGE_VERTEX_BIT>(&pc,
+					 cmd_buffer,
+					 layout,
+					 k_model_offset);
+    }
   }
-    
+  
   class renderer {    
     uint32_t m_instance_count{0};   
     
@@ -2060,7 +2096,8 @@ namespace vulkan {
 			     },
 			     // push constant ranges
 			     {
-			      push_constant::standard_surface_range()
+			      push_constant::standard_surface_range(),
+			      push_constant::model_range()
 			     }
 			    },
 			    // pipeline
