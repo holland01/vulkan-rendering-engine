@@ -19,9 +19,14 @@ layout(push_constant) uniform sampler_index_buffer {
   vec3 opacity; // colored
   float transparency;
   int samplerIndex;
-};
+} fragPC;
 
 void main() {
+vec4 sample_texture() {
+  return texture(unif_Samplers[fragPC.samplerIndex & 0x1], frag_TexCoord);
+}
+
+vec4 standard_surface() {
   //
   // Transparency closure.
   //
@@ -37,14 +42,18 @@ void main() {
   // The transparency can be modified to darken
   // the color if desired.
   //
-  vec3 t = (vec3(1.0) - opacity) * transparency;
+  vec3 t = (vec3(1.0) - fragPC.opacity) * fragPC.transparency;
 
   //
   // Here is the color component of the opacity closure
   //
-  vec3 c = opacity * frag_Color;
+  vec3 c = fragPC.opacity * frag_Color;
   
-  vec3 standard_surface = t + c;
-  vec4 tex = texture(unif_Samplers[samplerIndex & 0x1], frag_TexCoord);
-  out_Color = tex * vec4(standard_surface, 1.0);
+  vec3 ss = t + c;
+
+  return sample_texture() * vec4(ss, 1.0);
+}
+
+void main() {
+  out_Color = standard_surface();
 }
