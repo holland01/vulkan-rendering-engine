@@ -2090,8 +2090,7 @@ namespace vulkan {
 			    {
 			     // descriptor set layouts
 			     {
-			      descriptor_set_layout(k_descriptor_set_samplers),
-			      
+			      descriptor_set_layout(k_descriptor_set_samplers),			      
 			      descriptor_set_layout(k_descriptor_set_uniform_blocks)
 			     },
 			     // push constant ranges
