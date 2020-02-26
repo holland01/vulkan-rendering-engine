@@ -2286,34 +2286,6 @@ namespace vulkan {
 			   VK_SUBPASS_CONTENTS_INLINE);      
     }
 
-    void commands_draw_inner_objects(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
-      commands_draw_model("left-triangle",
-			  cmd_buffer,
-			  pipeline_layout);
-
-      commands_draw_model("right-triangle",
-			  cmd_buffer,
-			  pipeline_layout);
-
-      commands_draw_model("inner-cube",
-			  cmd_buffer,
-			  pipeline_layout);
-    }
-
-    void commands_draw_room(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
-      commands_draw_model("outer-cube",
-			  cmd_buffer,
-			  pipeline_layout);
-    }
-
-    void commands_draw_quad_no_vb(VkCommandBuffer cmd_buffer) const {
-      vkCmdDraw(cmd_buffer,
-		4,
-		1,
-		0,
-		0);
-    }
-
     bool commands_begin_buffer(VkCommandBuffer cmd_buffer) {
       bool ret = ok();
       
@@ -2367,6 +2339,34 @@ namespace vulkan {
       return ret;
     }
 
+    void commands_draw_inner_objects(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
+      commands_draw_model("left-triangle",
+			  cmd_buffer,
+			  pipeline_layout);
+
+      commands_draw_model("right-triangle",
+			  cmd_buffer,
+			  pipeline_layout);
+
+      commands_draw_model("inner-cube",
+			  cmd_buffer,
+			  pipeline_layout);
+    }
+
+    void commands_draw_room(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
+      commands_draw_model("outer-cube",
+			  cmd_buffer,
+			  pipeline_layout);
+    }
+
+    void commands_draw_quad_no_vb(VkCommandBuffer cmd_buffer) const {
+      vkCmdDraw(cmd_buffer,
+		4,
+		1,
+		0,
+		0);
+    }
+    
     void commands_draw_model(uint32_t model,
 			     VkCommandBuffer cmd_buffer,
 			     VkPipelineLayout pipeline_layout) const {
