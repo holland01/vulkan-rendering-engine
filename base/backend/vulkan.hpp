@@ -254,7 +254,20 @@ namespace vulkan {
 
     static inline constexpr int32_t k_sampler_checkerboard = 0;
     static inline constexpr int32_t k_sampler_aqua = 1;       
+    
+    struct {
+      darray<transform> transforms{};
+      darray<uint32_t> vb_offsets{};
+      darray<uint32_t> vb_lengths{};
 
+      std::unordered_map<std::string, uint32_t> indices{};
+
+      size_t length() const {
+	return transforms.size();
+      }
+      
+    } m_model_data{};
+    
     vertex_list_t m_vertex_buffer_vertices{};
 
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
@@ -1442,54 +1455,62 @@ namespace vulkan {
     void setup_vertex_data() {
       if (ok_present()) {
 	auto add_verts =
-	  [this](mesh_builder& mb) {
+	  [this](const std::string& name,
+		 mesh_builder& mb) {
+	    
+	    m_model_data.indices[name] = m_model_data.length();
+	    
+	    m_model_data.vb_offsets.push_back(m_vertex_buffer_vertices.size());
+	    m_model_data.vb_lengths.push_back(mb.vertices.size());
+	    m_model_data.transforms.push_back(mb.taccum);
+	    
 	    m_instance_count += mb.vertices.size() / 3;
 	    
 	    m_vertex_buffer_vertices =
-	      m_vertex_buffer_vertices + mb.vertices;	    
+	      m_vertex_buffer_vertices + mb.vertices;
+
+	    // erase previous state,
+	    // so we can add a new model
+	    mb.reset();
 	  };
-	
+
 	{
 	  mesh_builder mb{};
 
+	  // generate left triangle
 	  mb
-	    .triangle()
-	    .with_translate(R3v(-2.25, 0, 0));
+	    .set_transform(transform()
+			   .translate(R3v(-2.25, 0, 0)))
+	    .triangle();
 	  
-	  add_verts(mb);
-	}
+	  add_verts("left-triangle", mb);
 
-	{
-	  mesh_builder mb{};
-
+	  // generate right triangle
 	  mb
+	    .set_transform(transform()
+			   .translate(R3v(2.25, 0, 1)))
 	    .set_color(R3v(0, 0.5, 0.8))
-	    .triangle()
-	    .with_translate(R3v(2.25, 0, 1));
+	    .triangle();
 	  
-	  add_verts(mb);
-	}
+	  add_verts("right-triangle", mb);
 
-	{
-	  mesh_builder mb{};
-
+	  // generate inner cube
 	  mb
+	    .set_transform(transform()
+			   .translate(k_mirror_cube_center))
 	    .cube()
-	    .with_scale(k_mirror_cube_size)
-	    .with_translate(k_mirror_cube_center);
+	    .with_scale(k_mirror_cube_size);
 	  
-	  add_verts(mb);
-	}
+	  add_verts("inner-cube", mb);	       
 
-	{
-	  mesh_builder mb{};
-
+	  // generate outer cube
 	  mb
+	    .set_transform(transform()
+			   .translate(k_room_cube_center))
 	    .cube()
-	    .with_scale(k_room_cube_size)
-	    .with_translate(k_room_cube_center);
+	    .with_scale(k_room_cube_size);
 
-	  add_verts(mb);
+	  add_verts("outer-cube", mb);
 	}
 	
 	m_ok_vertex_data = true;
