@@ -2286,22 +2286,24 @@ namespace vulkan {
 			   VK_SUBPASS_CONTENTS_INLINE);      
     }
 
-    void commands_draw_inner_objects(VkCommandBuffer cmd_buffer) const {
-      // first 3 objects: two triangles and one small cube
-      vkCmdDraw(cmd_buffer,
-		(m_instance_count - 12) * 3, // num vertices
-		m_instance_count - 12, // num instances
-		0, // first vertex
-		0); // first instance
+    void commands_draw_inner_objects(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
+      commands_draw_model("left-triangle",
+			  cmd_buffer,
+			  pipeline_layout);
+
+      commands_draw_model("right-triangle",
+			  cmd_buffer,
+			  pipeline_layout);
+
+      commands_draw_model("inner-cube",
+			  cmd_buffer,
+			  pipeline_layout);
     }
 
-    void commands_draw_room(VkCommandBuffer cmd_buffer) const {
-      // big cube encompassing the scene
-      vkCmdDraw(cmd_buffer,
-		36,
-		12, // (6 faces, 12 triangles)
-		42, // 3 vertices + 3 vertices + 36 vertices
-		14); // 2 triangles + one cube (6 faces, 12 triangles)
+    void commands_draw_room(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
+      commands_draw_model("outer-cube",
+			  cmd_buffer,
+			  pipeline_layout);
     }
 
     void commands_draw_quad_no_vb(VkCommandBuffer cmd_buffer) const {
@@ -2365,6 +2367,31 @@ namespace vulkan {
       return ret;
     }
 
+    void commands_draw_model(uint32_t model,
+			     VkCommandBuffer cmd_buffer,
+			     VkPipelineLayout pipeline_layout) const {
+
+      push_constant::model pc_m{};
+      
+      pc_m.model_to_world = m_model_data.transforms.at(model)();
+      push_constant::model_upload(pc_m, cmd_buffer, pipeline_layout);
+      
+      vkCmdDraw(cmd_buffer,
+		m_model_data.vb_lengths.at(model), // num vertices
+	        m_model_data.vb_lengths.at(model) / 3, // num instances
+		m_model_data.vb_offsets.at(model), // first vertex
+		m_model_data.vb_offsets.at(model) / 3); // first instance
+
+    }
+
+    void commands_draw_model(const std::string& name,
+			     VkCommandBuffer cmd_buffer,
+			     VkPipelineLayout pipeline_layout) const {
+      commands_draw_model(m_model_data.indices.at(name),
+			  cmd_buffer,
+			  pipeline_layout);
+    }
+    
     void commands_draw_main(VkCommandBuffer cmd_buffer,
 			    VkPipelineLayout pipeline_layout) const {
       push_constant::standard_surface pc{};
@@ -2378,14 +2405,14 @@ namespace vulkan {
       // Note that instances are per-triangle
       pc.sampler = 0;
       push_constant::standard_surface_upload(pc, cmd_buffer, pipeline_layout);
-      commands_draw_inner_objects(cmd_buffer);
 	  
       pc.sampler = 1;
+      commands_draw_inner_objects(cmd_buffer, pipeline_layout);
 
       pc.transparency = R(0.1);
       
       push_constant::standard_surface_upload(pc, cmd_buffer, pipeline_layout);      
-      commands_draw_room(cmd_buffer);
+      commands_draw_room(cmd_buffer, pipeline_layout);
     }
 
     //
