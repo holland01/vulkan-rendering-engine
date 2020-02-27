@@ -20,7 +20,8 @@ layout(push_constant) uniform model_buffer {
 } modelBuffer;
 
 vec4 fixup_position(in vec4 p) {
-  p.y = -p.y; // invert y axis since vulkan's coordinate system is inverted on Y
+  // invert y axis since vulkan's coordinate system is inverted on Y
+  p.y = -p.y;
   p.z = (p.z + p.w) * 0.5; // map NDC [-1,1] to NDC [0, 1]
   return p;
 }
@@ -33,5 +34,5 @@ void main() {
   frag_TexCoord = in_TexCoord;
   frag_Color = in_Color;
   frag_Normal = mat3(modelBuffer.modelToWorld) * in_Normal;
-  frag_WorldPosition = fixup_position(worldPosition).xyz;
+  frag_WorldPosition = worldPosition.xyz;
 }
