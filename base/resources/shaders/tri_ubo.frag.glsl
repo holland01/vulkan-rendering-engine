@@ -5,6 +5,79 @@
 // which this shader references:
 //
 // https://autodesk.github.io/standard-surface/#figure_opacity
+//
+// Other resources:
+//   - [2] https://learnopengl.com/PBR/Theory
+//
+//
+// "Solid angle" - measured in steradians. Is a portion of a sphere,
+// in the same sense that an "angle" measured in radians is
+// a portion of a unit circle.
+//
+// "radiance" - the strength of the light
+//
+// Notes from learnopengl.com
+//--------------------------------------------------------------------------
+//
+// At a high level, this is our lighting formula:
+//
+// input:
+//
+// int steps = 100;
+// vec3 P    = ...; <- arbitrary point on surface
+// vec3 Wo   = ...; <- direction from point to viewer's position
+// vec3 N    = ...; <- surface normal
+// float dW  = 1.0 / steps;
+//
+// output:
+//
+// float sum = 0.0;
+//
+// procedure:
+//
+// for(int i = 0; i < steps; ++i) {
+//   vec3 Wi = getNextIncomingLightDir(i);
+//   sum += reflectance(P, Wi, Wo) * radiance(P, Wi) * dot(N, Wi) * dW;
+// }
+//
+// reflectance is our BRDF function, which has a slew of various models
+// that can be relied upon.
+//
+// The first model that we'll be experimenting with is the cook torrance model,
+// which is fairly common.
+//
+// The reflectance is built of the following sum:
+//
+// reflectance = diffuse + specular
+//
+// the diffuse is calculated as follows:
+//
+// k_refracted_light * (surface_color / pi)
+//
+// the specular is more complicated:
+//
+// specular = normal_distribution(halfway_vector, smoothness) * fresnel(dot(N, Wo)) * geometry() / normalization_factor()
+//
+// ----
+// normal_distribution(halfway_vector, smoothness):
+// ----
+// computes an approximation for the amount that the surface's microfacets are aligned to the halfway vector.
+//
+// note that the halfway_vector = (Wi + Wo) / length(Wi + Wo)
+//
+// smoothness is obviously specific to the material.
+//
+// ----
+// fresnel(cosTheta):
+// ----
+// provides the ratio of surface reflection for the given surface angle
+//
+// ----
+// geometry()
+// ----
+//
+// describes a self-shadowing property of the microfacets
+
 
 layout(location = 0) in vec2 frag_TexCoord;
 layout(location = 1) in vec3 frag_Color;
