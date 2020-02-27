@@ -15,45 +15,136 @@ layout(location = 0) out vec4 out_Color;
 
 layout(set=0, binding=0) uniform sampler2D unif_Samplers[2];
 
-layout(push_constant) uniform sampler_index_buffer {
-  vec3 opacity; // colored
-  float transparency;
-  int samplerIndex;
-} fragPC;
+// note that vec3 is 16 byte aligned
+layout(push_constant) uniform basic_pbr {
+  layout(offset = 0) vec3 cameraPosition;
+  layout(offset = 16) vec3 albedo;
+  layout(offset = 32) float metallic;
+  layout(offset = 36) float roughness;
+  layout(offset = 40) float ao;
+  layout(offset = 44) int samplerIndex;
+} basicPbr;
 
-void main() {
-vec4 sample_texture() {
-  return texture(unif_Samplers[fragPC.samplerIndex & 0x1], frag_TexCoord);
+const float PI = 3.1415926535;
+
+// [2]
+// N: surface normal.
+// H: halfway vector. Is measured against the surface's microfacets
+// a: surface roughness.
+float distribution_ggx(vec3 N, vec3 H, float a) {
+    float a2     = a*a;
+    float NdotH  = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH*NdotH;
+	
+    float nom    = a2;
+    float denom  = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom        = PI * denom * denom;
+	
+    return nom / denom;
 }
 
-vec4 standard_surface() {
-  //
-  // Transparency closure.
-  //
-  //
-  // The inverse of each channel is computed here:
-  // a dark blue, for example might be defined as:
-  // opacity = (0, 0, 0.25)
-  //
-  // The inverse operation here will result in:
-  // inverse = 1.0 - opacity = (1, 1, 0.75)
-  // the end result is a yellowish off-white hue.
-  //
-  // The transparency can be modified to darken
-  // the color if desired.
-  //
-  vec3 t = (vec3(1.0) - fragPC.opacity) * fragPC.transparency;
+// [2]
+float k_direct(float a) {
+  return ((a + 1.0) * (a + 1.0)) * 0.125;
+}
 
-  //
-  // Here is the color component of the opacity closure
-  //
-  vec3 c = fragPC.opacity * frag_Color;
+// [2] 
+float k_ibl(float a) {
+  return (a * a) * 0.5;
+}
+
+// [2]
+vec3 f0() {
+  return mix(vec3(0.04), basicPbr.albedo, basicPbr.metallic);
+}
+
+// [2]
+// cosTheta: dot product between surface normal and viewing direction
+// F0: reflectance; computed from f0()
+vec3 fresnel_schlick(float cosTheta, vec3 F0) {
+  return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+// [2]
+// 
+float geometry_schlick_ggx(float NdotV, float k)
+{
+    float nom   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+	
+    return nom / denom;
+}
   
-  vec3 ss = t + c;
+float geometry_smith(vec3 N, vec3 V, vec3 L, float k)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx1 = geometry_schlick_ggx(NdotV, k);
+    float ggx2 = geometry_schlick_ggx(NdotL, k);
+	
+    return ggx1 * ggx2;
+}
 
-  return sample_texture() * vec4(ss, 1.0);
+// F0: reflectance; computed from f0()
+// N: vertex normal
+// V: direction to viewer
+vec3 sample_radiance(in vec3 F0, in vec3 N, in vec3 V, in vec3 lightPosition, in vec3 lightColor) {
+  
+  // calculate per-light radiance
+  vec3 L = normalize(lightPosition - frag_WorldPosition); // direction to light
+  vec3 H = normalize(V + L); // half angle
+  float distance = length(lightPosition - frag_WorldPosition);
+  float attenuation = 1.0 / (distance * distance);
+  vec3 radiance = lightColor * attenuation;
+
+  // Cook-Torrance BRDF
+  float NDF = distribution_ggx(N, H, basicPbr.roughness);   
+  float G   = geometry_smith(N, V, L, basicPbr.roughness);      
+  vec3 F    = fresnel_schlick(clamp(dot(H, V), 0.0, 1.0), F0);
+           
+  vec3 nominator    = NDF * G * F; 
+  float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
+  vec3 specular = nominator / max(denominator, 0.001); // prevent divide by zero for NdotV=0.0 or NdotL=0.0
+        
+  // kS is equal to Fresnel
+  vec3 kS = F;
+  // for energy conservation, the diffuse and specular light can't
+  // be above 1.0 (unless the surface emits light); to preserve this
+  // relationship the diffuse component (kD) should equal 1.0 - kS.
+  vec3 kD = vec3(1.0) - kS;
+  // multiply kD by the inverse metalness such that only non-metals 
+  // have diffuse lighting, or a linear blend if partly metal (pure metals
+  // have no diffuse light).
+  kD *= 1.0 - basicPbr.metallic;	  
+
+  // scale light by NdotL
+  float NdotL = max(dot(N, L), 0.0);        
+
+  // add to outgoing radiance Lo
+  return (kD * basicPbr.albedo / PI + specular) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again  
+}
+
+vec4 sample_texture() {
+  return
+    texture(unif_Samplers[basicPbr.samplerIndex & 0x1],
+	    frag_TexCoord);
 }
 
 void main() {
-  out_Color = standard_surface();
+  vec3 testLightPosition = vec3(0.0, 10.0, 0.0);
+  vec3 testLightColor = vec3(23.47, 21.31, 20.79);
+
+  vec3 N = normalize(frag_Normal);
+  vec3 V = normalize(basicPbr.cameraPosition - frag_WorldPosition);
+  vec3 F0 = f0();
+
+  vec3 Lo = sample_radiance(F0, N, V, testLightPosition, testLightColor);
+
+  vec3 ambient = vec3(0.03) * basicPbr.albedo * basicPbr.ao;
+  vec3 color   = ambient + Lo;
+
+  color = color / (color + vec3(1.0));
+  color = pow(color, vec3(1.0/2.2));  
+  
+  out_Color = vec4(color, 1.0);
 }

@@ -165,7 +165,7 @@ namespace vulkan {
   
   namespace push_constant {
     // NOTE:
-    // currently the standard_surface and
+    // currently the basic_pbr and
     // model push constants
     // are used in the same program, just at different stages.
     // the model is used in the vertex stage, and the
@@ -177,14 +177,19 @@ namespace vulkan {
     // must be specified. For now, the model
     // offset is listed here at <k_model_offset> bytes.
     // there is a hole in the middle between the two,
-    // but that's ok since standard_surface will end
+    // but that's ok since basic_pbr will end
     // up having more parameters as we move forward.
     
     // autodesk - WIP
-    struct standard_surface {
-      vec3_t opacity{R(1)};
-      float transparency{R(1)};
-      uint32_t sampler{0};
+    struct basic_pbr {
+      vec3_t camera_position;
+      float padding0;
+      vec3_t albedo;
+      float padding1;
+      float metallic;
+      float roughness;
+      float ao;
+      int sampler;
     };
 
     struct model {
@@ -213,8 +218,8 @@ namespace vulkan {
 			 ptr);
     }
 
-    static inline VkPushConstantRange standard_surface_range() {
-      return range<standard_surface,
+    static inline VkPushConstantRange basic_pbr_range() {
+      return range<basic_pbr,
 		   VK_SHADER_STAGE_FRAGMENT_BIT>();
     }
 
@@ -223,10 +228,10 @@ namespace vulkan {
 		   VK_SHADER_STAGE_VERTEX_BIT>(k_model_offset);
     }
 
-    static inline void standard_surface_upload(standard_surface& pc,
+    static inline void basic_pbr_upload(basic_pbr& pc,
 					       VkCommandBuffer cmd_buffer,
 					       VkPipelineLayout layout) {
-      upload<standard_surface,
+      upload<basic_pbr,
 	     VK_SHADER_STAGE_FRAGMENT_BIT>(&pc,
 					   cmd_buffer,
 					   layout);
@@ -240,6 +245,29 @@ namespace vulkan {
 					 cmd_buffer,
 					 layout,
 					 k_model_offset);
+    }
+
+
+    static inline basic_pbr basic_pbr_default() {
+      return
+	{
+	 // camera position
+	 R3(0),
+	 // padding0
+	 R(0.0),
+	 // albedo
+	 R3v(0.5, 0, 0),
+	 // padding1
+	 R(0.0),
+	 // metallic
+	 R(0.5),
+	 // roughness
+	 R(0.5),
+	 // ambient occlusion
+	 R(1),
+	 // sampler index
+	 0
+	};
     }
   }
   
@@ -385,6 +413,8 @@ namespace vulkan {
        pipeline_pool::k_unset,
        pipeline_pool::k_unset
       };
+
+    vec3_t m_camera_position{R(0)};
     
     bool m_ok_present{false};
     bool m_ok_vertex_data{false};
@@ -2095,7 +2125,7 @@ namespace vulkan {
 			     },
 			     // push constant ranges
 			     {
-			      push_constant::standard_surface_range(),
+			      push_constant::basic_pbr_range(),
 			      push_constant::model_range()
 			     }
 			    },
@@ -2394,23 +2424,16 @@ namespace vulkan {
     void commands_draw_main(VkCommandBuffer cmd_buffer,
 			    VkPipelineLayout pipeline_layout) const {
       
-      push_constant::standard_surface pc_ss{};
+      push_constant::basic_pbr pc_bp{push_constant::basic_pbr_default()};
 
-      pc_ss.opacity.r = R(0);
-      pc_ss.opacity.g = R(0);
-      pc_ss.opacity.b = R(0.25);
-      pc_ss.transparency = R(0.5);     
-      pc_ss.sampler = 0;
-      push_constant::standard_surface_upload(pc_ss, cmd_buffer, pipeline_layout);
+      pc_bp.camera_position = m_camera_position;
+      pc_bp.sampler = 0;
+      push_constant::basic_pbr_upload(pc_bp, cmd_buffer, pipeline_layout);
       
       commands_draw_inner_objects(cmd_buffer, pipeline_layout);
-
-      pc_ss.opacity.r = R(0);
-      pc_ss.opacity.g = R(0);
-      pc_ss.opacity.b = R(0.25);
-      pc_ss.transparency = R(0.1);
-      pc_ss.sampler = 1;
-      push_constant::standard_surface_upload(pc_ss, cmd_buffer, pipeline_layout);
+      
+      pc_bp.sampler = 1;
+      push_constant::basic_pbr_upload(pc_bp, cmd_buffer, pipeline_layout);
       
       commands_draw_room(cmd_buffer, pipeline_layout);
     }
@@ -2627,6 +2650,7 @@ namespace vulkan {
 
     void set_world_to_view_transform(const mat4_t& w2v) {
       m_transform_uniform_block.data.world_to_view = w2v;
+      m_camera_position = -vec3_t{w2v[3]};
     }
 
     void set_view_to_clip_transform(const mat4_t& v2c) {
