@@ -298,5 +298,63 @@ namespace vulkan {
     return api_ok();
   }
 
+  std::optional<buffer_reqs> get_buffer_requirements(const device_resource_properties& resource_props,
+						     VkBufferCreateFlags create_flags,
+						     VkBufferUsageFlags usage_flags,
+						     VkMemoryPropertyFlags memory_property_flags,
+						     VkDeviceSize desired_size) {      
+    std::optional<buffer_reqs> ret;
+
+    int32_t out_property_index;
+    VkDeviceSize out_device_size;
     
+    if (resource_props.ok()) {
+      
+      VkBuffer dummy = make_buffer(resource_props,
+				   create_flags,
+				   usage_flags,
+				   desired_size);
+      
+      if (H_OK(dummy)) {
+	VkMemoryRequirements req = {};
+	
+	vkGetBufferMemoryRequirements(resource_props.device,
+				      dummy,
+				      &req);
+
+	out_device_size = req.size;
+
+	VkPhysicalDeviceMemoryProperties mem_props = {};
+
+	vkGetPhysicalDeviceMemoryProperties(resource_props.physical_device,
+					    &mem_props);
+	
+	out_property_index =
+	  find_memory_properties(&mem_props,
+				 req.memoryTypeBits,
+				 memory_property_flags);
+	
+	ASSERT(out_property_index != -1);
+
+	
+	if (desired_size <= req.size &&
+	    out_property_index != -1) {
+	  
+	  buffer_reqs r
+	    {
+	     out_device_size,
+	     static_cast<uint32_t>(out_property_index)
+	    };
+
+	  if (r.ok()) {
+	    ret = r;
+	  }
+	}
+
+	vkDestroyBuffer(resource_props.device, dummy, nullptr);
+      }     
+    }
+    
+    return ret;
+  }
 }

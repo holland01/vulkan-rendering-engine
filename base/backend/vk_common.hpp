@@ -530,6 +530,24 @@ namespace vulkan {
 			    uint32_t array_element,
 			    VkDescriptorType descriptor_type);
 
+
+  struct buffer_reqs {
+    VkDeviceSize required_size{std::numeric_limits<VkDeviceSize>::max()};
+    uint32_t memory_property_index{UINT32_MAX};
+
+    bool ok() const {
+      return
+	c_assert(required_size > 0) &&
+	c_assert(required_size != std::numeric_limits<VkDeviceSize>::max()) &&
+	c_assert(memory_property_index != UINT32_MAX);
+    }
+  };
+
+  std::optional<buffer_reqs> get_buffer_requirements(const device_resource_properties& resource_props,
+						     VkBufferCreateFlags create_flags,
+						     VkBufferUsageFlags usage_flags,
+						     VkMemoryPropertyFlags memory_property_flags,
+						     VkDeviceSize desired_size);
   static inline std::string realpath_spv(const std::string& spv_filename) {
     return "resources/shaders/bin/" + spv_filename;
   }
