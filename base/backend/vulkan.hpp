@@ -270,10 +270,8 @@ namespace vulkan {
 	};
     }
   }
-  
-  class renderer {    
-    uint32_t m_instance_count{0};   
     
+  class renderer {       
     darray<VkPhysicalDevice> m_vk_physical_devs;
 
     darray<VkImage> m_vk_swapchain_images;
@@ -415,6 +413,8 @@ namespace vulkan {
       };
 
     vec3_t m_camera_position{R(0)};
+
+    uint32_t m_instance_count{0};   
     
     bool m_ok_present{false};
     bool m_ok_vertex_data{false};
