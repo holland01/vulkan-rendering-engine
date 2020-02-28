@@ -5,7 +5,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace vulkan {
-  // NOTE:
   // right handed system,
   // so positive rotation about a given axis
   // is counter-clockwise

@@ -501,7 +501,7 @@ namespace vulkan {
 				    const void* data,
 				    VkDeviceSize size,
 				    VkDeviceSize alloc_size,
-				    uint32_t index);
+				    uint32_t memory_property_index);
 
   VkBuffer make_buffer(const device_resource_properties& resource_props,
 		       VkBufferCreateFlags create_flags,
@@ -548,6 +548,7 @@ namespace vulkan {
 						     VkBufferUsageFlags usage_flags,
 						     VkMemoryPropertyFlags memory_property_flags,
 						     VkDeviceSize desired_size);
+
   static inline std::string realpath_spv(const std::string& spv_filename) {
     return "resources/shaders/bin/" + spv_filename;
   }
