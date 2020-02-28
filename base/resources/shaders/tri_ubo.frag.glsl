@@ -205,8 +205,8 @@ vec4 sample_texture() {
 
 void main() {
   vec3 testLightPosition = vec3(0.0, 10.0, 0.0);
-  vec3 testLightColor = vec3(23.47, 21.31, 20.79);
-
+  vec3 testLightColor = vec3(300.0, 300.0, 300.0);
+  
   vec3 N = normalize(frag_Normal);
   vec3 V = normalize(basicPbr.cameraPosition - frag_WorldPosition);
   vec3 F0 = f0();
