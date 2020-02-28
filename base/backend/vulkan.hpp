@@ -307,7 +307,7 @@ namespace vulkan {
     
     static inline constexpr vec3_t k_room_cube_center = R3v(0, 0, 0);
     static inline constexpr vec3_t k_room_cube_size = R3(20);
-    static inline constexpr vec3_t k_mirror_cube_center = R3v(0, 0, 0);
+    static inline constexpr vec3_t k_mirror_cube_center = R3v(0, -10, 0);
     static inline constexpr vec3_t k_mirror_cube_size = R3(1);
     
     static inline constexpr vec3_t k_color_green = R3v(0, 1, 0);
@@ -1569,6 +1569,18 @@ namespace vulkan {
 	  
 	  add_verts("inner-cube", mb);	       
 
+
+	  // generate sphere
+	  mb
+	    .set_color(R3v(0, 0.5, 0.8))
+	    .set_transform(transform()
+			   .scale(R3v(5, 5, 5))
+			   .translate(R3v(0, 5, 0)))
+	    .sphere();
+
+
+	  add_verts("sphere", mb);
+	  
 	  // generate outer cube
 	  mb
 	    .set_transform(transform()
@@ -2369,17 +2381,13 @@ namespace vulkan {
     }
 
     void commands_draw_inner_objects(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
-      commands_draw_model("left-triangle",
-			  cmd_buffer,
-			  pipeline_layout);
-
-      commands_draw_model("right-triangle",
-			  cmd_buffer,
-			  pipeline_layout);
-
-      commands_draw_model("inner-cube",
-			  cmd_buffer,
-			  pipeline_layout);
+      for (auto const& [name, index]: m_model_data.indices) {
+	if (name != "outer-cube") {
+	  commands_draw_model(index,
+			      cmd_buffer,
+			      pipeline_layout);
+	}
+      }
     }
 
     void commands_draw_room(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
