@@ -270,7 +270,32 @@ namespace vulkan {
 	};
     }
   }
-    
+
+  struct buffer_data {
+    VkBuffer handle{VK_NULL_HANDLE};
+    VkDeviceMemory memory{VK_NULL_HANDLE};
+
+    bool ok() const {
+      return
+	c_assert(H_OK(handle)) &&
+	c_assert(H_OK(memory));
+    }
+
+    void free_mem(VkDevice device) {
+      free_device_handle<VkBuffer, &vkDestroyBuffer>(device, handle);
+      free_device_handle<VkDeviceMemory, &vkFreeMemory>(device, memory);
+    }
+
+    void bind_vertex(VkCommandBuffer cmd_buffer) {
+      VkDeviceSize vertex_buffer_offset = 0;
+      vkCmdBindVertexBuffers(cmd_buffer,
+			     0, // first buffer index
+			     1, // buffer count
+			     &handle,
+			     &vertex_buffer_offset);
+    }
+  };
+  
   class renderer {       
     darray<VkPhysicalDevice> m_vk_physical_devs;
 
@@ -355,11 +380,12 @@ namespace vulkan {
     VkSwapchainKHR m_vk_khr_swapchain{VK_NULL_HANDLE};
 
     VkSemaphore m_vk_sem_image_available;
-    VkSemaphore m_vk_sem_render_finished;
+    VkSemaphore m_vk_sem_render_finished;    
 
-    VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
-    VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
+    buffer_data m_vertex_buffer;
 
+    static inline constexpr VkDeviceSize k_staging_buffer_copy_stride = 65536;  
+    
     darray<image_pool::index_type> m_test_image_indices =
       {
        image_pool::k_unset,
@@ -1126,59 +1152,108 @@ namespace vulkan {
       }
     }
     
-    void setup_vertex_buffer() {
-      if (ok_graphics_pipeline()) {
-	const VkDeviceSize k_buf_verts_size =
-	  sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size();
-	
-	std::optional<VkMemoryRequirements> mem_reqs =
-	  query_vertex_buffer_memory_requirements(k_buf_verts_size);
+    std::optional<buffer_data> make_buffer_data(VkBufferCreateFlags flags_create,
+						VkBufferUsageFlags flags_usage,
+						VkMemoryPropertyFlags flags_memory,
+						VkDeviceSize buffer_size) {
+      std::optional<buffer_data> opt_ret{};
+      
+      auto properties = make_device_resource_properties();
+		
+      if (c_assert(properties.ok())) {
+	  	  
+	std::optional<buffer_reqs> opt_buffreqs =
+	  get_buffer_requirements(properties,
+				  flags_create,
+				  flags_usage,
+				  flags_memory,
+				  buffer_size);
 
-	ASSERT(mem_reqs.has_value());
-
-	// This is a _required_ allocation size
-	// for the vertex buffer - not using this size will create
-	// an error in the API's validation layers.
-	const VkDeviceSize k_buf_size = mem_reqs.value().size;
-	
-	VkBufferCreateInfo buffer_info = make_vertex_buffer_create_info(k_buf_size);
-       
-	VK_FN(vkCreateBuffer(m_vk_curr_ldevice, &buffer_info, nullptr, &m_vk_vertex_buffer));
-
-	// find which memory type index is available
-	// for this vertex buffer; the i'th bit
-	// represents a memory type index,
-	// and its bit is set if and only if that
-	// memory type is supported.
-	uint32_t memory_type_bits = mem_reqs.value().memoryTypeBits; 
-	uint32_t memory_type_index = 0;
-	while ((memory_type_bits & 1) == 0 && memory_type_index < 32) {
-	  memory_type_index++;
-	  memory_type_bits >>= 1;
-	}
-	// if this fails, we need to investigate
-	// the host's hardware/level of vulkan support.
-	ASSERT(memory_type_index < 32);
-
-	if (ok() && m_vk_vertex_buffer != VK_NULL_HANDLE) {	  		
-	  VkMemoryAllocateInfo balloc_info = {};
-	  balloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	  balloc_info.pNext = nullptr;
-	  balloc_info.allocationSize = k_buf_size;
-	  balloc_info.memoryTypeIndex = memory_type_index;
+	if (c_assert(opt_buffreqs.has_value())) {
+	  auto buffreqs = opt_buffreqs.value();
 	  
-	  VK_FN(vkAllocateMemory(m_vk_curr_ldevice,
-				 &balloc_info,
-				 nullptr,
-				 &m_vk_vertex_buffer_mem));
+	  if (c_assert(buffreqs.ok())) {
+	    buffer_data ret{};
+	    
+	    VkBufferCreateInfo buffer_info = {};
+	      
+	    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	    buffer_info.pNext = nullptr;
 
-	  VK_FN(vkBindBufferMemory(m_vk_curr_ldevice,
-				   m_vk_vertex_buffer,
-				   m_vk_vertex_buffer_mem,
-				   0));
+	    buffer_info.flags = flags_create;
+	    buffer_info.size = buffreqs.required_size;
+	    buffer_info.usage = flags_usage;
+	      
+	    buffer_info.sharingMode = properties.queue_sharing_mode;
+	    buffer_info.queueFamilyIndexCount = properties.queue_family_indices.size();
+	    buffer_info.pQueueFamilyIndices = properties.queue_family_indices.data();
 
-	  if (ok()) {	    
-	    m_ok_vertex_buffer = true;
+	    VK_FN(vkCreateBuffer(m_vk_curr_ldevice, &buffer_info, nullptr, &ret.handle));
+
+	    if (c_assert(H_OK(ret.handle))) {
+	      VkMemoryAllocateInfo balloc_info = {};
+		
+	      balloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	      balloc_info.pNext = nullptr;
+	      balloc_info.allocationSize = buffreqs.required_size;
+	      balloc_info.memoryTypeIndex = buffreqs.memory_property_index;
+	  
+	      VK_FN(vkAllocateMemory(m_vk_curr_ldevice,
+				     &balloc_info,
+				     nullptr,
+				     &ret.memory));
+
+	      if (c_assert(H_OK(ret.memory))) {		
+		VK_FN(vkBindBufferMemory(m_vk_curr_ldevice,
+					 ret.handle,
+					 ret.memory,
+					 0));
+
+		if (ok()) {
+		  opt_ret = ret;
+		}
+	      }
+	    }
+	  }
+	}
+      }
+      return opt_ret;
+    }
+    
+    void setup_vertex_buffer() {
+      if (ok_graphics_pipeline()) {              
+
+	const VkDeviceSize k_buffer_size =
+	    sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size();
+	
+	// create the vertex buffer
+	{	  
+	  constexpr VkBufferCreateFlags k_flags_create = 0;
+
+	  constexpr VkBufferUsageFlags k_flags_usage =
+	    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+	    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	
+	  constexpr VkMemoryPropertyFlags k_flags_memory =
+	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+	    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+	  auto opt_ret = make_buffer_data(k_flags_create,
+					  k_flags_usage,
+					  k_flags_memory,
+					  k_buffer_size);
+
+	  if (c_assert(opt_ret.has_value())) {
+	    if (c_assert(opt_ret.value().ok())) {
+	      m_vertex_buffer = opt_ret.value();
+	      
+	      write_device_memory(m_vk_curr_ldevice,
+				  m_vertex_buffer.memory,
+				  static_cast<void*>(m_vertex_buffer_vertices.data()),
+				  k_buffer_size);
+	    
+	      m_ok_vertex_buffer = true;	    
+	    }
 	  }
 	}
       }
@@ -1573,8 +1648,7 @@ namespace vulkan {
 	  // generate sphere
 	  mb
 	    .set_color(R3v(0, 0.5, 0.8))
-	    .set_transform(transform()
-			   .scale(R3v(5, 5, 5))
+	    .set_transform(transform()			   
 			   .translate(R3v(0, 5, 0)))
 	    .sphere();
 
@@ -2264,19 +2338,13 @@ namespace vulkan {
 				 VkPipelineLayout pipeline_layout,
 				 bool with_vertex_buffer,
 				 const darray<VkDescriptorSet>& descriptor_sets) {
-
-      VkDeviceSize vertex_buffer_ofs = 0;
       
       vkCmdBindPipeline(cmd_buffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			pipeline);
 
       if (with_vertex_buffer) {
-	vkCmdBindVertexBuffers(cmd_buffer,
-			       0,
-			       1,
-			       &m_vk_vertex_buffer,
-			       &vertex_buffer_ofs);
+	m_vertex_buffer.bind_vertex(cmd_buffer);
       }
 
       vkCmdBindDescriptorSets(cmd_buffer,
@@ -2444,8 +2512,8 @@ namespace vulkan {
       push_constant::basic_pbr_upload(pc_bp, cmd_buffer, pipeline_layout);
       
       commands_draw_room(cmd_buffer, pipeline_layout);
-    }
-
+    }     
+    
     //
     // we always use the command pool here to allocate command buffer memory
     //
@@ -2521,13 +2589,14 @@ namespace vulkan {
 	  //
 	  // update the descriptor sets here to include the input attachment
 	  // for the shader
-	  //	   	    
-
+	  //
+	  
 	  m_vk_command_buffers.resize(m_vk_swapchain_image_views.size());
 
 	  bool good = c_assert(make_command_buffers(m_vk_command_buffers));
 	    
-	  if (good) {	    
+	  if (good) {
+	    
 	    //
 	    // begin the command buffer series;
 	    // we obviously have two render passes,
@@ -2543,16 +2612,9 @@ namespace vulkan {
 	      good = c_assert(commands_begin_buffer(cmd_buff));
 	      
 	      if (good) {
-		vkCmdUpdateBuffer(cmd_buff,
-				  m_vk_vertex_buffer,
-				  0,
-				  sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
-				  m_vertex_buffer_vertices.data());
-		
 		commands_start_render_pass(cmd_buff,
 					   m_vk_swapchain_framebuffers.at(i),
 					   m_vk_render_pass);
-
 		//
 		// subpass 1: fill depth and color attachments
 		//
@@ -2561,7 +2623,7 @@ namespace vulkan {
 					pipeline(k_pass_texture2d),
 					pipeline_layout(k_pass_texture2d),
 					true,
-				        {
+					{
 					 descriptor_set(k_descriptor_set_samplers),
 					 descriptor_set(k_descriptor_set_uniform_blocks)
 					});
@@ -2585,20 +2647,8 @@ namespace vulkan {
 		commands_draw_quad_no_vb(cmd_buff);
 
 		vkCmdEndRenderPass(cmd_buff);
-#if 0
-		image_layout_transition().
-		  from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-		  to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-		  for_aspect(depthbuffer_data::k_image_aspect_flags).
-		  from_access(0).
-		  to_access(depthbuffer_data::k_access_flags).
-		  from(depthbuffer_data::k_initial_layout).
-		  to(depthbuffer_layouts::primary()).
-		  for_image(m_depthbuffer.image).
-		  via(cmd_buffer);
-#endif
 		
-		good = c_assert(commands_end_buffer(cmd_buff));
+		good = c_assert(commands_end_buffer(cmd_buff));		
 	      }
 	      	      
 	      i++;
@@ -2782,10 +2832,8 @@ namespace vulkan {
       if (m_vk_curr_ldevice != VK_NULL_HANDLE) {
 	vkDeviceWaitIdle(m_vk_curr_ldevice);
       }
-      
-      free_vk_ldevice_handle<VkDeviceMemory, &vkFreeMemory>(m_vk_vertex_buffer_mem);
-      
-      free_vk_ldevice_handle<VkBuffer, &vkDestroyBuffer>(m_vk_vertex_buffer);
+
+      m_vertex_buffer.free_mem(m_vk_curr_ldevice);
       
       free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_image_available);
       free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_render_finished);
