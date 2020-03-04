@@ -1219,43 +1219,92 @@ namespace vulkan {
       }
       return opt_ret;
     }
-    
+  
     void setup_vertex_buffer() {
-      if (ok_graphics_pipeline()) {              
-
+      if (ok_command_pool()) {
 	const VkDeviceSize k_buffer_size =
-	    sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size();
+	  sizeof(m_vertex_buffer_vertices[0]) *
+	  m_vertex_buffer_vertices.size();
 	
-	// create the vertex buffer
-	{	  
-	  constexpr VkBufferCreateFlags k_flags_create = 0;
+	auto make_and_fill =
+	  [this, k_buffer_size](VkBufferUsageFlags usage) -> buffer_data {
+      
+	    buffer_data buffer{};
 
-	  constexpr VkBufferUsageFlags k_flags_usage =
-	    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-	    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-	
-	  constexpr VkMemoryPropertyFlags k_flags_memory =
-	    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-	    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+	    auto opt_ret = make_buffer_data(0,
+					    usage,
+					    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+					    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					    k_buffer_size);
 
-	  auto opt_ret = make_buffer_data(k_flags_create,
-					  k_flags_usage,
-					  k_flags_memory,
-					  k_buffer_size);
-
-	  if (c_assert(opt_ret.has_value())) {
-	    if (c_assert(opt_ret.value().ok())) {
-	      m_vertex_buffer = opt_ret.value();
-	      
-	      write_device_memory(m_vk_curr_ldevice,
-				  m_vertex_buffer.memory,
-				  static_cast<void*>(m_vertex_buffer_vertices.data()),
-				  k_buffer_size);
-	    
-	      m_ok_vertex_buffer = true;	    
+	    if (c_assert(opt_ret.has_value())) {
+	      if (c_assert(opt_ret.value().ok())) {
+		buffer = opt_ret.value();
+	  
+		write_device_memory(m_vk_curr_ldevice,
+				    buffer.memory,
+				    static_cast<void*>(m_vertex_buffer_vertices.data()),
+				    k_buffer_size);	    
+	      }
 	    }
+
+	    return buffer;
+	  };
+
+	constexpr bool k_use_staging = true;
+
+	bool good = false;
+	
+	STATIC_IF (k_use_staging) {		
+	  // create the staging buffer
+	  buffer_data staging = make_and_fill(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+
+	  // create vertex buffer
+	  auto opt_vertex_buffer = make_buffer_data(0,
+						    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+						    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+						    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+						    k_buffer_size);
+	  // make sure everything is ok,
+	  // and then copy from staging to vertex buffer
+	  good =
+	    c_assert(opt_vertex_buffer.has_value()) &&
+	    c_assert(opt_vertex_buffer.value().ok());
+	  
+	  if (good) {	  
+	    m_vertex_buffer = opt_vertex_buffer.value();
+
+	    run_cmds(// success
+		     [this, k_buffer_size, &staging](VkCommandBuffer cmd_buf) {
+		       VkBufferCopy region{};
+
+		       region.srcOffset = 0;
+		       region.dstOffset = 0;
+		       region.size = k_buffer_size;
+		       
+		       vkCmdCopyBuffer(cmd_buf,
+				       staging.handle,
+				       m_vertex_buffer.handle,
+				       1,
+				       &region);
+		     },
+		     // error
+	             [this, &good]() {
+		       good = false;
+	             });
+
+	    staging.free_mem(m_vk_curr_ldevice);
 	  }
 	}
+	else {
+	  m_vertex_buffer =
+	    make_and_fill(VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+			  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+
+	  good = m_vertex_buffer.ok();
+	}
+
+	m_ok_vertex_buffer = good;
       }
     }
 
@@ -2262,6 +2311,21 @@ namespace vulkan {
 	  setup_pipeline_test_fbo();       
       }
     }
+    
+    void setup_command_pool() {
+      if (ok_graphics_pipeline()) {
+	queue_family_indices indices = query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
+
+	VkCommandPoolCreateInfo pool_info = {};
+	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	pool_info.queueFamilyIndex = indices.graphics_family.value();
+	pool_info.flags = 0;
+
+	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
+
+	m_ok_command_pool = true;	
+      }      
+    }
 
     darray<VkFramebuffer> make_framebuffer_list(VkRenderPass fb_render_pass,
 						const darray<VkImageView>& color_image_views) {
@@ -2316,21 +2380,6 @@ namespace vulkan {
 
 	m_ok_framebuffers = !m_vk_swapchain_framebuffers.empty(); 
       }
-    }
-
-    void setup_command_pool() {
-      if (ok_framebuffers()) {
-	queue_family_indices indices = query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
-
-	VkCommandPoolCreateInfo pool_info = {};
-	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	pool_info.queueFamilyIndex = indices.graphics_family.value();
-	pool_info.flags = 0;
-
-	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
-
-	m_ok_command_pool = true;	
-      }      
     }
 
     void commands_begin_pipeline(VkCommandBuffer cmd_buffer,
@@ -2558,7 +2607,7 @@ namespace vulkan {
     // pipeline layout created earlier.
     void setup_command_buffers() {
       m_image_pool.print_images_info();
-      if (ok_command_pool()) {
+      if (ok_framebuffers()) {
 	
 	//
 	// bind sampler[i] to test_texture_indices[i] via
@@ -2698,9 +2747,9 @@ namespace vulkan {
       setup_texture_data();
       setup_depthbuffer_data();
       setup_graphics_pipeline();
+      setup_command_pool();
       setup_vertex_buffer();
       setup_framebuffers();
-      setup_command_pool();
       setup_command_buffers();
       setup_semaphores();
       setup_scene();
