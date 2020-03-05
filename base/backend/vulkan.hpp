@@ -309,7 +309,14 @@ namespace vulkan {
 
     darray<VkCommandBuffer> m_vk_command_buffers{};   
 
+    darray<VkSemaphore> m_vk_sems_image_available{};
 
+    darray<VkSemaphore> m_vk_sems_render_finished{};
+
+    darray<VkFence> m_vk_fences_in_flight{};
+
+    darray<VkFence> m_vk_images_in_flight{};
+    
     framebuffer_attachments m_framebuffer_attachments{};
 
     descriptors m_descriptors{};
@@ -380,9 +387,6 @@ namespace vulkan {
     VkSurfaceKHR m_vk_khr_surface{VK_NULL_HANDLE};
     VkSwapchainKHR m_vk_khr_swapchain{VK_NULL_HANDLE};
 
-    VkSemaphore m_vk_sem_image_available;
-    VkSemaphore m_vk_sem_render_finished;    
-
     buffer_data m_vertex_buffer;
 
     static inline constexpr VkDeviceSize k_staging_buffer_copy_stride = 65536;  
@@ -441,7 +445,10 @@ namespace vulkan {
 
     vec3_t m_camera_position{R(0)};
 
-    uint32_t m_instance_count{0};   
+    static constexpr uint32_t k_max_frames_in_flight{4};
+    
+    uint32_t m_instance_count{0};
+    uint32_t m_current_frame{0};
     
     bool m_ok_present{false};
     bool m_ok_vertex_data{false};
@@ -456,7 +463,7 @@ namespace vulkan {
     bool m_ok_framebuffers{false};
     bool m_ok_command_pool{false};
     bool m_ok_command_buffers{false};
-    bool m_ok_semaphores{false};
+    bool m_ok_sync_objects{false};
     bool m_ok_scene{false};
     
     struct vk_layer_info {
@@ -473,6 +480,11 @@ namespace vulkan {
     static inline darray<const char*> s_device_extensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
+
+    uint32_t max_frames_in_flight() const {
+      // we may want to make this more dynamic at some point
+      return k_max_frames_in_flight;
+    }
     
     VkPipelineLayout pipeline_layout(int index) const {
       return
@@ -1477,8 +1489,8 @@ namespace vulkan {
       return r;
     }
 
-    bool ok_semaphores() const {
-      bool r = ok() && m_ok_semaphores;
+    bool ok_sync_objects() const {
+      bool r = ok() && m_ok_sync_objects;
       ASSERT(r);
       return r;
     }
@@ -1643,7 +1655,7 @@ namespace vulkan {
       setup_device_and_queues();
       setup_swapchain();
       setup_swapchain_image_views();
-
+      
       if (ok_swapchain()) {
 	m_ok_present = true;
       }
@@ -2716,30 +2728,49 @@ namespace vulkan {
       }
     }
 
-    void setup_semaphores() {
+    void setup_sync_objects() {
       if (ok_command_buffers()) {
 	VkSemaphoreCreateInfo semaphore_info = {};
 	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphore_info.pNext = nullptr;
+	semaphore_info.flags = 0;
+	
+	VkFenceCreateInfo fence_info = {};
+	fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fence_info.pNext = nullptr;
+	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
-				&semaphore_info,
-				nullptr,
-				&m_vk_sem_image_available));
+	m_vk_sems_image_available.resize(max_frames_in_flight());
+	m_vk_sems_render_finished.resize(max_frames_in_flight());
+	m_vk_fences_in_flight.resize(max_frames_in_flight());
+	
+	m_vk_images_in_flight.resize(m_vk_swapchain_images.size(), VK_NULL_HANDLE);
+	
+	for (uint32_t i = 0; i < max_frames_in_flight(); ++i) {
+	  VK_FN(vkCreateFence(m_vk_curr_ldevice,
+			      &fence_info,
+			      nullptr,
+			      &m_vk_fences_in_flight[i]));
+	  
+	  VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
+				  &semaphore_info,
+				  nullptr,
+				  &m_vk_sems_image_available[i]));
 
-	VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
-				&semaphore_info,
-				nullptr,
-				&m_vk_sem_render_finished));
-
+	  VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
+				  &semaphore_info,
+				  nullptr,
+				  &m_vk_sems_render_finished[i]));
+	}
+	
 	if (ok()) {
-	  m_ok_semaphores = true;
+	  m_ok_sync_objects = true;
 	}
       }
     }
 
     void setup_scene() {
-      if (ok_semaphores()) {
-	
+      if (ok_sync_objects()) {	
 	m_ok_scene = true;
       }
     }
@@ -2758,7 +2789,7 @@ namespace vulkan {
       setup_vertex_buffer();
       setup_framebuffers();
       setup_command_buffers();
-      setup_semaphores();
+      setup_sync_objects();
       setup_scene();
     }
 
@@ -2776,26 +2807,46 @@ namespace vulkan {
 	m_uniform_block_pool.update_block(m_transform_uniform_block.index,
 					  m_vk_curr_ldevice);
 	
-	VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
-	
 	constexpr uint64_t k_timeout_ns = 10000000000; // 10 seconds
+
+	
+	VK_FN(vkWaitForFences(m_vk_curr_ldevice,
+			      1,
+			      &m_vk_fences_in_flight[m_current_frame],
+			      VK_TRUE,
+			      k_timeout_ns));
+	
 	uint32_t image_index = UINT32_MAX;
 	
 	VK_FN(vkAcquireNextImageKHR(m_vk_curr_ldevice,
 				    m_vk_khr_swapchain,
 				    k_timeout_ns,
-				    m_vk_sem_image_available,
+				    m_vk_sems_image_available.at(m_current_frame),
 				    VK_NULL_HANDLE,
 				    &image_index));
+
+	if (m_vk_images_in_flight[image_index] != VK_NULL_HANDLE) {
+	  VK_FN(vkWaitForFences(m_vk_curr_ldevice,
+				1,
+				&m_vk_images_in_flight[image_index],
+				VK_TRUE,
+			        k_timeout_ns));
+	}
+	
+	m_vk_images_in_flight[image_index] = m_vk_fences_in_flight.at(m_current_frame);
 
 	if (ok()) {	  
 	  ASSERT(m_vk_command_buffers.size() == m_vk_swapchain_images.size());
 	  ASSERT(image_index < m_vk_command_buffers.size());
 
+	  VK_FN(vkResetFences(m_vk_curr_ldevice,
+			      1,
+			      &m_vk_fences_in_flight[m_current_frame]));			
+	  
 	  VkSubmitInfo submit_info = {};
 	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-	  VkSemaphore wait_semaphores[] = { m_vk_sem_image_available };
+	  VkSemaphore wait_semaphores[] = { m_vk_sems_image_available.at(m_current_frame) };
 	  
 	  VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };	  	  
 	  
@@ -2806,14 +2857,14 @@ namespace vulkan {
 	  submit_info.commandBufferCount = 1;
 	  submit_info.pCommandBuffers = &m_vk_command_buffers[image_index];
 
-	  VkSemaphore signal_semaphores[] = { m_vk_sem_render_finished  };
+	  VkSemaphore signal_semaphores[] = { m_vk_sems_render_finished.at(m_current_frame) };
 	  submit_info.signalSemaphoreCount = 1;
 	  submit_info.pSignalSemaphores = signal_semaphores;
 
 	  VK_FN(vkQueueSubmit(m_vk_graphics_queue,
 			      1,
 			      &submit_info,
-			      VK_NULL_HANDLE));
+			      m_vk_fences_in_flight.at(m_current_frame)));
 
 	  VkPresentInfoKHR present_info = {};
 	  present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -2830,7 +2881,7 @@ namespace vulkan {
 
 	  VK_FN(vkQueuePresentKHR(m_vk_present_queue, &present_info));
 
-	  VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
+	  m_current_frame = (m_current_frame + 1) % max_frames_in_flight();
 	}
       }
     }
@@ -2891,8 +2942,9 @@ namespace vulkan {
 
       m_vertex_buffer.free_mem(m_vk_curr_ldevice);
       
-      free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_image_available);
-      free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_render_finished);
+      free_vk_ldevice_handles<VkSemaphore, &vkDestroySemaphore>(m_vk_sems_image_available);
+      free_vk_ldevice_handles<VkSemaphore, &vkDestroySemaphore>(m_vk_sems_render_finished);
+      free_vk_ldevice_handles<VkFence, &vkDestroyFence>(m_vk_fences_in_flight);
       
       free_vk_ldevice_handle<VkCommandPool, &vkDestroyCommandPool>(m_vk_command_pool);
       
