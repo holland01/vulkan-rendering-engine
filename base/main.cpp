@@ -1253,6 +1253,8 @@ void render_loop_triangle::init() {
 }
 
 void render_loop_triangle::update() {
+  render_loop::update();
+  
   glfwPollEvents();
   
   g_m.view->update(g_cam_move_state);
@@ -1320,6 +1322,7 @@ int main(void) {
     while (g_m.loop->running()) {
       g_m.loop->update();
       g_m.loop->render();
+      g_m.loop->show_fps(g_m.device_ctx->window());
     }
   }
 
