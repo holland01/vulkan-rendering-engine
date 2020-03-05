@@ -2885,6 +2885,12 @@ namespace vulkan {
 	}
       }
     }
+
+    void device_wait() const {
+      if (m_vk_curr_ldevice != VK_NULL_HANDLE) {
+        vkDeviceWaitIdle(m_vk_curr_ldevice);
+      }
+    }
     
     template <class vkHandleType, void (*vkDestroyFn)(vkHandleType, const VkAllocationCallbacks*)>
     void free_vk_handle(vkHandleType& handle) const {
@@ -2936,9 +2942,7 @@ namespace vulkan {
     // The command pool also will free any allocated command
     // buffers.
     void free_mem() {
-      if (m_vk_curr_ldevice != VK_NULL_HANDLE) {
-	vkDeviceWaitIdle(m_vk_curr_ldevice);
-      }
+      device_wait();
 
       m_vertex_buffer.free_mem(m_vk_curr_ldevice);
       
