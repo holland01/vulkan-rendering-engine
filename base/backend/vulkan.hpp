@@ -297,21 +297,22 @@ namespace vulkan {
   };
   
   class renderer {       
-    darray<VkPhysicalDevice> m_vk_physical_devs;
+    darray<VkPhysicalDevice> m_vk_physical_devs{};
 
-    darray<VkImage> m_vk_swapchain_images;
+    darray<VkImage> m_vk_swapchain_images{};
     
-    darray<VkImageView> m_vk_swapchain_image_views;
+    darray<VkImageView> m_vk_swapchain_image_views{};
 
-    darray<VkFramebuffer> m_vk_swapchain_framebuffers;
+    darray<VkFramebuffer> m_vk_swapchain_framebuffers{};
 
-    darray<VkImage> m_vk_firstpass_images;
+    darray<VkImage> m_vk_firstpass_images{};
 
-    darray<VkCommandBuffer> m_vk_command_buffers;   
+    darray<VkCommandBuffer> m_vk_command_buffers{};   
 
-    framebuffer_attachments m_framebuffer_attachments;
 
-    descriptors m_descriptors;
+    framebuffer_attachments m_framebuffer_attachments{};
+
+    descriptors m_descriptors{};
     
     descriptor_set_pool m_descriptor_set_pool{};
     
