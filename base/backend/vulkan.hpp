@@ -949,11 +949,14 @@ namespace vulkan {
           // we can optimize later as necessary.
           uint32_t image_count = details.capabilities.minImageCount;
           ASSERT(image_count != 0);
-          if (image_count == 1) {
-            image_count++;
+          if (image_count != 3) {
+            image_count = 3;
           }
-          ASSERT(image_count <= details.capabilities.maxImageCount);
+          ASSERT(details.capabilities.minImageCount <= image_count &&
+		 image_count <= details.capabilities.maxImageCount);
 
+	  write_logf("swapchain image count = %" PRIu32, image_count);
+	  
           //
           // Here we actually create the swapchain.
           //
@@ -1061,9 +1064,12 @@ namespace vulkan {
             if (ok_swapchain()) {
               uint32_t count = 0;
               VK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
-                                             m_vk_khr_swapchain, 
-                                             &count,
-                                             nullptr));
+					    m_vk_khr_swapchain, 
+					    &count,
+					    nullptr));
+
+	      ASSERT(count == image_count);
+	      
               if (ok_swapchain()) {
                 m_vk_swapchain_images.resize(count);
                 VK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
