@@ -1,4 +1,4 @@
-CFLAGS=-O0
+CFLAGS=-O
 
 bin:
 	mkdir -p bin

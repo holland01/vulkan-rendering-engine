@@ -160,7 +160,7 @@ namespace vulkan {
     mesh_builder& sphere() {
       mesh_builder tmp{};      
       
-      real_t step = 0.1f;
+      real_t step = 0.33333333333f;
 
       auto cart = [](real_t phi, real_t theta) -> vec3_t {
 		    vec3_t ret;
