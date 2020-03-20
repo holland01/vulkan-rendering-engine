@@ -2821,8 +2821,7 @@ namespace vulkan {
 	m_uniform_block_pool.update_block(m_transform_uniform_block.index,
 					  m_vk_curr_ldevice);
 	
-	constexpr uint64_t k_timeout_ns = 10000000000; // 10 seconds
-
+	constexpr uint64_t k_timeout_ns = 16 * 1000000 + 6000000 * 100; // 100 * 16.6 milliseconds
 	
 	VK_FN(vkWaitForFences(m_vk_curr_ldevice,
 			      1,
