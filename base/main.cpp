@@ -1149,6 +1149,7 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
                               R3v(0.0, 1.0, 0.0));
 
     g_m.view->orient = mat3_t(yRot * xRot) * g_m.view->orient;
+    g_m.view->inverse_orient = glm::inverse(g_m.view->orient);
   }
 
   g_cam_orient.prev_xpos = xpos;

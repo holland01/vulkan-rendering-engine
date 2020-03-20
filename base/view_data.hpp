@@ -23,6 +23,7 @@ struct view_data {
   mat4_t view_mat;
 
   mat3_t orient;  // orient: camera orientation
+  mat3_t inverse_orient;
 
   vec3_t position;  // position: theoretical position of the camera: technically,
                        // view space is always centered at a specific location that's
@@ -38,6 +39,7 @@ struct view_data {
   real_t nearp;
   real_t skyfarp;
   real_t farp;
+  real_t fovy{R(45.0)};
 
   uint16_t view_width;
   uint16_t view_height;
@@ -48,8 +50,9 @@ struct view_data {
     : proj(1.0f), skyproj(R(1.0)), cubeproj(R(1.0)), ortho(R(1.0)),
     view_mat(R(1.0)),
     orient(1.0f),
+    inverse_orient(1.0f),
     position(0.0f),
-    step(0.1f),
+    step(STEP_UNIT),
     skynearp(10.0f),
     nearp(1.0f),
     skyfarp(1000.0f),
@@ -65,9 +68,9 @@ struct view_data {
   }
 
   void reset_proj() {
-    set_proj_from_fovy(45.0f);
-    skyproj = glm::perspective(45.0f, calc_aspect(), skynearp, skyfarp);
-    cubeproj = glm::perspective(45.0f, calc_aspect(), nearp, farp);
+    set_proj_from_fovy(fovy);
+    skyproj = glm::perspective(fovy, calc_aspect(), skynearp, skyfarp);
+    cubeproj = glm::perspective(fovy, calc_aspect(), nearp, farp);
 
     real_t w = R(view_width) * R(0.5);
     real_t h = R(view_height) * R(0.5);

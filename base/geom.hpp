@@ -148,4 +148,24 @@ struct module_geom {
     // correct ordering.
     return glm::normalize(glm::cross(v1, v0));
   }
+
+  class frustum {
+    enum
+      {
+       plane_top = 0,
+       plane_bottom,
+       plane_right,
+       plane_left,
+       plane_near,
+       plane_far
+      };
+    std::array<plane, 6> m_planes{};
+    mat4_t m_mvp{};
+    uint32_t accept_count{0};
+    uint32_t reject_count{0};
+
+  public:
+    void update();
+    bool intersects_sphere(const bvol& s) const;
+  };
 };
