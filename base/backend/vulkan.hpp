@@ -316,6 +316,9 @@ namespace vulkan {
     darray<VkFence> m_vk_fences_in_flight{};
 
     darray<VkFence> m_vk_images_in_flight{};
+
+    darray<double> m_frame_stimes{};
+    darray<double> m_frame_dtimes{};
     
     framebuffer_attachments m_framebuffer_attachments{};
 
@@ -1768,6 +1771,14 @@ namespace vulkan {
 	m_ok_descriptor_pool = api_ok() && m_vk_descriptor_pool != VK_NULL_HANDLE;
       }
     }
+
+    uint32_t current_frame() const {
+      return m_current_frame;
+    }
+
+    double frame_delta_seconds(uint32_t frame_index) const {
+      return m_frame_dtimes.at(frame_index);
+    }
     
     void setup_render_pass() {
       if (ok_descriptor_pool()) {
@@ -2745,6 +2756,9 @@ namespace vulkan {
 	m_vk_fences_in_flight.resize(max_frames_in_flight());
 	
 	m_vk_images_in_flight.resize(m_vk_swapchain_images.size(), VK_NULL_HANDLE);
+
+	m_frame_stimes.resize(max_frames_in_flight(), 0.0);
+	m_frame_dtimes.resize(max_frames_in_flight(), 0.0);
 	
 	for (uint32_t i = 0; i < max_frames_in_flight(); ++i) {
 	  VK_FN(vkCreateFence(m_vk_curr_ldevice,
@@ -2815,6 +2829,11 @@ namespace vulkan {
 			      &m_vk_fences_in_flight[m_current_frame],
 			      VK_TRUE,
 			      k_timeout_ns));
+	{
+	  double time = glfwGetTime();
+	  m_frame_dtimes[m_current_frame] = time - m_frame_stimes.at(m_current_frame);
+	  m_frame_stimes[m_current_frame] = time;
+	}
 	
 	uint32_t image_index = UINT32_MAX;
 	

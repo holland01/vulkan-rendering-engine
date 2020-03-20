@@ -1254,6 +1254,7 @@ void render_loop_triangle::init() {
 
 void render_loop_triangle::update() {
   render_loop::update();
+  m_frame_index = m_renderer.current_frame();
   
   glfwPollEvents();
   
@@ -1265,6 +1266,7 @@ void render_loop_triangle::update() {
 
 void render_loop_triangle::render() {
   m_renderer.render();
+  m_dtime = m_renderer.frame_delta_seconds(m_frame_index);
 }
 
 void render_loop_complete::init() {
