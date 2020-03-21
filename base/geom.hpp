@@ -129,6 +129,10 @@ struct module_geom {
     return proj_point_plane(p, P.normal, P.point);
   }
 
+  real_t sdist_point_plane(const vec3_t& p, const plane& plane_p) const {
+    return (glm::dot(p, plane_p.normal) + plane_p.d) / glm::length(plane_p.normal);
+  }
+
   // a, b, and c are assumed to be
   // laid out in a counter clockwise ordering.
   // on the plane which they create. It's also
@@ -161,9 +165,11 @@ struct module_geom {
       };
     std::array<plane, 6> m_planes{};
     mat4_t m_mvp{};
-    uint32_t accept_count{0};
-    uint32_t reject_count{0};
-
+    period_counter<uint32_t> m_display_tick{600, 0, 1};
+    mutable uint32_t m_accept_count{0};
+    mutable uint32_t m_reject_count{0};
+    bool m_display_info{true};
+    
   public:
     void update();
     bool intersects_sphere(const bvol& s) const;
