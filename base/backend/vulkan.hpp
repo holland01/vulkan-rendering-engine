@@ -9,6 +9,7 @@
 
 #include "common.hpp"
 #include "device_context.hpp"
+#include "geom.hpp"
 
 #include "vk_common.hpp"
 #include "vk_image.hpp"
@@ -337,6 +338,8 @@ namespace vulkan {
     pipeline_pool m_pipeline_pool{};
     
     depthbuffer_data m_depthbuffer{};
+
+    module_geom::frustum m_frustum{};
     
     uniform_block_data<uniform_block::transform> m_transform_uniform_block{};
     uniform_block_data<uniform_block::surface> m_surface_uniform_block{};
@@ -353,12 +356,13 @@ namespace vulkan {
     static inline constexpr int32_t k_sampler_checkerboard = 0;
     static inline constexpr int32_t k_sampler_aqua = 1;       
     
-    struct {
+    struct model_data {
       darray<transform> transforms{};
+      darray<module_geom::bvol> bounds_vols{}; // only spheres right now
       darray<uint32_t> vb_offsets{};
       darray<uint32_t> vb_lengths{};
 
-      std::unordered_map<std::string, uint32_t> indices{};
+      std::unordered_map<std::string, uint32_t> indices{}; // into the above buffers
 
       size_t length() const {
 	return transforms.size();
@@ -1668,13 +1672,21 @@ namespace vulkan {
       if (ok_present()) {
 	auto add_verts =
 	  [this](const std::string& name,
-		 mesh_builder& mb) {
+		 mesh_builder& mb,
+		 real_t bounds_radius) {
 	    
 	    m_model_data.indices[name] = m_model_data.length();
+
+	    module_geom::bvol bvol{};
 	    
+	    bvol.radius = bounds_radius;
+	    bvol.center = mb.taccum()[3];
+	    bvol.type = module_geom::bvol::type_sphere;
+	    
+	    m_model_data.bounds_vols.push_back(bvol);
 	    m_model_data.vb_offsets.push_back(m_vertex_buffer_vertices.size());
 	    m_model_data.vb_lengths.push_back(mb.vertices.size());
-	    m_model_data.transforms.push_back(mb.taccum);
+	    m_model_data.transforms.push_back(mb.taccum);	   	    
 	    
 	    m_instance_count += mb.vertices.size() / 3;
 	    
@@ -1695,7 +1707,7 @@ namespace vulkan {
 			   .translate(R3v(-2.25, 0, 0)))
 	    .triangle();
 	  
-	  add_verts("left-triangle", mb);
+	  add_verts("left-triangle", mb, R(1.0));
 
 	  // generate right triangle
 	  mb
@@ -1704,7 +1716,7 @@ namespace vulkan {
 	    .set_color(R3v(0, 0.5, 0.8))
 	    .triangle();
 	  
-	  add_verts("right-triangle", mb);
+	  add_verts("right-triangle", mb, R(1.0));
 
 	  // generate inner cube
 	  mb
@@ -1713,7 +1725,7 @@ namespace vulkan {
 	    .cube()
 	    .with_scale(k_mirror_cube_size);
 	  
-	  add_verts("inner-cube", mb);	       
+	  add_verts("inner-cube", mb, k_mirror_cube_size[0]);	       
 
 
 	  // generate sphere
@@ -1724,7 +1736,7 @@ namespace vulkan {
 	    .sphere();
 
 
-	  add_verts("sphere", mb);
+	  add_verts("sphere", mb, R(1.0));
 	  
 	  // generate outer cube
 	  mb
@@ -1733,7 +1745,7 @@ namespace vulkan {
 	    .cube()
 	    .with_scale(k_room_cube_size);
 
-	  add_verts("outer-cube", mb);
+	  add_verts("outer-cube", mb, k_room_cube_size[0]);
 	}
 	
 	m_ok_vertex_data = true;
@@ -2529,10 +2541,12 @@ namespace vulkan {
 
     void commands_draw_inner_objects(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
       for (auto const& [name, index]: m_model_data.indices) {
-	if (name != "outer-cube") {
-	  commands_draw_model(index,
-			      cmd_buffer,
-			      pipeline_layout);
+	if (name != "outer-cube" && name != "sphere") {
+	  if (m_frustum.intersects_sphere(m_model_data.bounds_vols.at(index))) {
+	    commands_draw_model(index,
+				cmd_buffer,
+				pipeline_layout);
+	  }
 	}
       }
     }
@@ -2832,6 +2846,8 @@ namespace vulkan {
 	  double time = glfwGetTime();
 	  m_frame_dtimes[m_current_frame] = time - m_frame_stimes.at(m_current_frame);
 	  m_frame_stimes[m_current_frame] = time;
+
+	  m_frustum.update();
 	}
 	
 	uint32_t image_index = UINT32_MAX;
