@@ -386,3 +386,29 @@ static inline darray<destType> c_fmap(const darray<srcType>& in, std::function<d
 #define fmap_via ,
 #define fmap_end )
 
+template <class counterType>
+struct period_counter {
+  typedef counterType value_type;
+  static_assert(std::is_arithmetic<value_type>::value, "period counter is designed strictly for arithmetic types");
+
+  value_type period;
+  value_type counter;
+  value_type increment;
+  
+  period_counter(value_type period,
+		 value_type init = value_type(0),
+		 value_type inc = value_type(1))
+  : period(period),
+    counter(init),
+    increment(inc) {
+    ASSERT((period % inc) == 0);
+  }
+
+  bool operator()() const {
+    return (counter % period) == 0;
+  }
+
+  void operator++() {
+    counter = counter + increment;
+  }
+};
