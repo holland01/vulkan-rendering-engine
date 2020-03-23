@@ -2541,12 +2541,10 @@ namespace vulkan {
 
     void commands_draw_inner_objects(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
       for (auto const& [name, index]: m_model_data.indices) {
-	if (name != "outer-cube" && name != "sphere") {
-	  if (m_frustum.intersects_sphere(m_model_data.bounds_vols.at(index))) {
-	    commands_draw_model(index,
-				cmd_buffer,
-				pipeline_layout);
-	  }
+	if (name != "outer-cube") {	   
+	  commands_draw_model(index,
+			      cmd_buffer,
+			      pipeline_layout);	  
 	}
       }
     }
