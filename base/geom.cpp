@@ -98,13 +98,24 @@ void module_geom::frustum::update() {
       m_planes[plane_near].d = calc_plane_dist(plane_near);
     }
   }
+
+#define plane_string(p) \
+  "\t" << AS_STRING_GLM_SS(p.point) << "\n" << \
+  "\t" << AS_STRING_GLM_SS(p.normal) << "\n" << \
+  "\t" << AS_STRING_SS(p.d) << "\n"
   
   if (m_display_info) {
     if (m_display_tick()) {
       std::stringstream ss;
       ss << "frustum\n"
 	 << "\t" << AS_STRING_SS(m_accept_count) << "\n"
-	 << "\t" << AS_STRING_SS(m_reject_count);
+	 << "\t" << AS_STRING_SS(m_reject_count) << "\n"
+	 << "\t" << AS_STRING_GLM_SS(g_m.view->position) << "\n"
+	 << "\t" << AS_STRING_GLM_SS(g_m.view->inverse_orient[0]) << "\n"
+	 << "\t" << AS_STRING_GLM_SS(g_m.view->inverse_orient[1]) << "\n"
+	 << plane_string(m_planes.at(plane_left))
+	 << plane_string(m_planes.at(plane_right));
+      
       write_logf("%s", ss.str().c_str());
     }
     ++m_display_tick;
