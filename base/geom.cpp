@@ -124,14 +124,8 @@ bool module_geom::frustum::intersects_sphere(const bvol& s) const {
   bool ret = true;
   uint32_t i = 0;
   // all intersections must pass
-  while (i < 4 && ret) {
-    // TODO: the offset needs to test if the normal is facing toward the sphere
-    // or away from it.
-    
-    vec3_t offset{(-glm::normalize(m_planes.at(i).normal)) * s.radius};
-    vec3_t p{s.center + offset};
-    
-    ret = g_m.geom->sdist_point_plane(p, m_planes.at(i)) >= 0;
+  while (i < 4 && ret) {    
+    ret = g_m.geom->sphere_intersects_plane(s, m_planes.at(i));
 
     if (ret) {
       i = i + 1;
