@@ -130,7 +130,7 @@ struct module_geom {
   }
 
   real_t sdist_point_plane(const vec3_t& p, const plane& plane_p) const {
-    return (glm::dot(p, plane_p.normal) + plane_p.d) / glm::length(plane_p.normal);
+    return (glm::dot(p, plane_p.normal) - plane_p.d) / glm::length(plane_p.normal);
   }
 
   // a, b, and c are assumed to be
