@@ -3176,19 +3176,42 @@ namespace vulkan {
     }
 
     void setup() {
+      constexpr bool single_pass = false;
+      
+      pass_type ps_type{};
+      attachment_read_descriptor_type desc_type{};
+      pipeline_type pl_type{};
+      command_buffer_type cmd_type{};
+      framebuffer_setup_method fb_setup{};
+      
+      STATIC_IF (single_pass) {
+	ps_type = pass_type::single;
+	desc_type = attachment_read_descriptor_type::none;
+	pl_type = pipeline_type::pbr_basic_single;
+	cmd_type = command_buffer_type::single_pass;
+	fb_setup = framebuffer_setup_method::single_pass;
+      }
+      else {
+	ps_type = pass_type::dual_via_input_attachment;
+	desc_type = attachment_read_descriptor_type::complete;
+	pl_type = pipeline_type::pbr_basic_to_quad;
+	cmd_type = command_buffer_type::two_pass;
+	fb_setup = framebuffer_setup_method::two_pass;
+      }
+      
       setup_presentation();
       setup_vertex_data();
       setup_descriptor_pool();
-      setup_render_pass();
-      setup_attachment_read_descriptors();
+      setup_render_pass(ps_type);
+      setup_attachment_read_descriptors(desc_type);
       setup_uniform_block_data();
       setup_texture_data();
       setup_depthbuffer_data();
-      setup_graphics_pipeline();
+      setup_graphics_pipeline(pl_type);
       setup_command_pool();
       setup_vertex_buffer();
-      setup_framebuffers();
-      setup_command_buffers();
+      setup_framebuffers(fb_setup);
+      setup_command_buffers(cmd_type);
       setup_sync_objects();
       setup_scene();
     }
