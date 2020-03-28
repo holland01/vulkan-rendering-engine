@@ -44,11 +44,7 @@ namespace vulkan {
   VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code);
 
   VkPipelineShaderStageCreateInfo make_shader_stage_settings(VkShaderModule module, VkShaderStageFlagBits type);  
-    
-  depthbuffer_data make_depthbuffer(const device_resource_properties& properties,
-				    uint32_t width,
-				    uint32_t height);
-  
+      
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
     std::optional<uint32_t> present_family{};
@@ -335,9 +331,7 @@ namespace vulkan {
 
     pipeline_layout_pool m_pipeline_layout_pool{};
 
-    pipeline_pool m_pipeline_pool{};
-    
-    depthbuffer_data m_depthbuffer{};
+    pipeline_pool m_pipeline_pool{};   
 
     module_geom::frustum m_frustum{};
     
@@ -464,7 +458,6 @@ namespace vulkan {
     bool m_ok_attachment_read_descriptors{false};
     bool m_ok_uniform_block_data{false};
     bool m_ok_texture_data{false};
-    bool m_ok_depthbuffer_data{false};
     bool m_ok_graphics_pipeline{false};
     bool m_ok_vertex_buffer{false};
     bool m_ok_framebuffers{false};
@@ -1456,12 +1449,6 @@ namespace vulkan {
     
     bool ok_texture_data() const {
       bool r = ok() && m_ok_texture_data;
-      ASSERT(r);
-      return r;
-    }
-
-    bool ok_depthbuffer_data() const {
-      bool r = ok() && m_ok_depthbuffer_data;
       ASSERT(r);
       return r;
     }
@@ -2529,16 +2516,6 @@ namespace vulkan {
       }
     }
 
-    void setup_depthbuffer_data() {
-      if (ok_texture_data()) {
-	m_depthbuffer = make_depthbuffer(make_device_resource_properties(),
-					 g_m.device_ctx->width(),
-					 g_m.device_ctx->height());
-	
-	m_ok_depthbuffer_data = m_depthbuffer.ok();
-      }
-    }
-
 
     bool setup_pipeline(int render_phase_index,
 			int subpass_index,
@@ -2631,7 +2608,7 @@ namespace vulkan {
       };
     
     void setup_graphics_pipeline(pipeline_type type=pipeline_type::pbr_basic_single) {      
-      if (ok_depthbuffer_data()) {
+      if (ok_texture_data()) {
 	m_pipeline_pool.set_pipeline_layout_pool(&m_pipeline_layout_pool);
 
 	switch (type) {
@@ -3206,7 +3183,6 @@ namespace vulkan {
       setup_attachment_read_descriptors(desc_type);
       setup_uniform_block_data();
       setup_texture_data();
-      setup_depthbuffer_data();
       setup_graphics_pipeline(pl_type);
       setup_command_pool();
       setup_vertex_buffer();
@@ -3392,9 +3368,7 @@ namespace vulkan {
       //      m_render_pass_pool.free_mem(m_vk_curr_ldevice);
       
       m_texture_pool.free_mem(m_vk_curr_ldevice);
-      m_image_pool.free_mem(m_vk_curr_ldevice);
-      
-      m_depthbuffer.free_mem(m_vk_curr_ldevice);
+      m_image_pool.free_mem(m_vk_curr_ldevice);    
 
       m_uniform_block_pool.free_mem(m_vk_curr_ldevice);
 
