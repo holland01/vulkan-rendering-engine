@@ -2666,20 +2666,49 @@ namespace vulkan {
       }      
     }
 
+    //
+    // framebuffer_attach_depth_output and framebuffer_attach_depth_input
+    // currently will result in the same thing: the addition
+    // of the same depth image view being added to the framebuffer's
+    // set of attachments.
+    //
+    // The distinction is important for both readability as well
+    // as maintainability.
+    //
+    enum framebuffer_attach_flag_bits
+      {
+       framebuffer_attach_depth_output = 1 << 0,
+       framebuffer_attach_color_input = 1 << 1,
+       framebuffer_attach_depth_input = 1 << 2
+      };
+
+    typedef uint32_t framebuffer_attach_flags_t;
+    
     darray<VkFramebuffer> make_framebuffer_list(VkRenderPass fb_render_pass,
-						const darray<VkImageView>& color_image_views) {
+						const darray<VkImageView>& color_image_views,
+						framebuffer_attach_flags_t attach_flags=0) {
       darray<VkFramebuffer> ret(color_image_views.size(), VK_NULL_HANDLE);
 
       size_t i{0};
       bool good{true};
       
       while (i < ret.size() && good) {
-	std::array<VkImageView, 3> attachments =
-	  {
-	   color_image_views.at(i),
-	   m_framebuffer_attachments.color_image_view(i),
-	   m_framebuffer_attachments.depth_image_view(i)
-	  };
+	darray<VkImageView> attachments{};
+
+	// always this
+	attachments.push_back(color_image_views.at(i));
+
+	if ((attach_flags & framebuffer_attach_depth_output) != 0) {
+	  attachments.push_back(m_framebuffer_attachments.depth_image_view(i));	  
+	}
+
+	if ((attach_flags & framebuffer_attach_color_input) != 0) {
+	  attachments.push_back(m_framebuffer_attachments.color_image_view(i));	  
+	}
+
+	if ((attach_flags & framebuffer_attach_depth_input) != 0) {
+	  attachments.push_back(m_framebuffer_attachments.depth_image_view(i));	  
+	}	
 
 	VkFramebufferCreateInfo framebuffer_info = {};
 	framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -2710,12 +2739,41 @@ namespace vulkan {
 
       return ret;
     }	  
+
+    //
+    // single pass results in 2 attachments for each
+    // framebuffer: the swapchain color image view and
+    // the depth image view that was created in setup_render_pass()
+    //
+    // for two_pass, we'll end up using 3, the aforementioned 2
+    // plus another color image view.
+    //
+    enum class framebuffer_setup_method
+      {
+       two_pass,
+       single_pass
+      };
     
-    void setup_framebuffers() {
+    void setup_framebuffers(framebuffer_setup_method fbmethod = framebuffer_setup_method::single_pass) {
       if (ok_vertex_buffer()) {
+	framebuffer_attach_flags_t flags = 0;
+
+	switch (fbmethod) {
+	case framebuffer_setup_method::two_pass:
+	  flags =
+	    framebuffer_attach_color_input |
+	    framebuffer_attach_depth_input;
+	  break;
+	case framebuffer_setup_method::single_pass:
+	  flags =
+	    framebuffer_attach_depth_output;
+	  break;
+	}
+	
 	m_vk_swapchain_framebuffers =
 	  make_framebuffer_list(m_vk_render_pass,
-				m_vk_swapchain_image_views);	
+				m_vk_swapchain_image_views,
+				flags);	
 
 	m_ok_framebuffers = !m_vk_swapchain_framebuffers.empty(); 
       }
