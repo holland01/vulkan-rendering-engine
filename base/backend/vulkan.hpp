@@ -2619,14 +2619,35 @@ namespace vulkan {
 			     realpath_spv("attachment_read.frag.spv")			     
 			    });
     }
+
+    //
+    // texture2d is used in both pipeline types,
+    // and thus is purely independent.
+    //
+    enum class pipeline_type
+      {
+       pbr_basic_single,
+       pbr_basic_to_quad
+      };
     
-    void setup_graphics_pipeline() {      
+    void setup_graphics_pipeline(pipeline_type type=pipeline_type::pbr_basic_single) {      
       if (ok_depthbuffer_data()) {
 	m_pipeline_pool.set_pipeline_layout_pool(&m_pipeline_layout_pool);
 
-	m_ok_graphics_pipeline =
-	  setup_pipeline_texture2d() &&
-	  setup_pipeline_test_fbo();       
+	switch (type) {
+	case pipeline_type::pbr_basic_single:
+	  m_ok_graphics_pipeline =
+	    setup_pipeline_texture2d();
+	  break;
+	case pipeline_type::pbr_basic_to_quad:
+	  m_ok_graphics_pipeline =
+	    setup_pipeline_texture2d() &&
+	    setup_pipeline_test_fbo();
+	  break;
+	default:
+	  __FATAL__("Unrecognized pipeline_type: 0x%" PRIx32, type);
+	  break;
+	}	
       }
     }
     
