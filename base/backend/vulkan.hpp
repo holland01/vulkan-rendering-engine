@@ -3002,7 +3002,23 @@ namespace vulkan {
     // associates the descriptor set with the descriptor
     // set layout that was associated with the
     // pipeline layout created earlier.
-    void setup_command_buffers() {
+    // --------------------
+    // WRT to command_buffer_type
+    // --------------------
+    //
+    // The command for the second pass, used for the
+    // render-to-textured-quad, will be included
+    // in the command buffer if "two_pass" is used.
+    // Otherwise, we just omit it.
+    // 
+
+    enum class command_buffer_type
+      {
+       single_pass,
+       two_pass
+      };
+    
+    void setup_command_buffers(command_buffer_type cmd_type = command_buffer_type::two_pass) {
       m_image_pool.print_images_info();
       if (ok_framebuffers()) {
 	
@@ -3068,7 +3084,7 @@ namespace vulkan {
 		commands_begin_pipeline(cmd_buff,
 					pipeline(k_pass_texture2d),
 					pipeline_layout(k_pass_texture2d),
-					true,
+					true, // bind vertex buffer
 					{
 					 descriptor_set(k_descriptor_set_samplers),
 					 descriptor_set(k_descriptor_set_uniform_blocks)
@@ -3076,22 +3092,25 @@ namespace vulkan {
 
 		commands_draw_main(cmd_buff,
 				   pipeline_layout(k_pass_texture2d));
-
-
-		vkCmdNextSubpass(cmd_buff, VK_SUBPASS_CONTENTS_INLINE);
 		
-		//
-		// subpass 2: read depth and color attachments
-		//
 
-		commands_begin_pipeline(cmd_buff,
-					pipeline(k_pass_test_fbo),
-					pipeline_layout(k_pass_test_fbo),
-					false, // do not bind vertex buffer
-					m_descriptor_set_pool.descriptor_sets(m_descriptors.attachment_read));		
+		if (cmd_type == command_buffer_type::two_pass) {
+		  //
+		  // subpass 2: read depth and color attachments
+		  //
+		  
+		  vkCmdNextSubpass(cmd_buff, VK_SUBPASS_CONTENTS_INLINE);
 		
-		commands_draw_quad_no_vb(cmd_buff);
 
+		  commands_begin_pipeline(cmd_buff,
+					  pipeline(k_pass_test_fbo),
+					  pipeline_layout(k_pass_test_fbo),
+					  false, // do not bind vertex buffer
+					  m_descriptor_set_pool.descriptor_sets(m_descriptors.attachment_read));		
+		
+		  commands_draw_quad_no_vb(cmd_buff);
+		}
+		
 		vkCmdEndRenderPass(cmd_buff);
 		
 		good = c_assert(commands_end_buffer(cmd_buff));		
