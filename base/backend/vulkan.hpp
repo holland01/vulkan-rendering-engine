@@ -2193,11 +2193,26 @@ namespace vulkan {
 
       return {};
     }
+
+    //
+    // By default, we actually don't need to use
+    // these. They're only necessary if we plan to use
+    // input attachments and we need to reference those
+    // attachments in a shader executing in a multipass
+    // setup.
+    //
+    enum class attachment_read_descriptor_type
+      {
+       none,
+       complete				       
+      };
+    
+    void setup_attachment_read_descriptors(attachment_read_descriptor_type type = attachment_read_descriptor_type::none) {
       if (ok_render_pass()) {
 
 	bool good = true;
 
-	{
+	if (type == attachment_read_descriptor_type::complete) {
 	  descriptor_set_gen_params attachment_read_params =
 	    {
 	     // stages
@@ -2220,7 +2235,9 @@ namespace vulkan {
 
 	  m_descriptors
 	    .attachment_read
-	    .resize(m_framebuffer_attachments.data.size());
+	    .resize(m_framebuffer_attachments
+		    .data
+		    .size());
 	  
 	  size_t i{0};
 	  while (i < m_framebuffer_attachments.data.size() && good) {
@@ -2279,9 +2296,9 @@ namespace vulkan {
 
 	    i++;
 	  }
+	}
 
-	  m_ok_attachment_read_descriptors = good;
-	}	
+	m_ok_attachment_read_descriptors = good;
       }
     }
     
