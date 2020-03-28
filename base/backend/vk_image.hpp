@@ -119,6 +119,10 @@ namespace vulkan {
 
     darray<VkImageUsageFlags> m_usage_flags;
 
+    // We will not call vkGetPhysicalDeviceImageFormatProperties()
+    // if g_vk_result is not equal to VK_SUCCESS beforehand. We may as well
+    // consider this a false result, given that at that point something
+    // else that's wrong has happened.
     bool image_create_info_valid(VkPhysicalDevice physical_device, const VkImageCreateInfo& create_info) const {
       VkImageFormatProperties properties;
 
