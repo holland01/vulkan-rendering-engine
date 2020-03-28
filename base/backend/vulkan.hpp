@@ -679,7 +679,7 @@ namespace vulkan {
       gen_image.height = m_vk_swapchain_extent.height;
       gen_image.depth = 1;
       gen_image.aspect_flags = aspect_mask;
-      gen_image.usage_flags = usage | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+      gen_image.usage_flags = usage;
 
       ret = m_image_pool.make_image(make_device_resource_properties(),
 				    gen_image);
@@ -1791,139 +1791,289 @@ namespace vulkan {
     double frame_delta_seconds(uint32_t frame_index) const {
       return m_frame_dtimes.at(frame_index);
     }
+
     
-    void setup_render_pass() {
+    //
+    // The two options added here allow for the caller to choose between a
+    // basic multipass setup (rendering to a textured quad) versus
+    // a single pass direct write to the color buffer.
+    // Note that m_framebuffer_attachments is used in both cases.
+    //
+    // What's important to be aware of is that, for any i in
+    // 1 <= i < m_vk_swapchain_images.size(), if the "single"
+    // path is chosen, then only m_dramebuffer_attachments.data[i].depth_attachment
+    // will be used; data[i].color_attachment will remain as VK_NULL_HANDLE.
+    //
+    enum class pass_type
+      {
+       single,
+       dual_via_input_attachment
+      };
+    
+    void setup_render_pass(pass_type type = pass_type::single) {
       if (ok_descriptor_pool()) {
-	ASSERT(!m_vk_swapchain_images.empty());
-	
-	const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
-	const VkFormat depth_format = depthbuffer_data::query_format();
-	
-	m_framebuffer_attachments.data.resize(m_vk_swapchain_images.size());
-	
-	for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
+	ASSERT(!m_vk_swapchain_images.empty());	
 
-	  m_framebuffer_attachments.data[i].color_attachment =
-	    make_framebuffer_attachment(color_format,
-					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-
-	  m_framebuffer_attachments.data[i].depth_attachment =
-	    make_framebuffer_attachment(depth_format,
-					VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
-	  
-	  
-	}
-
-	std::array<VkAttachmentDescription, 3> attachments{};
-
+	darray<VkAttachmentDescription> attachments{};
 	// Swap chain image color attachment
 	// Will be transitioned to present layout
-	attachments[0].format = m_vk_khr_swapchain_format.format;
-	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	attachments.push_back(make_attachment_description(attachment_kind::swapchain));
 
-	// Input attachments
-	// These will be written in the first subpass, transitioned to input attachments 
-	// and then read in the secod subpass
+	darray<VkSubpassDescription> subpass_descriptions{};
 
-	// Color
-	attachments[1].format = color_format;
-	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	// Depth
-	attachments[2].format = depth_format;
-	attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	VkAttachmentReference swapchain_attachment_ref{};
+	VkAttachmentReference color_attachment_ref{};
+	VkAttachmentReference depth_attachment_ref{};
 
-	std::array<VkSubpassDescription,2> subpass_descriptions{};
+	// Only relevant for the second subpass,
+	// under case pass_type::multiwithquad
+	darray<VkAttachmentReference> input_attachment_refs{};
 
-	/*
-	  First subpass
-	  Fill the color and depth attachments
-	*/
-	VkAttachmentReference colorReference = { 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-	VkAttachmentReference depthReference = { 2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+	// swapchain_attachment_ref is only relevant in the multipass rendering
+	// path; otherwise we don't need to worry about it.
+	swapchain_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;	
 
-	subpass_descriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass_descriptions[0].colorAttachmentCount = 1;
-	subpass_descriptions[0].pColorAttachments = &colorReference;
-	subpass_descriptions[0].pDepthStencilAttachment = &depthReference;
+	// this is the first subpass description,
+	// which refers to both the color attachment
+	// and depth attachment reference;
+	// we only add more if we choose to take
+	// the multipass path.
+	//
+	// If we're performing multiple passes,
+	// then we fill the depth and color attachment
+	// refs with this subpass.
+	subpass_descriptions.push_back({// flags
+					0,
+					// pipelineBindPoint
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					// inputAttachmentCount
+					0,
+					// pInputAttachments
+					nullptr,
+					// colorAttachmentCount
+					1,
+					// pColorAttachments
+					&color_attachment_ref,
+					// pResolveAttachments
+					nullptr,
+					// pDepthStencilAttachment
+					&depth_attachment_ref,
+					// preserveAttachmentCount
+					0,
+					// pPreserveAttachments
+					nullptr });
 
-	/*
-	  Second subpass
-	  Input attachment read and swap chain color attachment write
-	*/
+	darray<VkSubpassDependency> subpass_dependencies{};
 
-	// Color reference (target) for this sub pass is the swap chain color attachment
-	VkAttachmentReference color_reference_swapchain = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+	m_framebuffer_attachments.data.resize(m_vk_swapchain_images.size());
+	
+	switch (type) {
+	case pass_type::dual_via_input_attachment:
+	  // generate the framebuffer attachments;
+	  // these create image views which are meant to be used
+	  // for multipass rendering (via VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT)
+	  {
+	    const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
+	    const VkFormat depth_format = depthbuffer_data::query_format();       
+	
+	    for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
 
-	subpass_descriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass_descriptions[1].colorAttachmentCount = 1;
-	subpass_descriptions[1].pColorAttachments = &color_reference_swapchain;
+	      m_framebuffer_attachments.data[i].color_attachment =
+		make_framebuffer_attachment(color_format,
+					    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
 
-	// Color and depth attachment written to in first sub pass will
-	// be used as input attachments to be read in the fragment shader
-	VkAttachmentReference input_references[2];
-	input_references[0] = { 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-	input_references[1] = { 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-		
-	// Use the attachments filled in the first pass as input attachments
-	subpass_descriptions[1].inputAttachmentCount = 2;
-	subpass_descriptions[1].pInputAttachments = input_references;
+	      m_framebuffer_attachments.data[i].depth_attachment =
+		make_framebuffer_attachment(depth_format,
+					    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+	  
+	  
+	    }
+	  }
+	  
+	  // Input attachments
+	  // These will be written in the first subpass, transitioned to input attachments 
+	  // and then read in the secod subpass
+	  attachments.push_back(make_attachment_description(attachment_kind::input_color));
+	  attachments.push_back(make_attachment_description(attachment_kind::input_depth));
 
-	/*
-	  Subpass dependencies for layout transitions
-	*/
-	std::array<VkSubpassDependency, 3> dependencies;
+	  swapchain_attachment_ref.attachment = 0;
+	  color_attachment_ref.attachment = 1;
+	  depth_attachment_ref.attachment = 2;
 
-	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[0].dstSubpass = 0;
-	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+	  input_attachment_refs.resize(2);
+	  
+	  // Second subpass
+	  // Color and depth attachment written to in first sub pass will
+	  // be used as input attachments to be read in the fragment shader
+	  input_attachment_refs[0] = { 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+	  input_attachment_refs[1] = { 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+	  
+	  // Second subpass
+	  // Read the input attachments,
+	  // and then write to the
+	  // swapchain color attachment.
+	  subpass_descriptions.push_back(VkSubpassDescription {// flags
+					  0,
+					  // pipelineBindPoint
+					  VK_PIPELINE_BIND_POINT_GRAPHICS,
+					  // inputAttachmentCount
+					  static_cast<uint32_t>(input_attachment_refs.size()),
+					  // pInputAttachments
+					  input_attachment_refs.data(),
+					  // colorAttachmentCount
+					  1,
+					  // pColorAttachments
+					  &swapchain_attachment_ref,
+					  // pResolveAttachments
+					  nullptr,
+					  // pDepthStencilAttachment
+					  nullptr,
+					  // preserveAttachmentCount
+					  0,
+					  // pPreserveAttachments
+					  nullptr });
 
-	// This dependency transitions the input attachment from color attachment to shader read
-	dependencies[1].srcSubpass = 0;
-	dependencies[1].dstSubpass = 1;
-	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-	dependencies[2].srcSubpass = 0;
-	dependencies[2].dstSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[2].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[2].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[2].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+	  // Now we add subpass dependencies for the layout transitions
+	  subpass_dependencies.push_back(VkSubpassDependency {// srcSubpass
+					  //---------------
+					  // VK_SUBPASS_EXTERNAL refers to the previous
+					  // executed subpass from a prior complete render pass,
+					  // given the fact that the srcStageMask is
+					  // "VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT"
+					  //---------------
+	                                  VK_SUBPASS_EXTERNAL,
+		                          // dstSubpass
+					  0,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_MEMORY_READ_BIT,
+					  // dstAccessMask
+					  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					  // dependencyFlags
+					  VK_DEPENDENCY_BY_REGION_BIT});
+
+	  
+	  // This dependency transitions the input attachment from color attachment to shader read
+	  subpass_dependencies.push_back({// srcSubpass
+	                                  0,
+		                          // dstSubpass
+					  1,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					  // dstAccessMask
+					  VK_ACCESS_SHADER_READ_BIT,
+					  // dependencyFlags
+					  VK_DEPENDENCY_BY_REGION_BIT});
+
+	  // This dependency ensures that we can read and write our memory
+	  // up until we've finished with the COLOR_ATTACHMENT_OUTPUT stage.
+	  // Afterward, we explicitly state that we want the pipeline
+	  // to allow for the memory to always be readable until
+	  // the end of the render pass (or frame, for that matter).
+	  //
+	  // Notice that the first subpass dependency given above expects the source,
+	  // external subpass to have a VK_ACCESS_MEMORY_READ_BIT setting
+	  // for its access mask. This here is what closes that loop.
+	  //
+	  // The reason for this is to limit undefined behavior.
+	  subpass_dependencies.push_back({// srcSubpass
+	                                  0,
+		                          // dstSubpass
+					  VK_SUBPASS_EXTERNAL,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					  // dstAccessMask
+					  VK_ACCESS_SHADER_READ_BIT,
+					  // dependencyFlags
+					  VK_DEPENDENCY_BY_REGION_BIT});
+	  
+	  break;
+	case pass_type::single:
+	  // generate the depth framebuffer attachment;
+	  // we leave data[i].color_attachment alone (i.e., we don't generate it),
+	  // since it isn't needed.
+	  {
+	    const VkFormat depth_format = depthbuffer_data::query_format();	    
+
+	    for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
+
+	      m_framebuffer_attachments.data[i].depth_attachment =
+		make_framebuffer_attachment(depth_format,
+					    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	  
+	  
+	    }
+	  }
+	  
+	  // depth attachment; we still need a depth buffer,
+	  // and this describes how we wish to use the image view
+	  // (which we create in the loop right above this line)
+	  attachments.push_back(make_attachment_description(attachment_kind::depth));
+
+	  // we've already passed the addresses of these to the first
+	  // subpass above
+	  color_attachment_ref.attachment = 0;
+	  depth_attachment_ref.attachment = 1;
+	  
+	  // From external to color attachment output
+	  subpass_dependencies.push_back({// srcSubpass
+	                                  VK_SUBPASS_EXTERNAL,
+		                          // dstSubpass
+					  0,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_MEMORY_READ_BIT,
+					  // dstAccessMask
+					  VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
+					  // dependencyFlags
+					  0});
+
+	  // Close the loop
+	  subpass_dependencies.push_back({// srcSubpass
+	                                  0,
+		                          // dstSubpass
+					  VK_SUBPASS_EXTERNAL,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+					  // dstAccessMask
+					  VK_ACCESS_MEMORY_READ_BIT,
+					  // dependencyFlags
+					  0});	  
+	  
+	  break;
+	}
 
 	VkRenderPassCreateInfo render_pass_info_ci{};
+
 	render_pass_info_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	render_pass_info_ci.attachmentCount = static_cast<uint32_t>(attachments.size());
 	render_pass_info_ci.pAttachments = attachments.data();
 	render_pass_info_ci.subpassCount = static_cast<uint32_t>(subpass_descriptions.size());
 	render_pass_info_ci.pSubpasses = subpass_descriptions.data();
-	render_pass_info_ci.dependencyCount = static_cast<uint32_t>(dependencies.size());
-	render_pass_info_ci.pDependencies = dependencies.data();
+	render_pass_info_ci.dependencyCount = static_cast<uint32_t>(subpass_dependencies.size());
+	render_pass_info_ci.pDependencies = subpass_dependencies.data();
+	
 	VK_FN(vkCreateRenderPass(m_vk_curr_ldevice, &render_pass_info_ci, nullptr, &m_vk_render_pass));
 	
 	if (H_OK(m_vk_render_pass)) {
@@ -1933,7 +2083,116 @@ namespace vulkan {
       }
     }
 
-    void setup_attachment_read_descriptors() {
+    enum attachment_kind
+      {
+       // 
+       swapchain,
+       //
+       depth,
+       // for multipass rendering
+       input_color,
+       // for multipass rendering
+       input_depth,
+      };
+    
+    VkAttachmentDescription make_attachment_description(attachment_kind k) {
+      switch (k) {       
+      case attachment_kind::swapchain:
+	return
+	  VkAttachmentDescription {
+	   // flags
+	   0,
+	   // format
+	   m_vk_khr_swapchain_format.format,
+	   // samples
+	   VK_SAMPLE_COUNT_1_BIT,
+	   // loadOp
+	   VK_ATTACHMENT_LOAD_OP_CLEAR,
+	   // storeOp
+	   VK_ATTACHMENT_STORE_OP_STORE,
+	   // stencilLoadOp
+	   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	   // stencilStoreOp
+	   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	   // initialLayout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
+	   // finalLayout
+	   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	  };
+      case attachment_kind::input_color:
+	return
+	  VkAttachmentDescription {
+	   // flags
+	   0,
+	   // format
+	   VK_FORMAT_R8G8B8A8_UNORM,
+	   // samples
+	   VK_SAMPLE_COUNT_1_BIT,
+	   // loadOp
+	   VK_ATTACHMENT_LOAD_OP_CLEAR,
+	   // storeOp
+	   VK_ATTACHMENT_STORE_OP_STORE,
+	   // stencilLoadOp
+	   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	   // stencilStoreOp
+	   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	   // initialLayout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
+	   // finalLayout
+	   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	  };
+      case attachment_kind::input_depth:	
+	return
+	  VkAttachmentDescription {
+	   // flags
+	   0,
+	   // format
+	   depthbuffer_data::query_format(),
+	   // samples
+	   VK_SAMPLE_COUNT_1_BIT,
+	   // loadOp
+	   VK_ATTACHMENT_LOAD_OP_CLEAR,
+	   // storeOp
+	   VK_ATTACHMENT_STORE_OP_STORE,
+	   // stencilLoadOp
+	   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	   // stencilStoreOp
+	   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	   // initialLayout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
+	   // finalLayout
+	   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	  };
+      case attachment_kind::depth:	
+	return
+	  VkAttachmentDescription {
+	   // flags
+	   0,
+	   // format
+	   depthbuffer_data::query_format(),
+	   // samples
+	   VK_SAMPLE_COUNT_1_BIT,
+	   // loadOp
+	   VK_ATTACHMENT_LOAD_OP_CLEAR,
+	   // storeOp
+	   VK_ATTACHMENT_STORE_OP_STORE,
+	   // stencilLoadOp
+	   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	   // stencilStoreOp
+	   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	   // initialLayout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
+	   // finalLayout
+	   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	  };
+      default:
+	__FATAL__("Received unsupported parameter 0x%" PRIx32,
+		  static_cast<uint32_t>(k));
+	break;
+      }
+
+      return {};
+    }
       if (ok_render_pass()) {
 
 	bool good = true;
