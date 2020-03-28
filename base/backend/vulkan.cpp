@@ -129,7 +129,7 @@ namespace vulkan {
   VkAttachmentDescription default_depthbuffer_settings() {
     VkAttachmentDescription depth_attachment = {};
 
-    depth_attachment.format = depthbuffer_data::k_format;
+    depth_attachment.format = depthbuffer_info::k_format;
     
     depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
     depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -138,8 +138,8 @@ namespace vulkan {
     depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
-    depth_attachment.initialLayout = depthbuffer_data::k_initial_layout;
-    depth_attachment.finalLayout = depthbuffer_data::k_final_layout;
+    depth_attachment.initialLayout = depthbuffer_info::k_initial_layout;
+    depth_attachment.finalLayout = depthbuffer_info::k_final_layout;
 
     return depth_attachment;
   }
@@ -147,7 +147,7 @@ namespace vulkan {
   VkAttachmentReference default_depthbuffer_ref_settings() {
     VkAttachmentReference attachment_ref = {};
     attachment_ref.attachment = 1;
-    attachment_ref.layout = depthbuffer_data::k_final_layout;
+    attachment_ref.layout = depthbuffer_info::k_final_layout;
     return attachment_ref;
   }
 

@@ -1863,7 +1863,7 @@ namespace vulkan {
 	  // for multipass rendering (via VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT)
 	  {
 	    const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
-	    const VkFormat depth_format = depthbuffer_data::query_format();       
+	    const VkFormat depth_format = depthbuffer_info::query_format();       
 	
 	    for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
 
@@ -1994,7 +1994,7 @@ namespace vulkan {
 	  // we leave data[i].color_attachment alone (i.e., we don't generate it),
 	  // since it isn't needed.
 	  {
-	    const VkFormat depth_format = depthbuffer_data::query_format();	    
+	    const VkFormat depth_format = depthbuffer_info::query_format();	    
 
 	    for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
 
@@ -2134,7 +2134,7 @@ namespace vulkan {
 	   // flags
 	   0,
 	   // format
-	   depthbuffer_data::query_format(),
+	   depthbuffer_info::query_format(),
 	   // samples
 	   VK_SAMPLE_COUNT_1_BIT,
 	   // loadOp
@@ -2156,7 +2156,7 @@ namespace vulkan {
 	   // flags
 	   0,
 	   // format
-	   depthbuffer_data::query_format(),
+	   depthbuffer_info::query_format(),
 	   // samples
 	   VK_SAMPLE_COUNT_1_BIT,
 	   // loadOp

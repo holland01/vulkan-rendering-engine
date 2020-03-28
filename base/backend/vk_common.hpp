@@ -402,7 +402,7 @@ namespace vulkan {
     }
   };
   
-  struct depthbuffer_data {
+  struct depthbuffer_info {
     static inline constexpr uint32_t k_bpp = 4;
     static inline constexpr VkFormat k_format = VK_FORMAT_D24_UNORM_S8_UINT;
     static inline constexpr VkImageLayout k_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -436,7 +436,7 @@ namespace vulkan {
 
     std::string to_string() const {
       std::stringstream ss;
-      ss << "depthbuffer_data:\n"
+      ss << "depthbuffer_info:\n"
 	 << "..." << AS_STRING_SS(width) << "\n"
 	 << "..." << AS_STRING_SS(height) << "\n"
 	 << "..." << SS_HEX_NAME(image) << "\n"
