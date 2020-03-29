@@ -482,8 +482,9 @@ namespace vulkan {
     };
 
     uint32_t max_frames_in_flight() const {
-      // we may want to make this more dynamic at some point
-      return k_max_frames_in_flight;
+      // we may want to make this more dynamic at some point,
+      // hence the method
+      return st_config::c_renderer::k_max_frames_in_flight;
     }
     
     VkPipelineLayout pipeline_layout(int index) const {
@@ -988,8 +989,8 @@ namespace vulkan {
           // we can optimize later as necessary.
           uint32_t image_count = details.capabilities.minImageCount;
           ASSERT(image_count != 0);
-          if (image_count != 3) {
-            image_count = 3;
+          if (image_count != st_config::c_renderer::k_desired_swapchain_image_count) {
+            image_count = st_config::c_renderer::k_desired_swapchain_image_count;
           }
           ASSERT(details.capabilities.minImageCount <= image_count &&
 		 image_count <= details.capabilities.maxImageCount);

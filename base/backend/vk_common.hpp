@@ -66,6 +66,11 @@ namespace vulkan {
 	 config_file, // not implemented yet
 	 best_fit, // not implemented yet
 	};
+
+      static inline constexpr uint32_t k_max_frames_in_flight{2};
+      
+      static inline constexpr uint32_t k_desired_swapchain_image_count{3};
+      
       namespace m_render {
 	static inline constexpr bool k_use_frustum_culling{false};
 	static inline constexpr bool k_allow_more_frames_than_fences{false};
@@ -79,6 +84,12 @@ namespace vulkan {
       namespace m_select_present_mode {
 	static inline constexpr present_mode_select k_select_method{present_mode_select::fifo};
       }
+
+      static_assert((k_max_frames_in_flight == k_desired_swapchain_image_count) ||
+		    m_render::k_allow_more_frames_than_fences,
+		    "invalid frame count configuration; must ensure either of the given conditions hold:\n"
+		    "\tst_config::c_renderer::k_max_frames_in_flight == st_config::c_renderer::k_desired_swapchain_image_count, or\n"
+		    "\tst_config::c_renderer::m_render::k_allow_more_frames_than_fences == true");
     }
   }
 
