@@ -64,10 +64,10 @@ namespace vulkan {
 	 fifo,
 	 fifo_relaxed,
 	 config_file, // not implemented yet
-	 best_fit, // not implemented yet
+	 best_fit     // not implemented yet
 	};
 
-      static inline constexpr uint32_t k_max_frames_in_flight{2};
+      static inline constexpr uint32_t k_max_frames_in_flight{3};
       
       static inline constexpr uint32_t k_desired_swapchain_image_count{3};
       
