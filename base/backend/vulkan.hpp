@@ -467,11 +467,12 @@ namespace vulkan {
       bool enable{false};
     };
 
-    static inline darray<vk_layer_info> s_layers = {
-      { "VK_LAYER_LUNARG_standard_validation", true },
-      { "VK_LAYER_LUNARG_core_validation", true },
-      { "VK_LAYER_LUNARG_parameter_validation", false }
-    };
+    static inline darray<vk_layer_info> s_layers =
+      {
+       { "VK_LAYER_LUNARG_standard_validation", st_config::c_renderer::k_enable_validation_layers },
+       { "VK_LAYER_LUNARG_core_validation", st_config::c_renderer::k_enable_validation_layers },
+       { "VK_LAYER_LUNARG_parameter_validation", st_config::c_renderer::k_enable_validation_layers }
+      };
 
     static inline darray<const char*> s_device_extensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME

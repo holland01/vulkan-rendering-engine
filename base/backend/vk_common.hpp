@@ -70,6 +70,8 @@ namespace vulkan {
       static inline constexpr uint32_t k_max_frames_in_flight{3};
       
       static inline constexpr uint32_t k_desired_swapchain_image_count{3};
+
+      static inline constexpr bool k_enable_validation_layers{true};
       
       namespace m_render {
 	static inline constexpr bool k_use_frustum_culling{false};
