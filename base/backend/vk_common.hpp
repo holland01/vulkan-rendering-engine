@@ -76,6 +76,9 @@ namespace vulkan {
       namespace m_setup {
 	static inline constexpr bool k_use_single_pass{true};
       }
+      namespace m_select_present_mode {
+	static inline constexpr present_mode_select k_select_method{present_mode_select::fifo};
+      }
     }
   }
 

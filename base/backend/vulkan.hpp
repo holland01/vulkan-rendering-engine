@@ -910,6 +910,38 @@ namespace vulkan {
       return m_vk_khr_surface != VK_NULL_HANDLE;
     }
 
+    VkPresentModeKHR select_present_mode() const {
+      // FIFO_KHR implies vertical sync. There may be a slight latency,
+      // but for our purposes this shouldn't a problem.
+      // We can deal with potential issues that can occur
+      // with MAILBOX_KHR (provides triple buffering/lower latency)
+      // if necessary, if the system supports it.
+
+      using pms = st_config::c_renderer::present_mode_select;
+      
+      VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+
+      std::unordered_map<VkPresentModeKHR, std::string> table =
+	{
+	 { VK_PRESENT_MODE_FIFO_KHR, "VK_PRESENT_MODE_FIFO_KHR" },
+	 { VK_PRESENT_MODE_FIFO_RELAXED_KHR, "VK_PRESENT_MODE_FIFO_RELAXED_KHR" }
+	};
+      
+      switch (st_config::c_renderer::m_select_present_mode::k_select_method) {
+      case pms::fifo:
+	present_mode = VK_PRESENT_MODE_FIFO_KHR;
+	break;
+      case pms::fifo_relaxed: present_mode = VK_PRESENT_MODE_FIFO_RELAXED_KHR; break;
+      default:
+	ASSERT(false && "st_config::c_renderer::m_select_present_mode::k_select_method desired is not yet implemented");
+	break;
+      }
+
+      write_logf("Choosing present_mode = %s", table.at(present_mode).c_str());
+     
+      return present_mode;
+    }
+
     void setup_swapchain() {
       if (ok_ldev()) {
         if (swapchain_ok(m_vk_curr_pdevice)) {
@@ -929,13 +961,8 @@ namespace vulkan {
             ASSERT(chosen);
           }
 
-          // FIFO_KHR implies vertical sync. There may be a slight latency,
-          // but for our purposes this shouldn't a problem.
-          // We can deal with potential issues that can occur
-          // with MAILBOX_KHR (provides triple buffering/lower latency)
-          // if necessary.
-          VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
-          
+	  VkPresentModeKHR present_mode = select_present_mode();
+	  
           // Here we select the swapchain dimensions (the dimensions of the images that have been
           // rendered into). We want to make them as close as possible to the actual
           // window dimensions; sometimes this will be exact, other times it won't, depending
