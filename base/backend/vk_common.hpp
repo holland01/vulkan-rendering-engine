@@ -41,7 +41,46 @@ namespace vulkan {
 #define VK_HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, vk_handle_type) \
   HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, vk_handle_type, VK_NULL_HANDLE)
 
-    //
+  //
+  // Any STATIC_IF statements used in
+  // the vulkan namespace should be
+  // reading from a constexpr bool defined here.
+  //
+  // - st stands for "static"
+  // - c stands for "class"
+  // - s stands for "struct"
+  // - m stands for "method"
+  // - f for "function"
+  //
+  // each parameter should belong to a namespace
+  // defining one of these.
+  //
+  // Ultimately, any constexpr config parameter belongs here.
+  //
+  namespace st_config {
+    namespace c_renderer {
+      enum class present_mode_select
+	{
+	 fifo,
+	 fifo_relaxed,
+	 config_file, // not implemented yet
+	 best_fit, // not implemented yet
+	};
+      namespace m_render {
+	static inline constexpr bool k_use_frustum_culling{false};
+	static inline constexpr bool k_allow_more_frames_than_fences{false};
+      }
+      namespace m_setup_vertex_buffer {
+	static inline constexpr bool k_use_staging{true};
+      }
+      namespace m_setup {
+	static inline constexpr bool k_use_single_pass{true};
+      }
+    }
+  }
+
+  
+  //
   // The following struct defines a simple
   // fluent interface for a VkImageMemoryBarrier/VkCommandBuffer
   // operation.

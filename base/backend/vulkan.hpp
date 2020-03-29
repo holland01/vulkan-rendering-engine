@@ -1270,11 +1270,9 @@ namespace vulkan {
 	    return buffer;
 	  };
 
-	constexpr bool k_use_staging = true;
-
 	bool good = false;
 	
-	STATIC_IF (k_use_staging) {		
+	STATIC_IF (st_config::c_renderer::m_setup_vertex_buffer::k_use_staging) {		
 	  // create the staging buffer
 	  buffer_data staging = make_and_fill(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
@@ -3153,15 +3151,13 @@ namespace vulkan {
     }
 
     void setup() {
-      constexpr bool single_pass = false;
-      
       pass_type ps_type{};
       attachment_read_descriptor_type desc_type{};
       pipeline_type pl_type{};
       command_buffer_type cmd_type{};
       framebuffer_setup_method fb_setup{};
       
-      STATIC_IF (single_pass) {
+      STATIC_IF (st_config::c_renderer::m_setup::k_use_single_pass) {
 	ps_type = pass_type::single;
 	desc_type = attachment_read_descriptor_type::none;
 	pl_type = pipeline_type::pbr_basic_single;
@@ -3218,7 +3214,9 @@ namespace vulkan {
 	  m_frame_dtimes[m_current_frame] = time - m_frame_stimes.at(m_current_frame);
 	  m_frame_stimes[m_current_frame] = time;
 
-	  m_frustum.update();
+	  STATIC_IF (st_config::c_renderer::m_render::k_use_frustum_culling) {
+	    m_frustum.update();
+	  }
 	}
 	
 	uint32_t image_index = UINT32_MAX;
@@ -3229,17 +3227,25 @@ namespace vulkan {
 				    m_vk_sems_image_available.at(m_current_frame),
 				    VK_NULL_HANDLE,
 				    &image_index));
-
-	if (m_vk_images_in_flight[image_index] != VK_NULL_HANDLE) {
-	  VK_FN(vkWaitForFences(m_vk_curr_ldevice,
-				1,
-				&m_vk_images_in_flight[image_index],
-				VK_TRUE,
-			        k_timeout_ns));
+	
+	STATIC_IF (st_config::c_renderer::m_render::k_allow_more_frames_than_fences) {
+	  if (m_vk_images_in_flight.at(image_index) != VK_NULL_HANDLE) {
+	    VK_FN(vkWaitForFences(m_vk_curr_ldevice,
+				  1,
+				  &m_vk_images_in_flight[image_index],
+				  VK_TRUE,
+				  k_timeout_ns));
+	  }
+	  
+	  m_vk_images_in_flight[image_index] = m_vk_fences_in_flight.at(m_current_frame);
+	}
+	else {
+	  // m_vk_images_in_flight makes sense if and only if we're submitting more frames than
+	  // we have fences. Otherwise, the image index should directly
+	  // map to the current frame.
+	  ASSERT(image_index == m_current_frame);
 	}
 	
-	m_vk_images_in_flight[image_index] = m_vk_fences_in_flight.at(m_current_frame);
-
 	if (ok()) {	  
 	  ASSERT(m_vk_command_buffers.size() == m_vk_swapchain_images.size());
 	  ASSERT(image_index < m_vk_command_buffers.size());
