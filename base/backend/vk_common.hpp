@@ -2,12 +2,23 @@
 
 #include "common.hpp"
 
+#if defined(BASE_DEBUG) && defined(BASE_VK_LOG_CALL)
 #define VK_FN(expr)						\
   do {								\
     if (api_ok()) {						\
       g_vk_result = vk_call((expr), #expr, __LINE__, __FILE__);	\
     }								\
   } while (0)
+#elif defined(BASE_DEBUG)
+#define VK_FN(expr)						\
+  do {								\
+    if (api_ok()) {						\
+      g_vk_result = (expr);					\
+    }								\
+  } while (0)
+#else
+#define VK_FN(expr) expr
+#endif // BASE_DEBUG && BASE_VK_LOG_CALL
 
 namespace vulkan {
   extern const darray<VkImageLayout> k_invalid_attachment_layouts;
