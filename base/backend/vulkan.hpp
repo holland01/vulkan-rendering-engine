@@ -3221,7 +3221,7 @@ namespace vulkan {
 	{
 	  double time = glfwGetTime();
 	  m_frame_dtimes[m_current_frame] = time - m_frame_stimes.at(m_current_frame);
-	  m_frame_stimes[m_current_frame] = time;
+	  m_frame_stimes[m_current_frame] = time; // stimes = start times
 
 	  STATIC_IF (st_config::c_renderer::m_render::k_use_frustum_culling) {
 	    m_frustum.update();
