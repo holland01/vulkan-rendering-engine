@@ -27,7 +27,7 @@ public:
     real_t fps = 1.0 / dtime_s;
     m_fps_ema = k_smooth * fps + (1 - k_smooth) * m_fps_ema;
     
-    std::string str_fps{std::to_string(fps)};
+    std::string str_fps{"last frame: " + std::to_string(fps) + "|ema: " + std::to_string(m_fps_ema)};
     glfwSetWindowTitle(w, str_fps.c_str());
   }
 
