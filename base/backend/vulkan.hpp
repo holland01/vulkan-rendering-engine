@@ -3143,8 +3143,10 @@ namespace vulkan {
 	m_vk_sems_image_available.resize(max_frames_in_flight());
 	m_vk_sems_render_finished.resize(max_frames_in_flight());
 	m_vk_fences_in_flight.resize(max_frames_in_flight());
-	
-	m_vk_images_in_flight.resize(m_vk_swapchain_images.size(), VK_NULL_HANDLE);
+
+	STATIC_IF (st_config::c_renderer::m_render::k_allow_more_frames_than_fences) {
+	  m_vk_images_in_flight.resize(m_vk_swapchain_images.size(), VK_NULL_HANDLE);
+	}
 
 	m_frame_stimes.resize(max_frames_in_flight(), 0.0);
 	m_frame_dtimes.resize(max_frames_in_flight(), 0.0);
