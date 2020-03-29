@@ -389,8 +389,6 @@ namespace vulkan {
     VkSwapchainKHR m_vk_khr_swapchain{VK_NULL_HANDLE};
 
     buffer_data m_vertex_buffer;
-
-    static inline constexpr VkDeviceSize k_staging_buffer_copy_stride = 65536;  
     
     darray<image_pool::index_type> m_test_image_indices =
       {
@@ -445,8 +443,6 @@ namespace vulkan {
       };
 
     vec3_t m_camera_position{R(0)};
-
-    static constexpr uint32_t k_max_frames_in_flight{4};
     
     uint32_t m_instance_count{0};
     uint32_t m_current_frame{0};
@@ -2878,23 +2874,6 @@ namespace vulkan {
 		     m_image_pool.layout_final(dst),
 		     1,
 		     &copy_region);		     
-    }
-
-    bool commands_layout_transition(VkCommandBuffer cmd_buffer,
-				    image_pool::index_type image) const {
-      bool ret = ok();
-      if (ret) {
-	auto layout_transition =
-	  m_image_pool.make_layout_transition(image);
-
-        ret = c_assert(layout_transition.ok());
-	  
-	if (ret) {
-	  layout_transition.via(cmd_buffer);
-	  ret = c_assert(ok());
-	}
-      }
-      return ret;
     }
 
     void commands_draw_inner_objects(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
