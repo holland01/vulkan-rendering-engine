@@ -9,7 +9,7 @@ protected:
   uint32_t m_frame_index{0};
   double m_dtime{0.0};
   
-  bool m_running{false};
+  bool m_running{true};
 
 public:
   virtual ~render_loop() {}
