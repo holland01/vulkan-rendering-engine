@@ -365,90 +365,107 @@ namespace vulkan {
       ASSERT(r);
       return r;
     }
+
+    struct make_image_data {
+      VkDeviceMemory memory{VK_NULL_HANDLE};
+      VkImage handle{VK_NULL_HANDLE};
+      VkImageView view_handle{VK_NULL_HANDLE};
+
+      make_image_data(const image_pool& self,
+		      const device_resource_properties& properties,
+		      const image_gen_params& params) {
+	
+	if (properties.ok() && params.ok()) {	
+	  image_requirements reqs = self.get_image_requirements(properties, params);
+
+	  if (reqs.ok()) {	  	  
+	    memory = make_device_memory(properties.device,
+					params.data,
+					params.calc_data_size(),
+					reqs.memory_size(),
+					reqs.memory_type_index);
+	  }
+	
+
+	  if (H_OK(memory)) {
+	    VkImageCreateInfo create_info = self.make_image_create_info(properties, params);
+	  
+	    VK_FN(vkCreateImage(properties.device,
+				&create_info,
+				nullptr,
+				&handle));	  
+	  }
+
+	  bool bound = false;
+	  if (H_OK(handle)) {
+	    VK_FN(vkBindImageMemory(properties.device,
+				    handle,
+				    memory,
+				    0));
+	
+	    bound = api_ok();
+	  }
+
+	  if (bound) {
+	    VkImageViewCreateInfo create_info = self.make_image_view_create_info(params);
+	  
+	    create_info.image = handle;
+
+	    VK_FN(vkCreateImageView(properties.device,
+				    &create_info,
+				    nullptr,
+				    &view_handle));
+	  }	
+	}
+      }
+      
+      bool ok() const {
+	return
+	  c_assert(H_OK(memory)) &&
+	  c_assert(H_OK(handle)) &&
+	  c_assert(H_OK(view_handle));
+      }
+    };
     
     index_type make_image(const device_resource_properties& properties,
 			  const image_gen_params& params) {
       index_type img_index = k_unset;
       
-      VkDeviceMemory img_memory{VK_NULL_HANDLE};
-      VkImage img_handle{VK_NULL_HANDLE};
-      VkImageView img_view_handle{VK_NULL_HANDLE};
+      make_image_data mid{*this, properties, params};      
 
-      if (properties.ok() && params.ok()) {
-	image_requirements reqs = get_image_requirements(properties, params);
+      if (mid.ok()) {
+	img_index = new_image();
 
-	if (reqs.ok()) {	  	  
-	  img_memory = make_device_memory(properties.device,
-					  params.data,
-					  params.calc_data_size(),
-					  reqs.memory_size(),
-					  reqs.memory_type_index);
-	}
-	
-
-	if (H_OK(img_memory)) {
-	  VkImageCreateInfo create_info = make_image_create_info(properties, params);
+	m_user_ptrs[img_index] = params.data;
 	  
-	  VK_FN(vkCreateImage(properties.device,
-			      &create_info,
-			      nullptr,
-			      &img_handle));	  
-	}
+	m_device_memories[img_index] = mid.memory;
+	m_images[img_index] = mid.handle;
+	m_image_views[img_index] = mid.view_handle;
 
-	bool bound = false;
-	if (H_OK(img_handle)) {
-	  VK_FN(vkBindImageMemory(properties.device,
-				  img_handle,
-				  img_memory,
-				  0));
-	
-	  bound = api_ok();
-	}
-
-	if (bound) {
-	  VkImageViewCreateInfo create_info = make_image_view_create_info(params);
+	m_layouts_initial[img_index] = params.initial_layout;
+	m_layouts_final[img_index] = params.final_layout;
+	m_layouts_attach_opt[img_index] = params.attachment_layout;
 	  
-	  create_info.image = img_handle;
-
-	  VK_FN(vkCreateImageView(properties.device,
-				  &create_info,
-				  nullptr,
-				  &img_view_handle));
-	}
-
-	if (H_OK(img_view_handle)) {
-	  img_index = new_image();
-
-	  m_user_ptrs[img_index] = params.data;
+	m_formats[img_index] = params.format;
 	  
-	  m_device_memories[img_index] = img_memory;
-	  m_images[img_index] = img_handle;
-	  m_image_views[img_index] = img_view_handle;
-
-	  m_layouts_initial[img_index] = params.initial_layout;
-	  m_layouts_final[img_index] = params.final_layout;
-	  m_layouts_attach_opt[img_index] = params.attachment_layout;
+	m_widths[img_index] = params.width;
+	m_heights[img_index] = params.height;
+	m_depths[img_index] = params.depth;
 	  
-	  m_formats[img_index] = params.format;
-	  
-	  m_widths[img_index] = params.width;
-	  m_heights[img_index] = params.height;
-	  m_depths[img_index] = params.depth;
-	  
-	  m_types[img_index] = params.type;
-	  m_tiling[img_index] = params.tiling;
+	m_types[img_index] = params.type;
+	m_tiling[img_index] = params.tiling;
 
-	  m_aspect_flags[img_index] = params.aspect_flags;
+	m_aspect_flags[img_index] = params.aspect_flags;
 
-	  m_src_pipeline_stages[img_index] = params.source_pipeline_stage;
-	  m_dst_pipeline_stages[img_index] = params.dest_pipeline_stage;
+	m_src_pipeline_stages[img_index] = params.source_pipeline_stage;
+	m_dst_pipeline_stages[img_index] = params.dest_pipeline_stage;
       
-	  m_src_access_flags[img_index] = params.source_access_flags;
-	  m_dst_access_flags[img_index] = params.dest_access_flags;
+	m_src_access_flags[img_index] = params.source_access_flags;
+	m_dst_access_flags[img_index] = params.dest_access_flags;
 
-	  m_usage_flags[img_index] = params.usage_flags;
-	}
+	m_usage_flags[img_index] = params.usage_flags;
       }
+      
       ASSERT(ok_image(img_index));
       return img_index;
     }
