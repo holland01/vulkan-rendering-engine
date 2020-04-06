@@ -1275,7 +1275,7 @@ namespace vulkan {
       
 	    buffer_data buffer{};
 
-	    auto opt_ret = make_buffer_data(0,
+	    auto opt_ret = make_buffer_data(0, // create flags
 					    usage,
 					    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 					    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -1302,7 +1302,7 @@ namespace vulkan {
 	  buffer_data staging = make_and_fill(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
 	  // create vertex buffer
-	  auto opt_vertex_buffer = make_buffer_data(0,
+	  auto opt_vertex_buffer = make_buffer_data(0, // create flags
 						    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
 						    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 						    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
