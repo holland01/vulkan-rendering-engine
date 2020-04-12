@@ -370,12 +370,32 @@ namespace vulkan {
       VkDeviceMemory memory{VK_NULL_HANDLE};
       VkImage handle{VK_NULL_HANDLE};
       VkImageView view_handle{VK_NULL_HANDLE};
+      bool memory_bound{false};
 
-      make_image_data(const image_pool& self,
-		      const device_resource_properties& properties,
-		      const image_gen_params& params) {
-	
-	if (properties.ok() && params.ok()) {	
+      const image_pool& self;
+      const device_resource_properties& properties;
+      const image_gen_params& params;
+
+      bool ok_pre() const {
+	return
+	  c_assert(properties.ok()) &&
+	  c_assert(params.ok());
+      }
+
+      bool ok_memory() const {
+	return c_assert(H_OK(memory));
+      }
+
+      bool ok_handle() const {
+	return c_assert(H_OK(handle));
+      }
+
+      bool ok_view_handle() const {
+	return c_assert(H_OK(view_handle));
+      }
+      
+      make_image_data& make_image_memory() {
+	if (CA_H_NULL(memory)) {
 	  image_requirements reqs = self.get_image_requirements(properties, params);
 
 	  if (reqs.ok()) {	  	  
@@ -385,45 +405,84 @@ namespace vulkan {
 					reqs.memory_size(),
 					reqs.memory_type_index);
 	  }
-	
 
-	  if (H_OK(memory)) {
-	    VkImageCreateInfo create_info = self.make_image_create_info(properties, params);
-	  
-	    VK_FN(vkCreateImage(properties.device,
-				&create_info,
-				nullptr,
-				&handle));	  
-	  }
-
-	  bool bound = false;
-	  if (H_OK(handle)) {
-	    VK_FN(vkBindImageMemory(properties.device,
-				    handle,
-				    memory,
-				    0));
-	
-	    bound = api_ok();
-	  }
-
-	  if (bound) {
-	    VkImageViewCreateInfo create_info = self.make_image_view_create_info(params);
-	  
-	    create_info.image = handle;
-
-	    VK_FN(vkCreateImageView(properties.device,
-				    &create_info,
-				    nullptr,
-				    &view_handle));
-	  }	
 	}
+
+	return *this;
       }
+
+      make_image_data& create_image() {
+	if (ok_memory() && CA_H_NULL(handle)) {
+	  VkImageCreateInfo create_info = self.make_image_create_info(properties, params);
+	  
+	  VK_FN(vkCreateImage(properties.device,
+			      &create_info,
+			      nullptr,
+			      &handle));
+	}
+	return *this;
+      }
+      
+      make_image_data& bind_image_memory() {
+	if (!memory_bound && ok_handle()) {
+	  VK_FN(vkBindImageMemory(properties.device,
+				  handle,
+				  memory,
+				  0));
+	  memory_bound = api_ok();
+	}
+	return *this;
+      }
+
+      make_image_data& create_image_view() {
+	if (memory_bound && CA_H_NULL(view_handle)) {
+	  VkImageViewCreateInfo create_info =
+	    self.make_image_view_create_info(params);
+	  
+	  create_info.image = handle;
+
+	  VK_FN(vkCreateImageView(properties.device,
+				  &create_info,
+				  nullptr,
+				  &view_handle));
+	}
+	return *this;
+      }
+      
+      make_image_data(const image_pool& self,
+		      const device_resource_properties& properties,
+		      const image_gen_params& params)
+	: self{self},
+	  properties{properties},
+	  params{params} {}
+
+      make_image_data& all() {
+	return
+	  make_image_memory()
+	  .create_image()
+	  .bind_image_memory()
+	  .create_image_view();
+      }
+      
+      void free_device_mem() {
+	free_device_handle<VkImageView,
+			   &vkDestroyImageView>(properties.device,
+						view_handle);
+
+	free_device_handle<VkImage,
+			   &vkDestroyImage>(properties.device,
+					    handle);
+	
+	free_device_handle<VkDeviceMemory,
+			   &vkFreeMemory>(properties.device,
+					  memory);
+      }     
       
       bool ok() const {
 	return
-	  c_assert(H_OK(memory)) &&
-	  c_assert(H_OK(handle)) &&
-	  c_assert(H_OK(view_handle));
+	  ok_memory() &&
+	  ok_handle() &&
+	  ok_view_handle();
       }
     };
     
@@ -431,8 +490,11 @@ namespace vulkan {
 			  const image_gen_params& params) {
       index_type img_index = k_unset;
       
-      make_image_data mid{*this, properties, params};      
+      make_image_data mid{*this, properties, params};
 
+      // this performs a standard init sequence
+      mid.all();
+      
       if (mid.ok()) {
 	img_index = new_image();
 
