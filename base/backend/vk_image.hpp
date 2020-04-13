@@ -70,6 +70,15 @@ namespace vulkan {
       return r;
     }
 
+    // see documentation @ declaration for st_config flag below
+    // for more information
+    bool needs_staging_convert() const {
+      return
+	st_config::c_image_pool::m_make_image::k_always_produce_optimal_images && 
+	tiling == VK_IMAGE_TILING_LINEAR &&
+	initial_layout == VK_IMAGE_LAYOUT_PREINITIALIZED;
+    }
+    
     uint32_t bpp() const {
       return bpp_from_format(format);
     }

@@ -93,6 +93,18 @@ namespace vulkan {
 		    "\tst_config::c_renderer::k_max_frames_in_flight == st_config::c_renderer::k_desired_swapchain_image_count, or\n"
 		    "\tst_config::c_renderer::m_render::k_allow_more_frames_than_fences == true");
     }
+
+    namespace c_image_pool {
+      namespace m_make_image {
+	// this takes an image_gen_params with settings
+	// that are designed to produce an image with preinitialized
+	// data and internally, within the pool itself,
+	// produces an image with an optimal data layout.
+	// The tradeoff is that it will take longer to create the image,
+	// but if this is during init then it's really not a problem.
+	static inline constexpr bool k_always_produce_optimal_images{true};
+      }
+    }
   }
 
   
