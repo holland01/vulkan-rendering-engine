@@ -30,7 +30,8 @@ namespace vulkan {
   bool api_ok();
 
 #define H_OK(h) api_ok() && ((h) != VK_NULL_HANDLE)
-
+#define CA_H_NULL(h) c_assert((h) == VK_NULL_HANDLE)
+  
 #define HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, handle_type, null_value) \
   handle_type ret{null_value};						\
   if (ok_fn_name(index_name)) {						\
