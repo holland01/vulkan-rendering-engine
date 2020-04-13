@@ -309,17 +309,18 @@ namespace vulkan {
     VkDevice device{VK_NULL_HANDLE};
     VkSharingMode queue_sharing_mode{VK_SHARING_MODE_EXCLUSIVE};
     VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};
-
+    VkCommandPool command_pool{VK_NULL_HANDLE};
+    VkQueue command_queue{VK_NULL_HANDLE};
+     
     bool ok() const {
-      bool r =
+      return
  	!queue_family_indices.empty() &&
-	physical_device != VK_NULL_HANDLE &&
-	device != VK_NULL_HANDLE &&
-	descriptor_pool != VK_NULL_HANDLE;
-
-      ASSERT(r);
-      
-      return r;
+	c_assert(H_OK(physical_device)) &&
+	c_assert(H_OK(device)) &&
+	c_assert(H_OK(descriptor_pool)) &&
+        c_assert(H_OK(command_pool)) &&
+	c_assert(H_OK(command_queue)) 
+	; 
     }
   };
 
@@ -595,7 +596,6 @@ namespace vulkan {
 			    uint32_t binding_index,
 			    uint32_t array_element,
 			    VkDescriptorType descriptor_type);
-
 
   struct buffer_reqs {
     VkDeviceSize required_size{std::numeric_limits<VkDeviceSize>::max()};

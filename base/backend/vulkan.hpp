@@ -559,7 +559,9 @@ namespace vulkan {
         m_vk_curr_pdevice,
         m_vk_curr_ldevice,
         query_queue_sharing_mode(),
-	m_vk_descriptor_pool
+	m_vk_descriptor_pool,
+	m_vk_command_pool,
+	m_vk_graphics_queue
       };
     }
     
