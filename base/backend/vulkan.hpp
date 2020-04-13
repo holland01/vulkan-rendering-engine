@@ -1265,7 +1265,7 @@ namespace vulkan {
     }
   
     void setup_vertex_buffer() {
-      if (ok_command_pool()) {
+      if (ok_graphics_pipeline()) {
 	const VkDeviceSize k_buffer_size =
 	  sizeof(m_vertex_buffer_vertices[0]) *
 	  m_vertex_buffer_vertices.size();
@@ -1440,6 +1440,12 @@ namespace vulkan {
       return r;
     }
 
+    bool ok_command_pool() const {
+      bool r = ok() && m_ok_command_pool;
+      ASSERT(r);
+      return r;
+    }
+
     bool ok_vertex_data() const {
       return
 	ok() &&
@@ -1490,12 +1496,6 @@ namespace vulkan {
 
     bool ok_framebuffers() const {
       bool r = ok() && m_ok_framebuffers;
-      ASSERT(r);
-      return r;
-    }
-
-    bool ok_command_pool() const {
-      bool r = ok() && m_ok_command_pool;
       ASSERT(r);
       return r;
     }
@@ -1678,8 +1678,23 @@ namespace vulkan {
       }
     }
 
-    void setup_vertex_data() {
+    void setup_command_pool() {
       if (ok_present()) {
+	queue_family_indices indices = query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
+
+	VkCommandPoolCreateInfo pool_info = {};
+	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	pool_info.queueFamilyIndex = indices.graphics_family.value();
+	pool_info.flags = 0;
+
+	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
+
+	m_ok_command_pool = true;	
+      }      
+    }
+
+    void setup_vertex_data() {
+      if (ok_command_pool()) {
 	auto add_verts =
 	  [this](const std::string& name,
 		 mesh_builder& mb,
@@ -2650,21 +2665,6 @@ namespace vulkan {
 	}	
       }
     }
-    
-    void setup_command_pool() {
-      if (ok_graphics_pipeline()) {
-	queue_family_indices indices = query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
-
-	VkCommandPoolCreateInfo pool_info = {};
-	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	pool_info.queueFamilyIndex = indices.graphics_family.value();
-	pool_info.flags = 0;
-
-	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
-
-	m_ok_command_pool = true;	
-      }      
-    }
 
     //
     // framebuffer_attach_depth_output and framebuffer_attach_depth_input
@@ -3183,6 +3183,7 @@ namespace vulkan {
       }
       
       setup_presentation();
+      setup_command_pool();
       setup_vertex_data();
       setup_descriptor_pool();
       setup_render_pass(ps_type);
@@ -3190,7 +3191,6 @@ namespace vulkan {
       setup_uniform_block_data();
       setup_texture_data();
       setup_graphics_pipeline(pl_type);
-      setup_command_pool();
       setup_vertex_buffer();
       setup_framebuffers(fb_setup);
       setup_command_buffers(cmd_type);
