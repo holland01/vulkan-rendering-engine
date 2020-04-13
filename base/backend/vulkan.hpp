@@ -1333,7 +1333,7 @@ namespace vulkan {
 				       &region);
 		     },
 		     // error
-	             [this, &good]() {
+	             [this, &good](one_shot_command_error err) {
 		       good = false;
 	             });
 
@@ -1352,53 +1352,12 @@ namespace vulkan {
       }
     }
 
-    void run_cmds(std::function<void(VkCommandBuffer cmd_buffer)> f,
-		  std::function<void()> err_fn) {
+    void run_cmds(one_shot_command_fn_ok_t f,
+		  one_shot_command_fn_err_t err_fn) {
       
-      VkCommandBufferAllocateInfo alloc_info = {};
-      alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-      alloc_info.commandPool = m_vk_command_pool;
-      alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-      alloc_info.commandBufferCount = 1;
-
-      VkCommandBuffer cmd_buffer{VK_NULL_HANDLE};	
-      VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice,
-				     &alloc_info,
-				     &cmd_buffer));
-
-      
-
-      if (cmd_buffer != VK_NULL_HANDLE) {
-	if (ok()) {
-	  VkCommandBufferBeginInfo begin_info = {};
-	  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	  vkBeginCommandBuffer(cmd_buffer, &begin_info);
-
-	  f(cmd_buffer);
-	  
-	  vkEndCommandBuffer(cmd_buffer);
-
-	  VkSubmitInfo submit_info = {};
-	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	  submit_info.commandBufferCount = 1;
-	  submit_info.pCommandBuffers = &cmd_buffer;
-
-	  VK_FN(vkQueueSubmit(m_vk_graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
-	  VK_FN(vkQueueWaitIdle(m_vk_graphics_queue));
-	}
-	else if (err_fn) {
-	  err_fn();
-	}
-
-        vkFreeCommandBuffers(m_vk_curr_ldevice,
-			     m_vk_command_pool,
-			     1,
-			     &cmd_buffer);
-      }
-      else if (err_fn) {
-	err_fn();
-      }
+      one_shot_command_buffer(make_device_resource_properties(),
+			      f,
+			      err_fn);
     }
 
   public:
@@ -3027,7 +2986,7 @@ namespace vulkan {
 		       m_image_pool.make_layout_transitions(cmd_buf,
 							    m_test_image_indices);
 		   },
-	    [this]() {
+	    [this](one_shot_command_error err) {
 	      puts("run_cmds ERROR");
 	      ASSERT(false);
 	      m_ok_scene = false;

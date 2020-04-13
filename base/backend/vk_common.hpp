@@ -615,6 +615,19 @@ namespace vulkan {
 						     VkMemoryPropertyFlags memory_property_flags,
 						     VkDeviceSize desired_size);
 
+  enum class one_shot_command_error
+    {
+     device_resource_properties,
+     allocate_command_buffer,     
+    };
+
+  typedef std::function<void(VkCommandBuffer)> one_shot_command_fn_ok_t;
+  typedef std::function<void(one_shot_command_error)> one_shot_command_fn_err_t;
+
+  void one_shot_command_buffer(const device_resource_properties& properties,
+			       one_shot_command_fn_ok_t f_ok,
+			       one_shot_command_fn_err_t f_err);
+
   static inline std::string realpath_spv(const std::string& spv_filename) {
     return "resources/shaders/bin/" + spv_filename;
   }
