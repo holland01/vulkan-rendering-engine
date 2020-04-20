@@ -203,10 +203,11 @@ vec4 sample_texture() {
 	    frag_TexCoord);
 }
 
+const vec3 gamma = vec3(1.0 / 2.2);
+
 void main() {
   vec3 testLightPosition = vec3(0.0, 10.0, 0.0);
   vec3 testLightColor = vec3(300.0, 300.0, 300.0);
-  
   vec3 N = normalize(frag_Normal);
   vec3 V = normalize(basicPbr.cameraPosition - frag_WorldPosition);
   vec3 F0 = f0();
@@ -215,9 +216,12 @@ void main() {
 
   vec3 ambient = vec3(0.03) * basicPbr.albedo * basicPbr.ao;
   vec3 color   = ambient + Lo;
-
-  color = color / (color + vec3(1.0));
-  color = pow(color, vec3(1.0/2.2));  
   
-  out_Color = vec4(color, 1.0);
+  color = color / (color + vec3(1.0));
+
+  vec4 tex = sample_texture();
+  color *= tex.rgb;
+  color = pow(color, gamma);  
+  
+  out_Color = vec4(color, 1.0 * tex.a);
 }
