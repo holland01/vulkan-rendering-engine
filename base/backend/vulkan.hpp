@@ -2441,13 +2441,13 @@ namespace vulkan {
 	   // aspect flags
 	   VK_IMAGE_ASPECT_COLOR_BIT,
 	   // source pipeline stage
-	   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+	   VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
 	   // dest pipeline stage
 	   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 	   // source access flags
 	   0,
 	   // dest access flags
-	   VK_ACCESS_SHADER_READ_BIT,
+	   VK_ACCESS_UNIFORM_READ_BIT,
 	    
 	   // width
 	   image_w,
