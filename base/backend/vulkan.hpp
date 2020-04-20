@@ -2028,32 +2028,32 @@ namespace vulkan {
 	                                  VK_SUBPASS_EXTERNAL,
 		                          // dstSubpass
 					  0,
-					  // srcStageMask
-					  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+					  // srcStageMask					 
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 					  // dstStageMask
 					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 					  // srcAccessMask
-					  VK_ACCESS_MEMORY_READ_BIT,
+					  0,
 					  // dstAccessMask
-					  VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
+					  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 					  // dependencyFlags
-					  0});
+					  VK_DEPENDENCY_BY_REGION_BIT});
 
 	  // Close the loop
 	  subpass_dependencies.push_back({// srcSubpass
 	                                  0,
-		                          // dstSubpass
-					  VK_SUBPASS_EXTERNAL,
+	  	                          // dstSubpass
+	  				  VK_SUBPASS_EXTERNAL,
 					  // srcStageMask
 					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 					  // dstStageMask
 					  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 					  // srcAccessMask
-					  VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+					  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
 					  // dstAccessMask
-					  VK_ACCESS_MEMORY_READ_BIT,
+					  0,
 					  // dependencyFlags
-					  0});	  
+					  VK_DEPENDENCY_BY_REGION_BIT});
 	  
 	  break;
 	}
