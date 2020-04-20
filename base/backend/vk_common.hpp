@@ -68,9 +68,9 @@ namespace vulkan {
 	 best_fit     // not implemented yet
 	};
 
-      static inline constexpr uint32_t k_max_frames_in_flight{3};
+      static inline constexpr uint32_t k_max_frames_in_flight{8};
       
-      static inline constexpr uint32_t k_desired_swapchain_image_count{3};
+      static inline constexpr uint32_t k_desired_swapchain_image_count{8};
 
       static inline constexpr bool k_enable_validation_layers{true};
       
@@ -79,7 +79,7 @@ namespace vulkan {
 	static inline constexpr bool k_allow_more_frames_than_fences{false};
       }
       namespace m_setup_vertex_buffer {
-	static inline constexpr bool k_use_staging{true};
+	static inline constexpr bool k_use_staging{false};
       }
       namespace m_setup {
 	static inline constexpr bool k_use_single_pass{true};
