@@ -1820,7 +1820,7 @@ namespace vulkan {
 	VkAttachmentReference depth_attachment_ref{};
 
 	// Only relevant for the second subpass,
-	// under case pass_type::multiwithquad
+	// under case pass_type::dual_via_input_attachment
 	darray<VkAttachmentReference> input_attachment_refs{};
 
 	// swapchain_attachment_ref is only relevant in the multipass rendering
