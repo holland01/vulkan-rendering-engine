@@ -1,13 +1,20 @@
 #pragma once
 
 #include "common.hpp"
+#include <iostream>
+
 
 struct render_loop {
 protected:
+  static inline constexpr double k_time_delta_seconds = 5.0;
+  static inline constexpr double k_inv_time_delta_seconds = 1.0 / k_time_delta_seconds;
+  
   double m_frame_start_s{0.0};
   double m_fps_ema{60.0};
   uint32_t m_frame_index{0};
   double m_dtime{0.0};
+  double m_atime{0.0}; // accum
+  uint64_t m_present_count{0};
   
   bool m_running{true};
 
@@ -19,16 +26,18 @@ public:
   };
   virtual void render() = 0;
 
-  void show_fps(GLFWwindow* w) {
-    double dtime_s = m_dtime;
-
-    constexpr double k_smooth{0.25};   
+  void post_update() {
+    m_present_count++;
     
-    real_t fps = 1.0 / dtime_s;
-    m_fps_ema = k_smooth * fps + (1 - k_smooth) * m_fps_ema;
+    m_atime += glfwGetTime() - m_frame_start_s;
     
-    std::string str_fps{"last frame: " + std::to_string(fps) + "|ema: " + std::to_string(m_fps_ema)};
-    glfwSetWindowTitle(w, str_fps.c_str());
+    if (m_atime >= k_time_delta_seconds) {
+      double fps = static_cast<double>(m_present_count) * k_inv_time_delta_seconds;
+      std::cout << "FPS: " << fps << std::endl;
+      
+      m_atime = 0.0;
+      m_present_count = 0;
+    }
   }
 
   void post_init();

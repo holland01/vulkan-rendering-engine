@@ -1268,6 +1268,7 @@ void render_loop_triangle::update() {
 void render_loop_triangle::render() {
   m_renderer.render();
   m_dtime = m_renderer.frame_delta_seconds(m_frame_index);
+  post_update();
 }
 
 void render_loop_complete::init() {
@@ -1325,7 +1326,6 @@ int main(void) {
     while (g_m.loop->running()) {
       g_m.loop->update();
       g_m.loop->render();
-      g_m.loop->show_fps(g_m.device_ctx->window());
     }
   }
 
