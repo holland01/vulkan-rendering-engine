@@ -121,7 +121,6 @@ namespace vulkan {
 	c_assert(pipeline_layout_index != pipeline_layout_pool::k_unset) &&
 	c_assert(subpass_index != UINT32_MAX);
 	
-      ASSERT(r);	
       return r;
     }
   };
@@ -265,7 +264,6 @@ namespace vulkan {
 	iad_normal.binding = 0;
 	iad_normal.format = VK_FORMAT_R32G32B32_SFLOAT;
 	iad_normal.offset = offsetof(vertex_data, normal);
-
 	
 	darray<VkVertexInputAttributeDescription> input_attrs =
 	  {
