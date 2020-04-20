@@ -810,9 +810,9 @@ namespace vulkan {
           std::vector<VkExtensionProperties> avail_ext(extension_count);
 
           VK_FN(vkEnumerateDeviceExtensionProperties(device, 
-                                                      nullptr, 
-                                                      &extension_count, 
-                                                      avail_ext.data()));
+						     nullptr, 
+						     &extension_count, 
+						     avail_ext.data()));
           
           if (ok()) {
             std::set<std::string> required_ext(s_device_extensions.begin(), 
@@ -931,9 +931,12 @@ namespace vulkan {
       case pms::fifo:
 	present_mode = VK_PRESENT_MODE_FIFO_KHR;
 	break;
-      case pms::fifo_relaxed: present_mode = VK_PRESENT_MODE_FIFO_RELAXED_KHR; break;
+      case pms::fifo_relaxed:
+	present_mode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+	break;
       default:
-	ASSERT(false && "st_config::c_renderer::m_select_present_mode::k_select_method desired is not yet implemented");
+	ASSERT(false &&
+	       "st_config::c_renderer::m_select_present_mode::k_select_method desired is not yet implemented");
 	break;
       }
 
