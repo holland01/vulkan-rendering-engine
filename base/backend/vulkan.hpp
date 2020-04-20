@@ -997,7 +997,12 @@ namespace vulkan {
           ASSERT(details.capabilities.minImageCount <= image_count &&
 		 image_count <= details.capabilities.maxImageCount);
 
-	  write_logf("swapchain image count = %" PRIu32, image_count);
+	  write_logf("selected swapchain image count = %" PRIu32 "\n"
+		     "min image count allowed = %" PRIu32 "\n"
+		     "max image count allowed = %" PRIu32,
+		     image_count,
+		     details.capabilities.minImageCount,
+		     details.capabilities.maxImageCount);
 	  
           //
           // Here we actually create the swapchain.
