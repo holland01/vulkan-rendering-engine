@@ -446,6 +446,7 @@ namespace vulkan {
     
     uint32_t m_instance_count{0};
     uint32_t m_current_frame{0};
+    uint32_t m_swapchain_image_count{0};
     
     bool m_ok_present{false};
     bool m_ok_vertex_data{false};
@@ -481,7 +482,10 @@ namespace vulkan {
     uint32_t max_frames_in_flight() const {
       // we may want to make this more dynamic at some point,
       // hence the method
-      return st_config::c_renderer::k_max_frames_in_flight;
+      return
+	(st_config::c_renderer::k_max_frames_in_flight == BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE)
+ 	? m_swapchain_image_count
+	: st_config::c_renderer::k_max_frames_in_flight;
     }
     
     VkPipelineLayout pipeline_layout(int index) const {
@@ -989,18 +993,22 @@ namespace vulkan {
           // Image count represents the amount of images on the swapchain.
           // We'll use a small image count for now. Simple semantics first;
           // we can optimize later as necessary.
-          uint32_t image_count = details.capabilities.minImageCount;
-          ASSERT(image_count != 0);
-          if (image_count != st_config::c_renderer::k_desired_swapchain_image_count) {
-            image_count = st_config::c_renderer::k_desired_swapchain_image_count;
+          m_swapchain_image_count = details.capabilities.minImageCount;
+          ASSERT(m_swapchain_image_count != 0);
+	  if (st_config::c_renderer::k_desired_swapchain_image_count ==
+	      BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE) {
+	    m_swapchain_image_count = details.capabilities.maxImageCount;
+	  }
+	  else if (m_swapchain_image_count != st_config::c_renderer::k_desired_swapchain_image_count) {	    
+            m_swapchain_image_count = st_config::c_renderer::k_desired_swapchain_image_count;
           }
-          ASSERT(details.capabilities.minImageCount <= image_count &&
-		 image_count <= details.capabilities.maxImageCount);
+          ASSERT(details.capabilities.minImageCount <= m_swapchain_image_count &&
+		 m_swapchain_image_count <= details.capabilities.maxImageCount);
 
 	  write_logf("selected swapchain image count = %" PRIu32 "\n"
 		     "min image count allowed = %" PRIu32 "\n"
 		     "max image count allowed = %" PRIu32,
-		     image_count,
+		     m_swapchain_image_count,
 		     details.capabilities.minImageCount,
 		     details.capabilities.maxImageCount);
 	  
@@ -1069,7 +1077,7 @@ namespace vulkan {
 
             create_info.surface = m_vk_khr_surface;
             
-            create_info.minImageCount = image_count;
+            create_info.minImageCount = m_swapchain_image_count;
             
             create_info.imageExtent = swap_extent;
 
@@ -1115,7 +1123,7 @@ namespace vulkan {
 					    &count,
 					    nullptr));
 
-	      ASSERT(count == image_count);
+	      ASSERT(count == m_swapchain_image_count);
 	      
               if (ok_swapchain()) {
                 m_vk_swapchain_images.resize(count);

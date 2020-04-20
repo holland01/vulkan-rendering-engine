@@ -20,6 +20,8 @@
 #define VK_FN(expr) expr
 #endif // BASE_DEBUG && BASE_VK_LOG_CALL
 
+#define BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE UINT32_MAX
+
 namespace vulkan {
   extern const darray<VkImageLayout> k_invalid_attachment_layouts;
   
@@ -68,9 +70,9 @@ namespace vulkan {
 	 best_fit     // not implemented yet
 	};
 
-      static inline constexpr uint32_t k_max_frames_in_flight{8};
+      static inline constexpr uint32_t k_max_frames_in_flight{BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE};
       
-      static inline constexpr uint32_t k_desired_swapchain_image_count{8};
+      static inline constexpr uint32_t k_desired_swapchain_image_count{BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE};
 
       static inline constexpr bool k_enable_validation_layers{true};
       
