@@ -62,7 +62,7 @@ namespace vulkan {
     static constexpr inline vec2_t k_tc_tl = R2v(0, 0);
     static constexpr inline vec2_t k_tc_tr = R2v(1, 0);
     static constexpr inline vec2_t k_tc_br = R2v(1, 1);
-    static constexpr inline vec2_t k_tc_bl = R2v(1, 0);
+    static constexpr inline vec2_t k_tc_bl = R2v(0, 1);
     
     static constexpr inline real_t k_tri_ps = R(1);
     
