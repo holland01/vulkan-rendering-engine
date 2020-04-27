@@ -74,6 +74,8 @@ namespace fs = std::experimental::filesystem;
 
 #define SS_HEX_NAME(value) #value << ":" << SS_HEX(value)
 
+#define BOOL_TO_STR(b) ((b) == true) ? "true" : (((b) == false) ? "false" : "<garbage>")
+
 #define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
 
 #define DEBUGLINE write_logf("FILE:%s,LINE:%i\n", __FILE__, __LINE__)
