@@ -15,6 +15,7 @@ protected:
   double m_dtime{0.0};
   double m_atime{0.0}; // accum
   uint64_t m_present_count{0};
+  double m_fps{0.0};
   
   bool m_running{true};
 
@@ -37,9 +38,14 @@ public:
       
       m_atime = 0.0;
       m_present_count = 0;
+
+      m_fps = fps;
     }
   }
 
+  double frames_per_second() const {
+    return m_fps;
+  }
   void post_init();
   bool running() const;
   void set_running(bool v);
