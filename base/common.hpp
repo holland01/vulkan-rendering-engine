@@ -162,6 +162,7 @@ struct module_vertex_buffer;
 struct scene_graph;
 struct shader_uniform_storage;
 struct view_data;
+class settings;
 
 namespace gapi {
 class device;
@@ -191,7 +192,8 @@ struct modules {
   device_context* device_ctx {nullptr};
   gapi::device* gpu {nullptr};
   render_loop* loop{nullptr};
-
+  settings* config{nullptr};
+  
   bool init();
   void free();
 } extern g_m;
