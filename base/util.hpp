@@ -84,6 +84,8 @@ void report_gl_error(GLenum err,
 
 std::vector<uint8_t> read_file(const std::string& path); 
 
+std::vector<std::string> string_split(const std::string& str, char split);
+
 
 
 // https://stackoverflow.com/a/8498694

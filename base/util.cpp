@@ -111,3 +111,47 @@ std::vector<uint8_t> read_file(const std::string& path) {
 
   return ret;
 }
+
+darray<std::string> string_split(const std::string& str, char split) {
+  darray<std::string> v{};
+
+  size_t marker = 0;
+  size_t m = std::string::npos;
+  size_t n = std::string::npos;
+
+  m = str.find_first_of(split, marker);
+
+  if (m != std::string::npos) {
+    v.push_back(str.substr(0, m));
+    
+    marker = m;
+    
+    while (marker < str.size()) {
+      m = str.find_first_of(split, marker);
+    
+      if (m != std::string::npos) {
+	n = str.find_first_of(split, m + 1);
+      
+	if (n != std::string::npos) {
+	  size_t len = n - (m + 1); 
+	  v.push_back(str.substr(m + 1, len));
+	  marker = n;
+	}
+	else {
+	  size_t len = str.size() - (m + 1);
+	  v.push_back(str.substr(m + 1, len));
+	  marker = str.size();
+	}
+      }
+      else {
+	size_t len = str.size() - (marker + 1);
+	if (len > 0) {
+	  v.push_back(str.substr(marker, len));
+	}
+	marker = str.size();
+      }
+    }
+  }
+
+  return v;
+}
