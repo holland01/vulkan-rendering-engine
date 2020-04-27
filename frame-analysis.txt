@@ -1,0 +1,161 @@
+--------
+Overview
+--------
+
+This is a derivation from the algorithm defined here:
+     https://github.com/Overv/VulkanTutorial/blob/master/code/15_hello_triangle.cpp#L643
+
+In a nutshell, before we used this, what was happening was the following in our render loop:
+
+1) get the index for the next image to be used for the render
+
+2) set a semaphore to be signaled once this next image is actually available;
+   we do not block when we retrieve the index, so it's possible that we could have an
+   index that's still in use, hence the semaphore.
+   
+3) schedule a write to the image (i.e., render) using the command buffer corresponding to the
+   index. Ensure that the write does not begin until the aforementioned semaphore
+   is signaled. Also have a second semaphore be signaled as soon as the render
+   has finished. This is on the graphics queue.
+
+4) schedule a presentation for the image as soon as the the graphics queue has finished;
+   this implies that the present will for this image will wait until the
+   second semaphore has been signaled.
+
+5) block until the device is idle.
+
+This works well enough.
+
+However, we can do much better.
+
+The updated method takes into account the fact that we can schedule
+draws on the GPU from the CPU continuously by reducing the amount of
+wait time on the device.
+
+Rather than awaiting for the queues to be exhausted, we assign
+independent sets of resources that correspond to a frame.
+
+So, instead of having ONE semaphore that's used for every image available signal
+and ONE semaphore that's used for every rendering finished signal, we assign two of these
+to each frame.
+
+We also use a fence for each frame, because the fence itself can explicitly be waited for
+and allows for us to not have to worry about signaling semaphores that are handled
+exclusively by the queues.
+
+So, this allows us to be processing the next frame on the client side while the command buffers from the previous
+frame are being processed on the GPU.
+
+--------
+Image/frame Index Relations
+-------
+
+for image indices {0, 1, 2}
+and frame indices {0, 1, 2, 3}
+
+
+    img frame 
+
+1.  (0, 0)
+2.  (1, 1)     
+3.  (2, 2)     
+4.  (0, 3)     
+
+5.  (1, 0)     
+6.  (2, 1)
+7.  (0, 2)
+8.  (1, 3)
+
+9.  (2, 0)
+10. (0, 1)
+11. (1, 2)
+12. (2, 3)
+
+13. (0, 0)
+
+--------
+State Diagram Legend
+--------
+
+ISS = internal state switch (used to refer to asynchronous state changes)
+U = unsignaled (for both sems and fences)
+S = signaled (for both sems and fences)
+R = ready (command buffers)
+E = executing (command buffers)
+N = null (for the image fence, which is initialized to null with this algorithm)
+# = comment
+
+init frame = initialize data that's indexed by frame
+init image = initialize data that's indexed by image
+init = init frame and init image
+
+FII = fetch image index
+
+--------
+Notes
+--------
+
+the state diagram models the graphics queue; the present queue
+state isn't paid attention to.
+
+the state diagram also assumes that commands submitted to the queue
+are strictly first come first serve - this probably is not the case,
+and should be re-evaluated if further analysis is undergone.
+
+image fences are initialized to null, since they're assigned to the
+fence corresponding to the current frame index
+
+frame fences are created with their state already set to signaled;
+this is to prevent deadlock, since the draw-frame subroutine
+always waits for the corresponding frame fence to be signaled.
+
+image indices are in {0, 1, ..., # swap chain images - 1}
+frame indices are in {0, 1, ..., # max frames in flight - 1}
+
+objects indexed by image:
+	command buffer, image fence
+
+objects indexed by frame:
+	frame fence, image available sem, render finished sem
+
+note that # swap chain images <= # max frames in flight
+
+--------
+State diagram
+-------
+
+(image, frame) (image fence, frame fence, command buffer, image available sem, render finished sem)
+
+(0, 3) (U, U, R, S, U) # queue submit 
+(0, 3) (U, U, R, S, U) # ISS: image available sem signaled
+
+(2, 2) (S, S, R, S, S) # ISS: frame finished, presenting; buffer done
+
+(0, 3) (U, U, R, U, U) # reset frame fence
+(0, 3) (S, S, R, U, U) # FII; image fence = frame fence
+
+(0, 3) (S, S, R, U, U) # init frame 
+
+(2, 2) (U, U, E, S, U) # queue submit
+(2, 2) (U, U, R, S, U) # reset frame fence 
+(2, 2) (S, S, R, S, U) # ISS: image available sem signaled
+
+(1, 1) (S, S, R, S, S) # ISS: frame finished, presenting; buffer done
+
+(2, 2) (S, S, R, U, U) # FII; image fence = frame fence
+(2, 2) (N, S, R, U, U) # init
+
+(1, 1) (U, U, E, S, U) # queue submit
+
+(1, 1) (U, U, R, S, U) # reset frame fence 
+(1, 1) (S, S, R, S, U) # fetch image index; image fence = frame fence; ISS: image available sem signaled
+
+(0, 0) (S, S, R, S, S) # ISS: frame finished, presenting; command buffer done
+
+(1, 1) (N, S, R, U, U) # init
+
+(0, 0) (U, U, E, S, U) # queue submit
+(0, 0) (U, U, R, S, U) # reset frame fence; ISS: image available sem signaled
+(0, 0) (S, S, R, U, U) # FII; image fence = frame fence
+(0, 0) (N, S, R, U, U) # init
+

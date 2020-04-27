@@ -33,8 +33,9 @@ enum {
 
 #define LOGFN puts(__func__)
 
-#define LOGI32(x) printf("%s = %" PRId32 "\n", #x, x)
-#define LOGP(x) printf("%s = %p\n", #x, static_cast<void*>(x))
+#define LOGI32(x) write_logf("%s = %" PRId32 "\n", #x, x)
+#define LOGP(x) write_logf("%s = %p\n", #x, static_cast<void*>(x))
+#define LOGB(x) write_logf("%s = %s\n", #x, BOOL_TO_STR(x))
 
 #define CLOG(flag, ...) do { if ((g_log_mask & (flag)) != 0) { write_logf("CLOG|" __VA_ARGS__); } } while (0)
 #define CLOG_CODE(code) code
@@ -82,6 +83,8 @@ void report_gl_error(GLenum err,
                      const char* expr);
 
 std::vector<uint8_t> read_file(const std::string& path); 
+
+std::vector<std::string> string_split(const std::string& str, char split);
 
 
 

@@ -298,5 +298,123 @@ namespace vulkan {
     return api_ok();
   }
 
+  std::optional<buffer_reqs> get_buffer_requirements(const device_resource_properties& resource_props,
+						     VkBufferCreateFlags create_flags,
+						     VkBufferUsageFlags usage_flags,
+						     VkMemoryPropertyFlags memory_property_flags,
+						     VkDeviceSize desired_size) {      
+    std::optional<buffer_reqs> ret;
+
+    int32_t out_property_index;
+    VkDeviceSize out_device_size;
     
+    if (resource_props.ok()) {
+      
+      VkBuffer dummy = make_buffer(resource_props,
+				   create_flags,
+				   usage_flags,
+				   desired_size);
+      
+      if (H_OK(dummy)) {
+	VkMemoryRequirements req = {};
+	
+	vkGetBufferMemoryRequirements(resource_props.device,
+				      dummy,
+				      &req);
+
+	out_device_size = req.size;
+
+	VkPhysicalDeviceMemoryProperties mem_props = {};
+
+	vkGetPhysicalDeviceMemoryProperties(resource_props.physical_device,
+					    &mem_props);
+	
+	out_property_index =
+	  find_memory_properties(&mem_props,
+				 req.memoryTypeBits,
+				 memory_property_flags);
+	
+	ASSERT(out_property_index != -1);
+
+	
+	if (desired_size <= req.size &&
+	    out_property_index != -1) {
+	  
+	  buffer_reqs r
+	    {
+	     out_device_size,
+	     static_cast<uint32_t>(out_property_index)
+	    };
+
+	  if (r.ok()) {
+	    ret = r;
+	  }
+	}
+
+	vkDestroyBuffer(resource_props.device, dummy, nullptr);
+      }     
+    }
+    
+    return ret;
+  }
+  
+  void one_shot_command_buffer(const device_resource_properties& properties,
+			       one_shot_command_fn_ok_t f_ok,
+			       one_shot_command_fn_err_t f_err) {
+    
+    if (properties.ok() &&
+	c_assert(static_cast<bool>(f_ok)) &&
+	c_assert(static_cast<bool>(f_err))) {
+      
+      VkCommandBufferAllocateInfo alloc_info = {};
+      alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+      alloc_info.commandPool = properties.command_pool;
+      alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+      alloc_info.commandBufferCount = 1;
+
+      VkCommandBuffer cmd_buffer{VK_NULL_HANDLE};	
+      VK_FN(vkAllocateCommandBuffers(properties.device,
+				     &alloc_info,
+				     &cmd_buffer));
+
+      if (cmd_buffer != VK_NULL_HANDLE) {
+	if (api_ok()) {
+	  VkCommandBufferBeginInfo begin_info = {};
+	  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	  vkBeginCommandBuffer(cmd_buffer, &begin_info);
+
+	  f_ok(cmd_buffer);
+	  
+	  vkEndCommandBuffer(cmd_buffer);
+
+	  VkSubmitInfo submit_info = {};
+	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	  submit_info.commandBufferCount = 1;
+	  submit_info.pCommandBuffers = &cmd_buffer;
+
+	  VK_FN(vkQueueSubmit(properties.command_queue,
+			      1,
+			      &submit_info,
+			      VK_NULL_HANDLE));
+	  
+	  VK_FN(vkQueueWaitIdle(properties.command_queue));
+	}
+	else {
+	  f_err(one_shot_command_error::allocate_command_buffer);
+	}
+
+	vkFreeCommandBuffers(properties.device,
+			     properties.command_pool,
+			     1,
+			     &cmd_buffer);
+      }
+      else {
+	f_err(one_shot_command_error::allocate_command_buffer);
+      }
+    }
+    else {
+      f_err(one_shot_command_error::device_resource_properties);
+    }
+  }
 }

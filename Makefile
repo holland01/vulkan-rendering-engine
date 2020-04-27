@@ -1,6 +1,8 @@
 # Shameless copy paste from tj/luna project
 # https://github.com/tj/luna/blob/master/Makefile
 
+LIBROOT=$(BASE_LIBROOT)
+
 SRC = $(wildcard base/*.cpp)
 OFILES = $(SRC:.cpp=.o)
 OBJ = $(subst base,obj,$(OFILES))
@@ -19,7 +21,12 @@ LIBS := $(shell pkg-config --libs glfw3)
 LIBS += $(shell pkg-config --libs glew)
 LIBS += -lstdc++fs -lvulkan
 
-CPPFLAGS=-I./base -DGLM_ENABLE_EXPERIMENTAL -DBASE_ENABLE_VULKAN
+##
+# TODO: provide fallback options for libraries that are usually in /usr/include
+# but have been installed locally instead (like glm)
+##
+
+CPPFLAGS=-I./base -I${LIBROOT}/json/include -DGLM_ENABLE_EXPERIMENTAL -DBASE_ENABLE_VULKAN
 CXXFLAGS=-std=c++17 -Wall -Wpedantic -Werror -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable
 CFLAGS=
 

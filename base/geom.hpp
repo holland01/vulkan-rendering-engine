@@ -129,6 +129,29 @@ struct module_geom {
     return proj_point_plane(p, P.normal, P.point);
   }
 
+  // http://www.ambrsoft.com/TrigoCalc/Sphere/SpherePlaneIntersection_.htm
+  vec3_t sphere_plane_intersection(const bvol& v, const plane& p) const {
+    ASSERT(v.type == bvol::type_sphere);
+
+    real_t D = glm::dot(v.center, p.normal) - p.d;
+    real_t L = R(1) / R(glm::dot(p.normal, p.normal));
+    // intersection circle center
+    vec3_t c;
+    c.x = v.center.x - (p.normal.x * D) * L;
+    c.y = v.center.y - (p.normal.y * D) * L;
+    c.z = v.center.z - (p.normal.z * D) * L;
+    return c;
+  }
+
+  bool sphere_intersects_plane(const bvol& v, const plane& p) const {
+    vec3_t c{sphere_plane_intersection(v, p)};
+    return glm::length(c - v.center) <= v.radius;
+  }
+
+  real_t sdist_point_plane(const vec3_t& p, const plane& plane_p) const {
+    return (glm::dot(p, plane_p.normal) - plane_p.d) / glm::length(plane_p.normal);
+  }
+
   // a, b, and c are assumed to be
   // laid out in a counter clockwise ordering.
   // on the plane which they create. It's also
@@ -148,4 +171,26 @@ struct module_geom {
     // correct ordering.
     return glm::normalize(glm::cross(v1, v0));
   }
+
+  class frustum {
+    enum
+      {
+       plane_top = 0,
+       plane_bottom,
+       plane_right,
+       plane_left,
+       plane_near,
+       plane_far
+      };
+    std::array<plane, 6> m_planes{};
+    mat4_t m_mvp{};
+    period_counter<uint32_t> m_display_tick{600, 0, 1};
+    mutable uint32_t m_accept_count{0};
+    mutable uint32_t m_reject_count{0};
+    bool m_display_info{true};
+    
+  public:
+    void update();
+    bool intersects_sphere(const bvol& s) const;
+  };
 };

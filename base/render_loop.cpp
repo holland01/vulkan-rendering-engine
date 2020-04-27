@@ -13,6 +13,8 @@ bool render_loop::running() const {
 }
 
 void render_loop::set_running(bool v) {
-  m_running = v;
+  if (m_running) {
+    m_running = v;
+  }
 }
 

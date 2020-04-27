@@ -74,6 +74,8 @@ namespace fs = std::experimental::filesystem;
 
 #define SS_HEX_NAME(value) #value << ":" << SS_HEX(value)
 
+#define BOOL_TO_STR(b) ((b) == true) ? "true" : (((b) == false) ? "false" : "<garbage>")
+
 #define MAT4V3(m, v) vec3_t((m) * vec4_t((v), real_t(1.0)))
 
 #define DEBUGLINE write_logf("FILE:%s,LINE:%i\n", __FILE__, __LINE__)
@@ -160,6 +162,7 @@ struct module_vertex_buffer;
 struct scene_graph;
 struct shader_uniform_storage;
 struct view_data;
+class settings;
 
 namespace gapi {
 class device;
@@ -189,7 +192,8 @@ struct modules {
   device_context* device_ctx {nullptr};
   gapi::device* gpu {nullptr};
   render_loop* loop{nullptr};
-
+  settings* config{nullptr};
+  
   bool init();
   void free();
 } extern g_m;
@@ -386,3 +390,29 @@ static inline darray<destType> c_fmap(const darray<srcType>& in, std::function<d
 #define fmap_via ,
 #define fmap_end )
 
+template <class counterType>
+struct period_counter {
+  typedef counterType value_type;
+  static_assert(std::is_arithmetic<value_type>::value, "period counter is designed strictly for arithmetic types");
+
+  value_type period;
+  value_type counter;
+  value_type increment;
+  
+  period_counter(value_type period,
+		 value_type init = value_type(0),
+		 value_type inc = value_type(1))
+  : period(period),
+    counter(init),
+    increment(inc) {
+    ASSERT((period % inc) == 0);
+  }
+
+  bool operator()() const {
+    return (counter % period) == 0;
+  }
+
+  void operator++() {
+    counter = counter + increment;
+  }
+};

@@ -2,12 +2,25 @@
 
 #include "common.hpp"
 
+#if defined(BASE_DEBUG) && defined(BASE_VK_LOG_CALL)
 #define VK_FN(expr)						\
   do {								\
     if (api_ok()) {						\
       g_vk_result = vk_call((expr), #expr, __LINE__, __FILE__);	\
     }								\
   } while (0)
+#elif defined(BASE_DEBUG)
+#define VK_FN(expr)						\
+  do {								\
+    if (api_ok()) {						\
+      g_vk_result = (expr);					\
+    }								\
+  } while (0)
+#else
+#define VK_FN(expr) expr
+#endif // BASE_DEBUG && BASE_VK_LOG_CALL
+
+#define BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE UINT32_MAX
 
 namespace vulkan {
   extern const darray<VkImageLayout> k_invalid_attachment_layouts;
@@ -19,7 +32,8 @@ namespace vulkan {
   bool api_ok();
 
 #define H_OK(h) api_ok() && ((h) != VK_NULL_HANDLE)
-
+#define CA_H_NULL(h) c_assert((h) == VK_NULL_HANDLE)
+  
 #define HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, handle_type, null_value) \
   handle_type ret{null_value};						\
   if (ok_fn_name(index_name)) {						\
@@ -30,7 +44,74 @@ namespace vulkan {
 #define VK_HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, vk_handle_type) \
   HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, vk_handle_type, VK_NULL_HANDLE)
 
-    //
+  //
+  // Any STATIC_IF statements used in
+  // the vulkan namespace should be
+  // reading from a constexpr bool defined here.
+  //
+  // - st stands for "static"
+  // - c stands for "class"
+  // - s stands for "struct"
+  // - m stands for "method"
+  // - f for "function"
+  //
+  // each parameter should belong to a namespace
+  // defining one of these.
+  //
+  // Ultimately, any constexpr config parameter belongs here.
+  //
+  namespace st_config {
+    namespace c_renderer {
+      enum class present_mode_select
+	{
+	 fifo,
+	 fifo_relaxed,
+	 config_file, // not implemented yet
+	 best_fit     // not implemented yet
+	};
+
+      static inline constexpr uint32_t k_max_frames_in_flight{BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE};
+      
+      static inline constexpr uint32_t k_desired_swapchain_image_count{BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE};
+
+      static inline constexpr bool k_enable_validation_layers{true};
+      
+      namespace m_render {
+	static inline constexpr bool k_use_frustum_culling{false};
+	static inline constexpr bool k_allow_more_frames_than_fences{false};
+      }
+      namespace m_setup_vertex_buffer {
+	static inline constexpr bool k_use_staging{false};
+      }
+      namespace m_setup {
+	static inline constexpr bool k_use_single_pass{true};
+      }
+      namespace m_select_present_mode {
+	static inline constexpr present_mode_select k_select_method{present_mode_select::fifo};
+      }
+
+      static_assert((k_max_frames_in_flight == k_desired_swapchain_image_count) ||
+		    m_render::k_allow_more_frames_than_fences,
+		    "invalid frame count configuration; must ensure either of the given conditions hold:\n"
+		    "\tst_config::c_renderer::k_max_frames_in_flight == st_config::c_renderer::k_desired_swapchain_image_count, or\n"
+		    "\tst_config::c_renderer::m_render::k_allow_more_frames_than_fences == true");
+    }
+
+    namespace c_image_pool {
+      namespace m_make_image {
+	// this takes an image_gen_params with settings
+	// that are designed to produce an image with preinitialized
+	// data and internally, within the pool itself,
+	// produces an image with an optimal data layout.
+	// The tradeoff is that it will take longer to create the image,
+	// but if this is during init then it's really not a problem.
+	static inline constexpr bool k_always_produce_optimal_images{true};
+      }
+    }
+  }
+
+  
+  //
   // The following struct defines a simple
   // fluent interface for a VkImageMemoryBarrier/VkCommandBuffer
   // operation.
@@ -228,13 +309,14 @@ namespace vulkan {
     }
   };
 
-
-  
   struct vertex_data {
     vec3_t position;
     vec2_t st;
     vec3_t color;
+    vec3_t normal;
   };
+
+  using vertex_list_t = darray<vertex_data>;
   
   struct device_resource_properties {
     darray<uint32_t> queue_family_indices;
@@ -242,17 +324,18 @@ namespace vulkan {
     VkDevice device{VK_NULL_HANDLE};
     VkSharingMode queue_sharing_mode{VK_SHARING_MODE_EXCLUSIVE};
     VkDescriptorPool descriptor_pool{VK_NULL_HANDLE};
-
+    VkCommandPool command_pool{VK_NULL_HANDLE};
+    VkQueue command_queue{VK_NULL_HANDLE};
+     
     bool ok() const {
-      bool r =
+      return
  	!queue_family_indices.empty() &&
-	physical_device != VK_NULL_HANDLE &&
-	device != VK_NULL_HANDLE &&
-	descriptor_pool != VK_NULL_HANDLE;
-
-      ASSERT(r);
-      
-      return r;
+	c_assert(H_OK(physical_device)) &&
+	c_assert(H_OK(device)) &&
+	c_assert(H_OK(descriptor_pool)) &&
+        c_assert(H_OK(command_pool)) &&
+	c_assert(H_OK(command_queue)) 
+	; 
     }
   };
 
@@ -401,7 +484,7 @@ namespace vulkan {
     }
   };
   
-  struct depthbuffer_data {
+  struct depthbuffer_info {
     static inline constexpr uint32_t k_bpp = 4;
     static inline constexpr VkFormat k_format = VK_FORMAT_D24_UNORM_S8_UINT;
     static inline constexpr VkImageLayout k_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -435,7 +518,7 @@ namespace vulkan {
 
     std::string to_string() const {
       std::stringstream ss;
-      ss << "depthbuffer_data:\n"
+      ss << "depthbuffer_info:\n"
 	 << "..." << AS_STRING_SS(width) << "\n"
 	 << "..." << AS_STRING_SS(height) << "\n"
 	 << "..." << SS_HEX_NAME(image) << "\n"
@@ -500,7 +583,7 @@ namespace vulkan {
 				    const void* data,
 				    VkDeviceSize size,
 				    VkDeviceSize alloc_size,
-				    uint32_t index);
+				    uint32_t memory_property_index);
 
   VkBuffer make_buffer(const device_resource_properties& resource_props,
 		       VkBufferCreateFlags create_flags,
@@ -528,6 +611,37 @@ namespace vulkan {
 			    uint32_t binding_index,
 			    uint32_t array_element,
 			    VkDescriptorType descriptor_type);
+
+  struct buffer_reqs {
+    VkDeviceSize required_size{std::numeric_limits<VkDeviceSize>::max()};
+    uint32_t memory_property_index{UINT32_MAX};
+
+    bool ok() const {
+      return
+	c_assert(required_size > 0) &&
+	c_assert(required_size != std::numeric_limits<VkDeviceSize>::max()) &&
+	c_assert(memory_property_index != UINT32_MAX);
+    }
+  };
+
+  std::optional<buffer_reqs> get_buffer_requirements(const device_resource_properties& resource_props,
+						     VkBufferCreateFlags create_flags,
+						     VkBufferUsageFlags usage_flags,
+						     VkMemoryPropertyFlags memory_property_flags,
+						     VkDeviceSize desired_size);
+
+  enum class one_shot_command_error
+    {
+     device_resource_properties,
+     allocate_command_buffer,     
+    };
+
+  typedef std::function<void(VkCommandBuffer)> one_shot_command_fn_ok_t;
+  typedef std::function<void(one_shot_command_error)> one_shot_command_fn_err_t;
+
+  void one_shot_command_buffer(const device_resource_properties& properties,
+			       one_shot_command_fn_ok_t f_ok,
+			       one_shot_command_fn_err_t f_err);
 
   static inline std::string realpath_spv(const std::string& spv_filename) {
     return "resources/shaders/bin/" + spv_filename;

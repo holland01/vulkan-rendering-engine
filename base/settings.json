@@ -1,0 +1,52 @@
+{
+
+    "shapes": [
+	{
+	    "center": { "x": 1, "y": 3, "z": 3 }
+	}
+    ],
+
+    "renderer": {
+	"render": {
+	    "use_frustum_culling": false,
+	    "allow_more_frames_than_fences": false
+	},
+	"setup_vertex_buffer": {
+	    "use_staging": false
+	},
+	"setup": {
+	    "use_single_pass": true
+	},
+	"select_present_mode": {
+	    "select_method": "fifo"
+	},
+
+	"max_frames_in_flight": -2,
+	"swapchain_image_count": -2,
+	"enable_validation_layers": true
+    },
+
+    "image_pool": {
+	"make_image": {
+	    "always_produce_optimal_images": true
+	}
+    }
+};
+
+/*
+ * NOTE: some of the entries here use constant integers as enumeration values;
+ * these are preferred over strings since a typo will produce a bug.
+ * 
+ * for class_renderer.method_select_present_mode.select_method:
+ *   0 -> fifo
+ *   1 -> fifo_relaxed
+ *   2 -> best_fit
+ * 
+ *
+ * for class_renderer.{max_frames_in_flight or swapchain_image_count}:
+ *   -2 -> max_image_count
+ *   -1 -> min_image_count
+ *   n -> where n >= 0: constant image count that will be attempted regardless of platform recommendation.
+ *                      e.g., if you want to see if 5 swapchain images is possible, you would just set the value to 5.
+ *                      It's unknown whether or not a value of zero is allowed.
+ */

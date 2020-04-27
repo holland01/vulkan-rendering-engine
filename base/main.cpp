@@ -31,6 +31,8 @@
 
 #include "render_loop.hpp"
 
+#include "settings.hpp"
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
@@ -85,6 +87,8 @@ bool modules::init() {
     case render_loop_type::triangle: loop = new render_loop_triangle(); break;
     default: break;
     }
+
+    config = new settings();
   }
 
   return device_ctx->ok();
@@ -113,6 +117,8 @@ void modules::free() {
       break;
     }
   }
+
+  delete config;
 
   delete device_ctx;
 }
@@ -1149,6 +1155,7 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
                               R3v(0.0, 1.0, 0.0));
 
     g_m.view->orient = mat3_t(yRot * xRot) * g_m.view->orient;
+    g_m.view->inverse_orient = glm::inverse(g_m.view->orient);
   }
 
   g_cam_orient.prev_xpos = xpos;
@@ -1244,7 +1251,7 @@ void render_loop_triangle::init() {
     m_renderer.setup();
   }
     
-  if (m_renderer.ok_semaphores()) {
+  if (m_renderer.ok_sync_objects()) {
     // moves the camera backward 5 units on the z axis - right handed system
     g_m.view->position = R3v(0, 0, 5);
     g_m.view->reset_proj();
@@ -1253,6 +1260,9 @@ void render_loop_triangle::init() {
 }
 
 void render_loop_triangle::update() {
+  render_loop::update();
+  m_frame_index = m_renderer.current_frame();
+  
   glfwPollEvents();
   
   g_m.view->update(g_cam_move_state);
@@ -1263,6 +1273,8 @@ void render_loop_triangle::update() {
 
 void render_loop_triangle::render() {
   m_renderer.render();
+  m_dtime = m_renderer.frame_delta_seconds(m_frame_index);
+  post_update();
 }
 
 void render_loop_complete::init() {
@@ -1317,9 +1329,21 @@ int main(void) {
     
     g_m.loop->init();
 
-    while (g_m.loop->running()) {
-      g_m.loop->update();
-      g_m.loop->render();
+    if (g_m.config->read()) {
+      while (g_m.loop->running()) {
+	g_m.loop->update();
+	g_m.loop->render();
+
+	{
+	  std::stringstream ss;
+
+	  ss << "FPS: " << g_m.loop->frames_per_second();
+	
+	  glfwSetWindowTitle(g_m.device_ctx->window(),
+			     ss.str().c_str());
+			   
+	}
+      }
     }
   }
 

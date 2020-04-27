@@ -70,6 +70,15 @@ namespace vulkan {
       return r;
     }
 
+    // see documentation @ declaration for st_config flag below
+    // for more information
+    bool needs_staging_convert() const {
+      return
+	st_config::c_image_pool::m_make_image::k_always_produce_optimal_images && 
+	tiling == VK_IMAGE_TILING_LINEAR &&
+	initial_layout == VK_IMAGE_LAYOUT_PREINITIALIZED;
+    }
+    
     uint32_t bpp() const {
       return bpp_from_format(format);
     }
@@ -94,6 +103,160 @@ namespace vulkan {
     typedef index_traits<int16_t, darray<void*>> index_traits_type;
     typedef index_traits_type::index_type index_type;
     static constexpr inline index_type k_unset = index_traits_type::k_unset;
+
+  private:
+    struct make_image_data {
+      VkDeviceMemory memory{VK_NULL_HANDLE};
+      VkImage handle{VK_NULL_HANDLE};
+      VkImageView view_handle{VK_NULL_HANDLE};
+      bool memory_bound{false};
+      mutable bool pre{false};
+
+      const image_pool* self{nullptr};
+      const device_resource_properties* properties{nullptr};
+      const image_gen_params* params{nullptr};
+      
+      bool ok_pre() const {
+	if (!pre) {
+	  pre = 
+	    c_assert(self != nullptr) &&
+	    c_assert(properties != nullptr) &&
+	    c_assert(params != nullptr) &&
+	    c_assert(properties->ok()) &&
+	    c_assert(params->ok());
+	}
+	return pre;
+      }
+
+      make_image_data& set_pre(const image_pool* self,
+		   const device_resource_properties* properties,
+			       const image_gen_params* params) {
+	this->self = self;
+	this->properties = properties;
+	this->params = params;
+	
+	return *this;
+      }
+
+      bool ok_memory() const {
+	return c_assert(H_OK(memory));
+      }
+
+      bool ok_handle() const {
+	return c_assert(H_OK(handle));
+      }
+
+      bool ok_view_handle() const {
+	return c_assert(H_OK(view_handle));
+      }
+      
+      make_image_data& make_image_memory() {
+	if (ok_pre() && CA_H_NULL(memory)) {
+	  image_requirements reqs = self->get_image_requirements(*properties, *params);
+
+	  if (reqs.ok()) {	  	  
+	    memory = make_device_memory(properties->device,
+					params->data,
+					params->calc_data_size(),
+					reqs.memory_size(),
+					reqs.memory_type_index);
+	  }
+
+	}
+
+	return *this;
+      }
+
+      make_image_data& create_image() {
+	if (ok_pre() && ok_memory() && CA_H_NULL(handle)) {
+	  VkImageCreateInfo create_info = self->make_image_create_info(*properties, *params);
+	  
+	  VK_FN(vkCreateImage(properties->device,
+			      &create_info,
+			      nullptr,
+			      &handle));
+	}
+	return *this;
+      }
+      
+      make_image_data& bind_image_memory() {
+	if (ok_pre() && !memory_bound && ok_handle()) {
+	  VK_FN(vkBindImageMemory(properties->device,
+				  handle,
+				  memory,
+				  0));
+	  memory_bound = api_ok();
+	}
+	return *this;
+      }
+
+      make_image_data& create_image_view() {
+	if (ok_pre() && memory_bound && CA_H_NULL(view_handle)) {
+	  VkImageViewCreateInfo create_info =
+	    self->make_image_view_create_info(*params);
+	  
+	  create_info.image = handle;
+
+	  VK_FN(vkCreateImageView(properties->device,
+				  &create_info,
+				  nullptr,
+				  &view_handle));
+	}
+	return *this;
+      }
+      
+
+      make_image_data& all() {	
+	return
+	  make_image_memory()
+	  .create_image()
+	  .bind_image_memory()
+	  .create_image_view();
+      }
+      
+      image_layout_transition make_layout_transition() const {
+	auto ret = image_layout_transition(false);
+
+	if (ok()) {
+	  ret
+	    .from_stage(params->source_pipeline_stage)
+	    .to_stage(params->dest_pipeline_stage)
+	    .for_aspect(params->aspect_flags)
+	    .from_access(params->source_access_flags)
+	    .to_access(params->dest_access_flags)
+	    .from(params->initial_layout)
+	    .to(params->final_layout)
+	    .for_image(handle)
+	    .ready()
+	    ;
+	}
+	
+	return ret;
+      }
+
+      
+      void free_device_mem() {
+	free_device_handle<VkImageView,
+			   &vkDestroyImageView>(properties->device,
+						view_handle);
+
+	free_device_handle<VkImage,
+			   &vkDestroyImage>(properties->device,
+					    handle);
+	
+	free_device_handle<VkDeviceMemory,
+			   &vkFreeMemory>(properties->device,
+					  memory);
+      }     
+      
+      bool ok() const {
+	return
+	  ok_memory() &&
+	  ok_handle() &&
+	  ok_view_handle();
+      }
+    };
+
   private:
     darray<void*> m_user_ptrs;
     darray<VkImage> m_images;
@@ -119,6 +282,10 @@ namespace vulkan {
 
     darray<VkImageUsageFlags> m_usage_flags;
 
+    // We will not call vkGetPhysicalDeviceImageFormatProperties()
+    // if g_vk_result is not equal to VK_SUCCESS beforehand. We may as well
+    // consider this a false result, given that at that point something
+    // else that's wrong has happened.
     bool image_create_info_valid(VkPhysicalDevice physical_device, const VkImageCreateInfo& create_info) const {
       VkImageFormatProperties properties;
 
@@ -336,7 +503,7 @@ namespace vulkan {
       m_usage_flags.push_back(0);
             
       return index;
-    }
+    } 
     
   public:
     image_pool()
@@ -361,90 +528,180 @@ namespace vulkan {
       ASSERT(r);
       return r;
     }
-    
+
     index_type make_image(const device_resource_properties& properties,
 			  const image_gen_params& params) {
       index_type img_index = k_unset;
       
-      VkDeviceMemory img_memory{VK_NULL_HANDLE};
-      VkImage img_handle{VK_NULL_HANDLE};
-      VkImageView img_view_handle{VK_NULL_HANDLE};
+      make_image_data mid{};
 
-      if (properties.ok() && params.ok()) {
-	image_requirements reqs = get_image_requirements(properties, params);
+      // unless the image parameters are a sepcific configuration,
+      // we won't use this
+      make_image_data mid_conv{};
 
-	if (reqs.ok()) {	  	  
-	  img_memory = make_device_memory(properties.device,
-					  params.data,
-					  params.calc_data_size(),
-					  reqs.memory_size(),
-					  reqs.memory_type_index);
-	}
-	
+      // this is just a helper ptr since we may be using a different
+      // make_image_data instance, as the above comment implies.
+      make_image_data* mid_used = nullptr;
 
-	if (H_OK(img_memory)) {
-	  VkImageCreateInfo create_info = make_image_create_info(properties, params);
-	  
-	  VK_FN(vkCreateImage(properties.device,
-			      &create_info,
-			      nullptr,
-			      &img_handle));	  
-	}
+      // overall flag which determines success
+      bool good{false};
 
-	bool bound = false;
-	if (H_OK(img_handle)) {
-	  VK_FN(vkBindImageMemory(properties.device,
-				  img_handle,
-				  img_memory,
-				  0));
-	
-	  bound = api_ok();
-	}
-
-	if (bound) {
-	  VkImageViewCreateInfo create_info = make_image_view_create_info(params);
-	  
-	  create_info.image = img_handle;
-
-	  VK_FN(vkCreateImageView(properties.device,
-				  &create_info,
-				  nullptr,
-				  &img_view_handle));
-	}
-
-	if (H_OK(img_view_handle)) {
-	  img_index = new_image();
-
-	  m_user_ptrs[img_index] = params.data;
-	  
-	  m_device_memories[img_index] = img_memory;
-	  m_images[img_index] = img_handle;
-	  m_image_views[img_index] = img_view_handle;
-
-	  m_layouts_initial[img_index] = params.initial_layout;
-	  m_layouts_final[img_index] = params.final_layout;
-	  m_layouts_attach_opt[img_index] = params.attachment_layout;
-	  
-	  m_formats[img_index] = params.format;
-	  
-	  m_widths[img_index] = params.width;
-	  m_heights[img_index] = params.height;
-	  m_depths[img_index] = params.depth;
-	  
-	  m_types[img_index] = params.type;
-	  m_tiling[img_index] = params.tiling;
-
-	  m_aspect_flags[img_index] = params.aspect_flags;
-
-	  m_src_pipeline_stages[img_index] = params.source_pipeline_stage;
-	  m_dst_pipeline_stages[img_index] = params.dest_pipeline_stage;
+      // these may not be used, but if they are,
+      // they need to be in scope throughout the lifetime
+      // of the method call. they're used if
+      // params.needs_staging_convert() is true.
+      image_gen_params cparams_src{params};
+      image_gen_params cparams_dest{params};
       
-	  m_src_access_flags[img_index] = params.source_access_flags;
-	  m_dst_access_flags[img_index] = params.dest_access_flags;
+      // here we check to see if we're going to optimize the image
+      // by taking the data that the user specified and altering the layout
+      // parameters. in order to do this, we use the initial image as a staging
+      // image, and transfer the memory from that over. Then we free the
+      // the "mid" initialized above, since we no longer need it.
+      if (params.needs_staging_convert()) {       	
+	// it's probable that the original params
+	// don't have the proper image usage flags;
 
-	  m_usage_flags[img_index] = params.usage_flags;
+	cparams_src.usage_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	  
+	mid
+	  .set_pre(this, &properties, &cparams_src)
+	  .all();
+	
+	// create dst image
+	// we null out the data ptr since ::make_device_memory()
+	// checks for a non-null value, and if it is non-null,
+	// writes the memory to the newly created memory - this is unnecessary.
+	// also we use device local memory here; this is very important.
+	cparams_dest.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+	cparams_dest.final_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	cparams_dest.tiling = VK_IMAGE_TILING_OPTIMAL;
+	cparams_dest.usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	cparams_dest.data = nullptr;
+	cparams_dest.memory_property_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	mid_conv
+	  .set_pre(this, &properties, &cparams_dest)
+	  .all();
+	
+	good =
+	  c_assert(mid.ok()) &&
+	  c_assert(mid_conv.ok());
+
+	if (good) {
+	  // this is a synchronous call;
+	  // generate a one time submit command buffer
+	  // and then create two image layout transitions
+	  // so that we can perform a copy from the temporary image
+	  // to the main image whose memory is strictly device local.	  
+	  one_shot_command_buffer(properties,
+				  [this,
+				   &mid_conv,
+				   &mid,
+				   &good](VkCommandBuffer cmd_buf) {
+				    auto ilt = mid.make_layout_transition();
+				    
+				    if (ilt.ok()) {
+				      ilt.via(cmd_buf);
+				      
+				      auto ilt_conv = mid_conv.make_layout_transition();
+
+				      if (ilt_conv.ok()) {
+					ilt_conv.via(cmd_buf);
+					
+					VkImageCopy region{};
+
+					VkImageSubresourceLayers subresource{};
+					subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+					subresource.mipLevel = 0;
+					subresource.baseArrayLayer = 0;
+					subresource.layerCount = 1;
+				    
+					region.srcSubresource = subresource;
+					region.srcOffset.x = 0;
+					region.srcOffset.y = 0;
+					region.srcOffset.z = 0;
+
+					region.dstSubresource = subresource;
+					region.dstOffset.x = 0;
+					region.dstOffset.y = 0;
+					region.dstOffset.z = 0;
+
+					region.extent.width = mid.params->width;
+					region.extent.height = mid.params->height;
+					region.extent.depth = mid.params->depth;
+				    
+					vkCmdCopyImage(cmd_buf,
+						       mid.handle,
+						       mid.params->final_layout,
+						       mid_conv.handle,
+						       mid_conv.params->final_layout,
+						       1,
+						       &region);
+				      }
+				    }						   
+				  },
+				  [this, &good](one_shot_command_error err) {
+				    good = false;
+				  });
+
+	  if (good) {
+	    mid_used = &mid_conv;
+	  }
+	}
+
+	// this is no longer needed,
+	// so we free it here.
+	mid.free_device_mem();
+      }
+      else {
+	mid
+	  .set_pre(this, &properties, &params)
+	  .all();
+
+	good =
+	  c_assert(mid.ok());
+
+	if (good) {
+	  mid_used = &mid;
 	}
       }
+	      
+      if (good) {
+	ASSERT(mid_used != nullptr);
+	
+	img_index = new_image();
+
+	m_user_ptrs[img_index] = params.data;
+	  
+	m_device_memories[img_index] = mid_used->memory;
+	m_images[img_index] = mid_used->handle;
+	m_image_views[img_index] = mid_used->view_handle;
+
+	m_layouts_initial[img_index] = mid_used->params->initial_layout;
+	m_layouts_final[img_index] = mid_used->params->final_layout;
+	m_layouts_attach_opt[img_index] = mid_used->params->attachment_layout;
+	  
+	m_formats[img_index] = mid_used->params->format;
+	  
+	m_widths[img_index] = mid_used->params->width;
+	m_heights[img_index] = mid_used->params->height;
+	m_depths[img_index] = mid_used->params->depth;
+	  
+	m_types[img_index] = mid_used->params->type;
+	m_tiling[img_index] = mid_used->params->tiling;
+
+	m_aspect_flags[img_index] = mid_used->params->aspect_flags;
+
+	m_src_pipeline_stages[img_index] = mid_used->params->source_pipeline_stage;
+	m_dst_pipeline_stages[img_index] = mid_used->params->dest_pipeline_stage;
+      
+	m_src_access_flags[img_index] = mid_used->params->source_access_flags;
+	m_dst_access_flags[img_index] = mid_used->params->dest_access_flags;
+
+	m_usage_flags[img_index] = mid_used->params->usage_flags;
+      }
+      
       ASSERT(ok_image(img_index));
       return img_index;
     }

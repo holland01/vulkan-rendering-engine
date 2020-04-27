@@ -9,11 +9,13 @@
 
 #include "common.hpp"
 #include "device_context.hpp"
+#include "geom.hpp"
 
 #include "vk_common.hpp"
 #include "vk_image.hpp"
 #include "vk_uniform_buffer.hpp"
 #include "vk_pipeline.hpp"
+#include "vk_model.hpp"
 
 #include <optional>
 #include <set>
@@ -42,11 +44,7 @@ namespace vulkan {
   VkShaderModuleCreateInfo make_shader_module_settings(darray<uint8_t>& spv_code);
 
   VkPipelineShaderStageCreateInfo make_shader_stage_settings(VkShaderModule module, VkShaderStageFlagBits type);  
-    
-  depthbuffer_data make_depthbuffer(const device_resource_properties& properties,
-				    uint32_t width,
-				    uint32_t height);
-  
+      
   struct queue_family_indices {
     std::optional<uint32_t> graphics_family{};
     std::optional<uint32_t> present_family{};
@@ -67,7 +65,6 @@ namespace vulkan {
   };
 
   struct framebuffer_attachments {
-
     struct color_depth_pair {
       image_pool::index_type color_attachment;
       image_pool::index_type depth_attachment;
@@ -94,11 +91,6 @@ namespace vulkan {
     }
   };
 
-  struct transform_data {
-    mat4_t view_to_clip{R(1.0)};
-    mat4_t world_to_view{R(1.0)};    
-  };
-
   struct sampler_data {
     int sampler_index;
   };
@@ -111,27 +103,223 @@ namespace vulkan {
   struct descriptors {
     darray<descriptor_set_pool::index_type> attachment_read;
   };
+
+  namespace uniform_block {
+    struct transform {
+      mat4_t view_to_clip{R(1.0)};
+      mat4_t world_to_view{R(1.0)};    
+    };
+
+    struct surface {
+      vec3_t albedo;
+      float metallic;
+      float roughness;
+      float ao; // ambient occlusion
+    };
+
+    static constexpr inline uint32_t k_binding_transform = 0;
+    static constexpr inline uint32_t k_binding_surface = 1;
+
+    struct series_gen {
+      device_resource_properties properties;
+      descriptor_set_pool::index_type series_index{descriptor_set_pool::k_unset};
+      uniform_block_pool* pool{nullptr};
+      
+
+      template <class blockStructType>
+      bool make(uniform_block_data<blockStructType>& block,
+		uint32_t binding_index,
+		uint32_t array_elem_index = 0) {
+	bool ret{false};
+	if (c_assert(properties.ok()) &&
+	    c_assert(pool != nullptr) &&
+	    c_assert(series_index != descriptor_set_pool::k_unset)) {
+	  block.index = pool->make_uniform_block(properties,
+						 {
+						  // descriptor set index
+						  series_index,
+						  // block upload address
+						  static_cast<void*>(&block.data),
+						  // block upload size
+						  sizeof(block.data),
+						  //
+						  array_elem_index,
+						  //
+						  binding_index
+						 });
+
+	  block.pool = pool;
+	  
+	  ret = block.ok();
+	  
+	}
+	return ret;
+      }
+
+    };
+    
+  }
   
-  using vertex_list_t = darray<vertex_data>;
+  namespace push_constant {
+    // NOTE:
+    // currently the basic_pbr and
+    // model push constants
+    // are used in the same program, just at different stages.
+    // the model is used in the vertex stage, and the
+    // standard surface in the fragment shage.
+    // despite being used at different stages,
+    // the push constants are viewed as one contiguous
+    // buffer for a given pipeline layout;
+    // thus, a byte offset for at least one of these
+    // must be specified. For now, the model
+    // offset is listed here at <k_model_offset> bytes.
+    // there is a hole in the middle between the two,
+    // but that's ok since basic_pbr will end
+    // up having more parameters as we move forward.
     
-  class renderer {    
-    uint32_t m_instance_count{0};   
+    // autodesk - WIP
+    struct basic_pbr {
+      vec3_t camera_position;
+      float padding0;
+      vec3_t albedo;
+      float padding1;
+      float metallic;
+      float roughness;
+      float ao;
+      int sampler;
+    };
+
+    struct model {
+      mat4_t model_to_world{R(1.0)};
+    };
+
+    static inline constexpr uint32_t k_model_offset = 64;
     
-    darray<VkPhysicalDevice> m_vk_physical_devs;
+    template <class T, VkShaderStageFlags flags>
+    static inline VkPushConstantRange range(uint32_t offset = 0) {
+      return
+	{
+	 flags,
+	 offset,
+	 sizeof(T)
+	};
+    }
 
-    darray<VkImage> m_vk_swapchain_images;
+    template <class T, VkShaderStageFlags flags>
+    static inline void upload(T* ptr, VkCommandBuffer cmd_buffer, VkPipelineLayout layout, uint32_t offset=0) {
+      vkCmdPushConstants(cmd_buffer,
+			 layout,
+			 flags,
+			 offset,
+			 sizeof(T),
+			 ptr);
+    }
+
+    static inline VkPushConstantRange basic_pbr_range() {
+      return range<basic_pbr,
+		   VK_SHADER_STAGE_FRAGMENT_BIT>();
+    }
+
+    static inline VkPushConstantRange model_range() {
+      return range<model,
+		   VK_SHADER_STAGE_VERTEX_BIT>(k_model_offset);
+    }
+
+    static inline void basic_pbr_upload(basic_pbr& pc,
+					       VkCommandBuffer cmd_buffer,
+					       VkPipelineLayout layout) {
+      upload<basic_pbr,
+	     VK_SHADER_STAGE_FRAGMENT_BIT>(&pc,
+					   cmd_buffer,
+					   layout);
+    }
+
+    static inline void model_upload(model& pc,
+				    VkCommandBuffer cmd_buffer,
+				    VkPipelineLayout layout) {
+      upload<model,
+	     VK_SHADER_STAGE_VERTEX_BIT>(&pc,
+					 cmd_buffer,
+					 layout,
+					 k_model_offset);
+    }
+
+
+    static inline basic_pbr basic_pbr_default() {
+      return
+	{
+	 // camera position
+	 R3(0),
+	 // padding0
+	 R(0.0),
+	 // albedo
+	 R3v(0.5, 0, 0),
+	 // padding1
+	 R(0.0),
+	 // metallic
+	 R(0.5),
+	 // roughness
+	 R(0.5),
+	 // ambient occlusion
+	 R(1),
+	 // sampler index
+	 0
+	};
+    }
+  }
+
+  struct buffer_data {
+    VkBuffer handle{VK_NULL_HANDLE};
+    VkDeviceMemory memory{VK_NULL_HANDLE};
+
+    bool ok() const {
+      return
+	c_assert(H_OK(handle)) &&
+	c_assert(H_OK(memory));
+    }
+
+    void free_mem(VkDevice device) {
+      free_device_handle<VkBuffer, &vkDestroyBuffer>(device, handle);
+      free_device_handle<VkDeviceMemory, &vkFreeMemory>(device, memory);
+    }
+
+    void bind_vertex(VkCommandBuffer cmd_buffer) {
+      VkDeviceSize vertex_buffer_offset = 0;
+      vkCmdBindVertexBuffers(cmd_buffer,
+			     0, // first buffer index
+			     1, // buffer count
+			     &handle,
+			     &vertex_buffer_offset);
+    }
+  };
+  
+  class renderer {       
+    darray<VkPhysicalDevice> m_vk_physical_devs{};
+
+    darray<VkImage> m_vk_swapchain_images{};
     
-    darray<VkImageView> m_vk_swapchain_image_views;
+    darray<VkImageView> m_vk_swapchain_image_views{};
 
-    darray<VkFramebuffer> m_vk_swapchain_framebuffers;
+    darray<VkFramebuffer> m_vk_swapchain_framebuffers{};
 
-    darray<VkImage> m_vk_firstpass_images;
+    darray<VkImage> m_vk_firstpass_images{};
 
-    darray<VkCommandBuffer> m_vk_command_buffers;   
+    darray<VkCommandBuffer> m_vk_command_buffers{};   
 
-    framebuffer_attachments m_framebuffer_attachments;
+    darray<VkSemaphore> m_vk_sems_image_available{};
 
-    descriptors m_descriptors;
+    darray<VkSemaphore> m_vk_sems_render_finished{};
+
+    darray<VkFence> m_vk_fences_in_flight{};
+
+    darray<VkFence> m_vk_images_in_flight{};
+
+    darray<double> m_frame_stimes{};
+    darray<double> m_frame_dtimes{};
+    
+    framebuffer_attachments m_framebuffer_attachments{};
+
+    descriptors m_descriptors{};
     
     descriptor_set_pool m_descriptor_set_pool{};
     
@@ -143,15 +331,16 @@ namespace vulkan {
 
     pipeline_layout_pool m_pipeline_layout_pool{};
 
-    pipeline_pool m_pipeline_pool{};
-    
-    depthbuffer_data m_depthbuffer{};
-    
-    uniform_block_data<transform_data> m_transform_uniform_block{};
+    pipeline_pool m_pipeline_pool{};   
 
+    module_geom::frustum m_frustum{};
+    
+    uniform_block_data<uniform_block::transform> m_transform_uniform_block{};
+    uniform_block_data<uniform_block::surface> m_surface_uniform_block{};
+    
     static inline constexpr vec3_t k_room_cube_center = R3v(0, 0, 0);
     static inline constexpr vec3_t k_room_cube_size = R3(20);
-    static inline constexpr vec3_t k_mirror_cube_center = R3v(0, 0, 0);
+    static inline constexpr vec3_t k_mirror_cube_center = R3v(0, -10, 0);
     static inline constexpr vec3_t k_mirror_cube_size = R3(1);
     
     static inline constexpr vec3_t k_color_green = R3v(0, 1, 0);
@@ -159,24 +348,24 @@ namespace vulkan {
     static inline constexpr vec3_t k_color_blue = R3v(0, 0, 1);
 
     static inline constexpr int32_t k_sampler_checkerboard = 0;
-    static inline constexpr int32_t k_sampler_aqua = 1;
+    static inline constexpr int32_t k_sampler_aqua = 1;       
     
-    // NOTE:
-    // right handed system,
-    // so positive rotation about a given axis
-    // is counter-clockwise
-    vertex_list_t m_vertex_buffer_vertices =
-      // triangle on the left
-      model_triangle(R3v(-2.25, 0, 0)) + // offset: 0, length: 3
-      // triangle on the right
-      model_triangle(R3v(2.25, 0, 1), R3v(0, 0.5, 0.8)) + // offset: 3, length: 3
-      // center cube
-      model_cube(k_mirror_cube_center, R3(1), k_mirror_cube_size) + // offset: 6, length: 36
-      // room cube, containing all objects
-      model_cube(k_room_cube_center,
-		 R3(1),
-		 k_room_cube_size); // offset: 42, length: 36
+    struct model_data {
+      darray<transform> transforms{};
+      darray<module_geom::bvol> bounds_vols{}; // only spheres right now
+      darray<uint32_t> vb_offsets{};
+      darray<uint32_t> vb_lengths{};
+
+      std::unordered_map<std::string, uint32_t> indices{}; // into the above buffers
+
+      size_t length() const {
+	return transforms.size();
+      }
       
+    } m_model_data{};
+    
+    vertex_list_t m_vertex_buffer_vertices{};
+
     VkCommandPool m_vk_command_pool{VK_NULL_HANDLE};
 
     VkDescriptorPool m_vk_descriptor_pool{VK_NULL_HANDLE};   
@@ -199,12 +388,8 @@ namespace vulkan {
     VkSurfaceKHR m_vk_khr_surface{VK_NULL_HANDLE};
     VkSwapchainKHR m_vk_khr_swapchain{VK_NULL_HANDLE};
 
-    VkSemaphore m_vk_sem_image_available;
-    VkSemaphore m_vk_sem_render_finished;
-
-    VkBuffer m_vk_vertex_buffer{VK_NULL_HANDLE};
-    VkDeviceMemory m_vk_vertex_buffer_mem{VK_NULL_HANDLE};
-
+    buffer_data m_vertex_buffer;
+    
     darray<image_pool::index_type> m_test_image_indices =
       {
        image_pool::k_unset,
@@ -230,7 +415,6 @@ namespace vulkan {
     //
     static constexpr inline int k_descriptor_set_samplers = 0;
     static constexpr inline int k_descriptor_set_uniform_blocks = 1; 
-    static constexpr inline int k_descriptor_set_sampler_cubemap = 2;
     static constexpr inline int k_descriptor_set_input_attachment = 3;
     
     darray<descriptor_set_pool::index_type> m_test_descriptor_set_indices =
@@ -242,8 +426,7 @@ namespace vulkan {
       };   
     
     static constexpr inline int k_pass_texture2d = 0;
-    static constexpr inline int k_pass_cubemap = 1;
-    static constexpr inline int k_pass_test_fbo = 2; // test FBO pass   
+    static constexpr inline int k_pass_test_fbo = 1; // test FBO pass   
 
     darray<pipeline_layout_pool::index_type> m_pipeline_layout_indices =
       {
@@ -258,20 +441,26 @@ namespace vulkan {
        pipeline_pool::k_unset,
        pipeline_pool::k_unset
       };
+
+    vec3_t m_camera_position{R(0)};
+    
+    uint32_t m_instance_count{0};
+    uint32_t m_current_frame{0};
+    uint32_t m_swapchain_image_count{0};
     
     bool m_ok_present{false};
+    bool m_ok_vertex_data{false};
     bool m_ok_descriptor_pool{false};
     bool m_ok_render_pass{false};
     bool m_ok_attachment_read_descriptors{false};
     bool m_ok_uniform_block_data{false};
     bool m_ok_texture_data{false};
-    bool m_ok_depthbuffer_data{false};
     bool m_ok_graphics_pipeline{false};
     bool m_ok_vertex_buffer{false};
     bool m_ok_framebuffers{false};
     bool m_ok_command_pool{false};
     bool m_ok_command_buffers{false};
-    bool m_ok_semaphores{false};
+    bool m_ok_sync_objects{false};
     bool m_ok_scene{false};
     
     struct vk_layer_info {
@@ -279,115 +468,24 @@ namespace vulkan {
       bool enable{false};
     };
 
-    static inline darray<vk_layer_info> s_layers = {
-      { "VK_LAYER_LUNARG_standard_validation", true },
-      { "VK_LAYER_LUNARG_core_validation", true },
-      { "VK_LAYER_LUNARG_parameter_validation", false }
-    };
+    static inline darray<vk_layer_info> s_layers =
+      {
+       { "VK_LAYER_LUNARG_standard_validation", st_config::c_renderer::k_enable_validation_layers },
+       { "VK_LAYER_LUNARG_core_validation", st_config::c_renderer::k_enable_validation_layers },
+       { "VK_LAYER_LUNARG_parameter_validation", st_config::c_renderer::k_enable_validation_layers }
+      };
 
     static inline darray<const char*> s_device_extensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
-    static constexpr inline real_t k_tri_ps = R(1);
-    
-    vertex_list_t model_triangle(vec3_t offset = R3(0), vec3_t color = R3(1)) {
-      m_instance_count++;
+    uint32_t max_frames_in_flight() const {
+      // we may want to make this more dynamic at some point,
+      // hence the method
       return
-	{
-	 { R3v(-k_tri_ps, k_tri_ps, 0.0) + offset, R2v(0.0, 0.0), color }, // top left position, top left texture
-	 { R3v(k_tri_ps, -k_tri_ps, 0.0) + offset, R2v(1.0, 1.0), color }, // bottom right position, bottom right texture
-	 { R3v(-k_tri_ps, -k_tri_ps, 0.0) + offset, R2v(0.0, 1.0), color }
-	};
-    }
-    
-    vertex_list_t model_quad(vec3_t translate = R3(0),
-			     vec3_t color = R3(1),
-			     vec3_t scale = R3(1),
-			     darray<rot_cmd> rot = darray<rot_cmd>()) {
-      
-      auto a = model_triangle(R3(0), color);
-      auto b = model_triangle(R3(0), color);
-
-      a[1].position.y = R(k_tri_ps); // flip to top
-      a[1].st.y = R(0);
-      
-      a[2].position.x = R(k_tri_ps); 
-      a[2].st.x = R(1);
-
-      auto combined = a + b;
-      
-      for (vertex_data& vertex: combined) {
-	vertex.position *= scale;
-	for (const auto& cmd: rot) {
-	  mat4_t R = glm::rotate(mat4_t(R(1)), cmd.rad, cmd.axes);
-	  vertex.position = MAT4V3(R, vertex.position);
-	}
-	vertex.position += translate * scale;
-      }
-
-      return combined;
-    }
-
-    vertex_list_t model_cube(vec3_t translate = R3(0),
-			     vec3_t color = R3(1),
-			     vec3_t scale = R3(1)) {
-      return
-	// left face
-	model_quad(translate + R3v(-1, 0, 0),
-		   color,
-		   scale,
-		   {
-		    {
-		     R3v(0, 1, 0),
-		     glm::half_pi<real_t>()
-		    }
-		   }) +
-
-	// right face
-	model_quad(translate + R3v(1, 0, 0),
-		   color,
-		   scale,
-		   {
-		    {
-		     R3v(0, 1, 0),
-		     glm::half_pi<real_t>()
-		    }
-		   }) +
-
-	// up face
-	model_quad(translate + R3v(0, 1, 0),
-		   color,
-		   scale,
-		   {
-		    {
-		     R3v(1, 0, 0),
-		     -glm::half_pi<real_t>()
-		    }
-		   }) +
-
-	// down face
-	model_quad(translate + R3v(0, -1, 0),
-		   color,
-		   scale,
-		   {
-		    {
-		     R3v(1, 0, 0),
-		     glm::half_pi<real_t>()
-		    }
-		   }) +
-      
-	// front face
-	model_quad(translate + R3v(0, 0, 1),
-		   color,
-		   scale,
-		   {}) +
-
-	// back face
-	model_quad(translate + R3v(0, 0, -1),
-		   color,
-		   scale,
-		   {});
+	(st_config::c_renderer::k_max_frames_in_flight == BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE)
+ 	? m_swapchain_image_count
+	: st_config::c_renderer::k_max_frames_in_flight;
     }
     
     VkPipelineLayout pipeline_layout(int index) const {
@@ -465,7 +563,9 @@ namespace vulkan {
         m_vk_curr_pdevice,
         m_vk_curr_ldevice,
         query_queue_sharing_mode(),
-	m_vk_descriptor_pool
+	m_vk_descriptor_pool,
+	m_vk_command_pool,
+	m_vk_graphics_queue
       };
     }
     
@@ -576,7 +676,7 @@ namespace vulkan {
       gen_image.height = m_vk_swapchain_extent.height;
       gen_image.depth = 1;
       gen_image.aspect_flags = aspect_mask;
-      gen_image.usage_flags = usage | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+      gen_image.usage_flags = usage;
 
       ret = m_image_pool.make_image(make_device_resource_properties(),
 				    gen_image);
@@ -714,9 +814,9 @@ namespace vulkan {
           std::vector<VkExtensionProperties> avail_ext(extension_count);
 
           VK_FN(vkEnumerateDeviceExtensionProperties(device, 
-                                                      nullptr, 
-                                                      &extension_count, 
-                                                      avail_ext.data()));
+						     nullptr, 
+						     &extension_count, 
+						     avail_ext.data()));
           
           if (ok()) {
             std::set<std::string> required_ext(s_device_extensions.begin(), 
@@ -814,6 +914,41 @@ namespace vulkan {
       return m_vk_khr_surface != VK_NULL_HANDLE;
     }
 
+    VkPresentModeKHR select_present_mode() const {
+      // FIFO_KHR implies vertical sync. There may be a slight latency,
+      // but for our purposes this shouldn't a problem.
+      // We can deal with potential issues that can occur
+      // with MAILBOX_KHR (provides triple buffering/lower latency)
+      // if necessary, if the system supports it.
+
+      using pms = st_config::c_renderer::present_mode_select;
+      
+      VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+
+      std::unordered_map<VkPresentModeKHR, std::string> table =
+	{
+	 { VK_PRESENT_MODE_FIFO_KHR, "VK_PRESENT_MODE_FIFO_KHR" },
+	 { VK_PRESENT_MODE_FIFO_RELAXED_KHR, "VK_PRESENT_MODE_FIFO_RELAXED_KHR" }
+	};
+      
+      switch (st_config::c_renderer::m_select_present_mode::k_select_method) {
+      case pms::fifo:
+	present_mode = VK_PRESENT_MODE_FIFO_KHR;
+	break;
+      case pms::fifo_relaxed:
+	present_mode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+	break;
+      default:
+	ASSERT(false &&
+	       "st_config::c_renderer::m_select_present_mode::k_select_method desired is not yet implemented");
+	break;
+      }
+
+      write_logf("Choosing present_mode = %s", table.at(present_mode).c_str());
+     
+      return present_mode;
+    }
+
     void setup_swapchain() {
       if (ok_ldev()) {
         if (swapchain_ok(m_vk_curr_pdevice)) {
@@ -833,13 +968,8 @@ namespace vulkan {
             ASSERT(chosen);
           }
 
-          // FIFO_KHR implies vertical sync. There may be a slight latency,
-          // but for our purposes this shouldn't a problem.
-          // We can deal with potential issues that can occur
-          // with MAILBOX_KHR (provides triple buffering/lower latency)
-          // if necessary.
-          VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
-          
+	  VkPresentModeKHR present_mode = select_present_mode();
+	  
           // Here we select the swapchain dimensions (the dimensions of the images that have been
           // rendered into). We want to make them as close as possible to the actual
           // window dimensions; sometimes this will be exact, other times it won't, depending
@@ -863,13 +993,25 @@ namespace vulkan {
           // Image count represents the amount of images on the swapchain.
           // We'll use a small image count for now. Simple semantics first;
           // we can optimize later as necessary.
-          uint32_t image_count = details.capabilities.minImageCount;
-          ASSERT(image_count != 0);
-          if (image_count == 1) {
-            image_count++;
+          m_swapchain_image_count = details.capabilities.minImageCount;
+          ASSERT(m_swapchain_image_count != 0);
+	  if (st_config::c_renderer::k_desired_swapchain_image_count ==
+	      BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE) {
+	    m_swapchain_image_count = details.capabilities.maxImageCount;
+	  }
+	  else if (m_swapchain_image_count != st_config::c_renderer::k_desired_swapchain_image_count) {	    
+            m_swapchain_image_count = st_config::c_renderer::k_desired_swapchain_image_count;
           }
-          ASSERT(image_count <= details.capabilities.maxImageCount);
+          ASSERT(details.capabilities.minImageCount <= m_swapchain_image_count &&
+		 m_swapchain_image_count <= details.capabilities.maxImageCount);
 
+	  write_logf("selected swapchain image count = %" PRIu32 "\n"
+		     "min image count allowed = %" PRIu32 "\n"
+		     "max image count allowed = %" PRIu32,
+		     m_swapchain_image_count,
+		     details.capabilities.minImageCount,
+		     details.capabilities.maxImageCount);
+	  
           //
           // Here we actually create the swapchain.
           //
@@ -935,7 +1077,7 @@ namespace vulkan {
 
             create_info.surface = m_vk_khr_surface;
             
-            create_info.minImageCount = image_count;
+            create_info.minImageCount = m_swapchain_image_count;
             
             create_info.imageExtent = swap_extent;
 
@@ -977,9 +1119,12 @@ namespace vulkan {
             if (ok_swapchain()) {
               uint32_t count = 0;
               VK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
-                                             m_vk_khr_swapchain, 
-                                             &count,
-                                             nullptr));
+					    m_vk_khr_swapchain, 
+					    &count,
+					    nullptr));
+
+	      ASSERT(count == m_swapchain_image_count);
+	      
               if (ok_swapchain()) {
                 m_vk_swapchain_images.resize(count);
                 VK_FN(vkGetSwapchainImagesKHR(m_vk_curr_ldevice, 
@@ -1069,111 +1214,166 @@ namespace vulkan {
       }
     }
     
-    void setup_vertex_buffer() {
-      if (ok_graphics_pipeline()) {
-	const VkDeviceSize k_buf_verts_size =
-	  sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size();
-	
-	std::optional<VkMemoryRequirements> mem_reqs =
-	  query_vertex_buffer_memory_requirements(k_buf_verts_size);
+    std::optional<buffer_data> make_buffer_data(VkBufferCreateFlags flags_create,
+						VkBufferUsageFlags flags_usage,
+						VkMemoryPropertyFlags flags_memory,
+						VkDeviceSize buffer_size) {
+      std::optional<buffer_data> opt_ret{};
+      
+      auto properties = make_device_resource_properties();
+		
+      if (c_assert(properties.ok())) {
+	  	  
+	std::optional<buffer_reqs> opt_buffreqs =
+	  get_buffer_requirements(properties,
+				  flags_create,
+				  flags_usage,
+				  flags_memory,
+				  buffer_size);
 
-	ASSERT(mem_reqs.has_value());
-
-	// This is a _required_ allocation size
-	// for the vertex buffer - not using this size will create
-	// an error in the API's validation layers.
-	const VkDeviceSize k_buf_size = mem_reqs.value().size;
-	
-	VkBufferCreateInfo buffer_info = make_vertex_buffer_create_info(k_buf_size);
-       
-	VK_FN(vkCreateBuffer(m_vk_curr_ldevice, &buffer_info, nullptr, &m_vk_vertex_buffer));
-
-	// find which memory type index is available
-	// for this vertex buffer; the i'th bit
-	// represents a memory type index,
-	// and its bit is set if and only if that
-	// memory type is supported.
-	uint32_t memory_type_bits = mem_reqs.value().memoryTypeBits; 
-	uint32_t memory_type_index = 0;
-	while ((memory_type_bits & 1) == 0 && memory_type_index < 32) {
-	  memory_type_index++;
-	  memory_type_bits >>= 1;
-	}
-	// if this fails, we need to investigate
-	// the host's hardware/level of vulkan support.
-	ASSERT(memory_type_index < 32);
-
-	if (ok() && m_vk_vertex_buffer != VK_NULL_HANDLE) {	  		
-	  VkMemoryAllocateInfo balloc_info = {};
-	  balloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	  balloc_info.pNext = nullptr;
-	  balloc_info.allocationSize = k_buf_size;
-	  balloc_info.memoryTypeIndex = memory_type_index;
+	if (c_assert(opt_buffreqs.has_value())) {
+	  auto buffreqs = opt_buffreqs.value();
 	  
-	  VK_FN(vkAllocateMemory(m_vk_curr_ldevice,
-				 &balloc_info,
-				 nullptr,
-				 &m_vk_vertex_buffer_mem));
+	  if (c_assert(buffreqs.ok())) {
+	    buffer_data ret{};
+	    
+	    VkBufferCreateInfo buffer_info = {};
+	      
+	    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	    buffer_info.pNext = nullptr;
 
-	  VK_FN(vkBindBufferMemory(m_vk_curr_ldevice,
-				   m_vk_vertex_buffer,
-				   m_vk_vertex_buffer_mem,
-				   0));
+	    buffer_info.flags = flags_create;
+	    buffer_info.size = buffreqs.required_size;
+	    buffer_info.usage = flags_usage;
+	      
+	    buffer_info.sharingMode = properties.queue_sharing_mode;
+	    buffer_info.queueFamilyIndexCount = properties.queue_family_indices.size();
+	    buffer_info.pQueueFamilyIndices = properties.queue_family_indices.data();
 
-	  if (ok()) {	    
-	    m_ok_vertex_buffer = true;
+	    VK_FN(vkCreateBuffer(m_vk_curr_ldevice, &buffer_info, nullptr, &ret.handle));
+
+	    if (c_assert(H_OK(ret.handle))) {
+	      VkMemoryAllocateInfo balloc_info = {};
+		
+	      balloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	      balloc_info.pNext = nullptr;
+	      balloc_info.allocationSize = buffreqs.required_size;
+	      balloc_info.memoryTypeIndex = buffreqs.memory_property_index;
+	  
+	      VK_FN(vkAllocateMemory(m_vk_curr_ldevice,
+				     &balloc_info,
+				     nullptr,
+				     &ret.memory));
+
+	      if (c_assert(H_OK(ret.memory))) {		
+		VK_FN(vkBindBufferMemory(m_vk_curr_ldevice,
+					 ret.handle,
+					 ret.memory,
+					 0));
+
+		if (ok()) {
+		  opt_ret = ret;
+		}
+	      }
+	    }
 	  }
 	}
       }
+      return opt_ret;
+    }
+  
+    void setup_vertex_buffer() {
+      if (ok_graphics_pipeline()) {
+	const VkDeviceSize k_buffer_size =
+	  sizeof(m_vertex_buffer_vertices[0]) *
+	  m_vertex_buffer_vertices.size();
+	
+	auto make_and_fill =
+	  [this, k_buffer_size](VkBufferUsageFlags usage) -> buffer_data {
+      
+	    buffer_data buffer{};
+
+	    auto opt_ret = make_buffer_data(0, // create flags
+					    usage,
+					    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+					    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					    k_buffer_size);
+
+	    if (c_assert(opt_ret.has_value())) {
+	      if (c_assert(opt_ret.value().ok())) {
+		buffer = opt_ret.value();
+	  
+		write_device_memory(m_vk_curr_ldevice,
+				    buffer.memory,
+				    static_cast<void*>(m_vertex_buffer_vertices.data()),
+				    k_buffer_size);	    
+	      }
+	    }
+
+	    return buffer;
+	  };
+
+	bool good = false;
+	
+	STATIC_IF (st_config::c_renderer::m_setup_vertex_buffer::k_use_staging) {		
+	  // create the staging buffer
+	  buffer_data staging = make_and_fill(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+
+	  // create vertex buffer
+	  auto opt_vertex_buffer = make_buffer_data(0, // create flags
+						    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+						    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+						    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+						    k_buffer_size);
+	  // make sure everything is ok,
+	  // and then copy from staging to vertex buffer
+	  good =
+	    c_assert(opt_vertex_buffer.has_value()) &&
+	    c_assert(opt_vertex_buffer.value().ok());
+	  
+	  if (good) {	  
+	    m_vertex_buffer = opt_vertex_buffer.value();
+
+	    run_cmds(// success
+		     [this, k_buffer_size, &staging](VkCommandBuffer cmd_buf) {
+		       VkBufferCopy region{};
+
+		       region.srcOffset = 0;
+		       region.dstOffset = 0;
+		       region.size = k_buffer_size;
+		       
+		       vkCmdCopyBuffer(cmd_buf,
+				       staging.handle,
+				       m_vertex_buffer.handle,
+				       1,
+				       &region);
+		     },
+		     // error
+	             [this, &good](one_shot_command_error err) {
+		       good = false;
+	             });
+
+	    staging.free_mem(m_vk_curr_ldevice);
+	  }
+	}
+	else {
+	  m_vertex_buffer =
+	    make_and_fill(VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+			  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+
+	  good = m_vertex_buffer.ok();
+	}
+
+	m_ok_vertex_buffer = good;
+      }
     }
 
-    void run_cmds(std::function<void(VkCommandBuffer cmd_buffer)> f,
-		  std::function<void()> err_fn) {
+    void run_cmds(one_shot_command_fn_ok_t f,
+		  one_shot_command_fn_err_t err_fn) {
       
-      VkCommandBufferAllocateInfo alloc_info = {};
-      alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-      alloc_info.commandPool = m_vk_command_pool;
-      alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-      alloc_info.commandBufferCount = 1;
-
-      VkCommandBuffer cmd_buffer{VK_NULL_HANDLE};	
-      VK_FN(vkAllocateCommandBuffers(m_vk_curr_ldevice,
-				     &alloc_info,
-				     &cmd_buffer));
-
-      
-
-      if (cmd_buffer != VK_NULL_HANDLE) {
-	if (ok()) {
-	  VkCommandBufferBeginInfo begin_info = {};
-	  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	  vkBeginCommandBuffer(cmd_buffer, &begin_info);
-
-	  f(cmd_buffer);
-	  
-	  vkEndCommandBuffer(cmd_buffer);
-
-	  VkSubmitInfo submit_info = {};
-	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	  submit_info.commandBufferCount = 1;
-	  submit_info.pCommandBuffers = &cmd_buffer;
-
-	  VK_FN(vkQueueSubmit(m_vk_graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
-	  VK_FN(vkQueueWaitIdle(m_vk_graphics_queue));
-	}
-	else if (err_fn) {
-	  err_fn();
-	}
-
-        vkFreeCommandBuffers(m_vk_curr_ldevice,
-			     m_vk_command_pool,
-			     1,
-			     &cmd_buffer);
-      }
-      else if (err_fn) {
-	err_fn();
-      }
+      one_shot_command_buffer(make_device_resource_properties(),
+			      f,
+			      err_fn);
     }
 
   public:
@@ -1217,6 +1417,17 @@ namespace vulkan {
       return r;
     }
 
+    bool ok_command_pool() const {
+      bool r = ok() && m_ok_command_pool;
+      ASSERT(r);
+      return r;
+    }
+
+    bool ok_vertex_data() const {
+      return
+	ok() &&
+	c_assert(m_ok_vertex_data);
+    }
     
     bool ok_descriptor_pool() const {
       bool r = ok() && m_ok_descriptor_pool;
@@ -1248,12 +1459,6 @@ namespace vulkan {
       return r;
     }
 
-    bool ok_depthbuffer_data() const {
-      bool r = ok() && m_ok_depthbuffer_data;
-      ASSERT(r);
-      return r;
-    }
-
     bool ok_graphics_pipeline() const {
       bool r = ok() && m_ok_graphics_pipeline;
       ASSERT(r);
@@ -1272,20 +1477,14 @@ namespace vulkan {
       return r;
     }
 
-    bool ok_command_pool() const {
-      bool r = ok() && m_ok_command_pool;
-      ASSERT(r);
-      return r;
-    }
-
     bool ok_command_buffers() const {
       bool r = ok() && m_ok_command_buffers;
       ASSERT(r);
       return r;
     }
 
-    bool ok_semaphores() const {
-      bool r = ok() && m_ok_semaphores;
+    bool ok_sync_objects() const {
+      bool r = ok() && m_ok_sync_objects;
       ASSERT(r);
       return r;
     }
@@ -1450,14 +1649,113 @@ namespace vulkan {
       setup_device_and_queues();
       setup_swapchain();
       setup_swapchain_image_views();
-
+      
       if (ok_swapchain()) {
 	m_ok_present = true;
       }
     }
+
+    void setup_command_pool() {
+      if (ok_present()) {
+	queue_family_indices indices = query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
+
+	VkCommandPoolCreateInfo pool_info = {};
+	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	pool_info.queueFamilyIndex = indices.graphics_family.value();
+	pool_info.flags = 0;
+
+	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
+
+	m_ok_command_pool = true;	
+      }      
+    }
+
+    void setup_vertex_data() {
+      if (ok_command_pool()) {
+	auto add_verts =
+	  [this](const std::string& name,
+		 mesh_builder& mb,
+		 real_t bounds_radius) {
+	    
+	    m_model_data.indices[name] = m_model_data.length();
+
+	    module_geom::bvol bvol{};
+	    
+	    bvol.radius = bounds_radius;
+	    bvol.center = mb.taccum()[3];
+	    bvol.type = module_geom::bvol::type_sphere;
+	    
+	    m_model_data.bounds_vols.push_back(bvol);
+	    m_model_data.vb_offsets.push_back(m_vertex_buffer_vertices.size());
+	    m_model_data.vb_lengths.push_back(mb.vertices.size());
+	    m_model_data.transforms.push_back(mb.taccum);	   	    
+	    
+	    m_instance_count += mb.vertices.size() / 3;
+	    
+	    m_vertex_buffer_vertices =
+	      m_vertex_buffer_vertices + mb.vertices;
+
+	    // erase previous state,
+	    // so we can add a new model
+	    mb.reset();
+	  };
+
+	{
+	  mesh_builder mb{};
+
+	  // generate left triangle
+	  mb
+	    .set_transform(transform()
+			   .translate(R3v(-2.25, 0, 0)))
+	    .triangle();
+	  
+	  add_verts("left-triangle", mb, R(1.0));
+
+	  // generate right triangle
+	  mb
+	    .set_transform(transform()
+			   .translate(R3v(2.25, 0, 1)))
+	    .set_color(R3v(0, 0.5, 0.8))
+	    .triangle();
+	  
+	  add_verts("right-triangle", mb, R(1.0));
+
+	  // generate inner cube
+	  mb
+	    .set_transform(transform()
+			   .translate(k_mirror_cube_center))
+	    .cube()
+	    .with_scale(k_mirror_cube_size);
+	  
+	  add_verts("inner-cube", mb, k_mirror_cube_size[0]);	       
+
+
+	  // generate sphere
+	  mb
+	    .set_color(R3v(0, 0.5, 0.8))
+	    .set_transform(transform()			   
+			   .translate(R3v(0, 5, 0)))
+	    .sphere();
+
+
+	  add_verts("sphere", mb, R(1.0));
+	  
+	  // generate outer cube
+	  mb
+	    .set_transform(transform()
+			   .translate(k_room_cube_center))
+	    .cube()
+	    .with_scale(k_room_cube_size);
+
+	  add_verts("outer-cube", mb, k_room_cube_size[0]);
+	}
+	
+	m_ok_vertex_data = true;
+      }
+    }
     
     void setup_descriptor_pool() {
-      if (ok_present()) {       
+      if (ok_vertex_data()) {       
         darray<VkDescriptorPoolSize> pool_sizes =
 	  {
 	   // type, descriptorCount
@@ -1487,139 +1785,297 @@ namespace vulkan {
 	m_ok_descriptor_pool = api_ok() && m_vk_descriptor_pool != VK_NULL_HANDLE;
       }
     }
+
+    uint32_t current_frame() const {
+      return m_current_frame;
+    }
+
+    double frame_delta_seconds(uint32_t frame_index) const {
+      return m_frame_dtimes.at(frame_index);
+    }
+
     
-    void setup_render_pass() {
+    //
+    // The two options added here allow for the caller to choose between a
+    // basic multipass setup (rendering to a textured quad) versus
+    // a single pass direct write to the color buffer.
+    // Note that m_framebuffer_attachments is used in both cases.
+    //
+    // What's important to be aware of is that, for any i in
+    // 1 <= i < m_vk_swapchain_images.size(), if the "single"
+    // path is chosen, then only m_dramebuffer_attachments.data[i].depth_attachment
+    // will be used; data[i].color_attachment will remain as VK_NULL_HANDLE.
+    //
+    enum class pass_type
+      {
+       single,
+       dual_via_input_attachment
+      };
+    
+    void setup_render_pass(pass_type type = pass_type::single) {
       if (ok_descriptor_pool()) {
-	ASSERT(!m_vk_swapchain_images.empty());
-	
-	const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
-	const VkFormat depth_format = depthbuffer_data::query_format();
-	
-	m_framebuffer_attachments.data.resize(m_vk_swapchain_images.size());
-	
-	for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
+	ASSERT(!m_vk_swapchain_images.empty());	
 
-	  m_framebuffer_attachments.data[i].color_attachment =
-	    make_framebuffer_attachment(color_format,
-					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-
-	  m_framebuffer_attachments.data[i].depth_attachment =
-	    make_framebuffer_attachment(depth_format,
-					VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
-	  
-	  
-	}
-
-	std::array<VkAttachmentDescription, 3> attachments{};
-
+	darray<VkAttachmentDescription> attachments{};
 	// Swap chain image color attachment
 	// Will be transitioned to present layout
-	attachments[0].format = m_vk_khr_swapchain_format.format;
-	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	attachments.push_back(make_attachment_description(attachment_kind::swapchain));
 
-	// Input attachments
-	// These will be written in the first subpass, transitioned to input attachments 
-	// and then read in the secod subpass
+	darray<VkSubpassDescription> subpass_descriptions{};
 
-	// Color
-	attachments[1].format = color_format;
-	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	// Depth
-	attachments[2].format = depth_format;
-	attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	VkAttachmentReference swapchain_attachment_ref{};
+	VkAttachmentReference color_attachment_ref{};
+	VkAttachmentReference depth_attachment_ref{};
 
-	std::array<VkSubpassDescription,2> subpass_descriptions{};
+	// Only relevant for the second subpass,
+	// under case pass_type::dual_via_input_attachment
+	darray<VkAttachmentReference> input_attachment_refs{};
 
-	/*
-	  First subpass
-	  Fill the color and depth attachments
-	*/
-	VkAttachmentReference colorReference = { 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-	VkAttachmentReference depthReference = { 2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+	// swapchain_attachment_ref is only relevant in the multipass rendering
+	// path; otherwise we don't need to worry about it.
+	swapchain_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;	
 
-	subpass_descriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass_descriptions[0].colorAttachmentCount = 1;
-	subpass_descriptions[0].pColorAttachments = &colorReference;
-	subpass_descriptions[0].pDepthStencilAttachment = &depthReference;
+	// this is the first subpass description,
+	// which refers to both the color attachment
+	// and depth attachment reference;
+	// we only add more if we choose to take
+	// the multipass path.
+	//
+	// If we're performing multiple passes,
+	// then we fill the depth and color attachment
+	// refs with this subpass.
+	subpass_descriptions.push_back({// flags
+					0,
+					// pipelineBindPoint
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					// inputAttachmentCount
+					0,
+					// pInputAttachments
+					nullptr,
+					// colorAttachmentCount
+					1,
+					// pColorAttachments
+					&color_attachment_ref,
+					// pResolveAttachments
+					nullptr,
+					// pDepthStencilAttachment
+					&depth_attachment_ref,
+					// preserveAttachmentCount
+					0,
+					// pPreserveAttachments
+					nullptr });
 
-	/*
-	  Second subpass
-	  Input attachment read and swap chain color attachment write
-	*/
+	darray<VkSubpassDependency> subpass_dependencies{};
 
-	// Color reference (target) for this sub pass is the swap chain color attachment
-	VkAttachmentReference color_reference_swapchain = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+	m_framebuffer_attachments.data.resize(m_vk_swapchain_images.size());
+	
+	switch (type) {
+	case pass_type::dual_via_input_attachment:
+	  // generate the framebuffer attachments;
+	  // these create image views which are meant to be used
+	  // for multipass rendering (via VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT)
+	  {
+	    const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
+	    const VkFormat depth_format = depthbuffer_info::query_format();       
+	
+	    for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
 
-	subpass_descriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass_descriptions[1].colorAttachmentCount = 1;
-	subpass_descriptions[1].pColorAttachments = &color_reference_swapchain;
+	      m_framebuffer_attachments.data[i].color_attachment =
+		make_framebuffer_attachment(color_format,
+					    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
 
-	// Color and depth attachment written to in first sub pass will
-	// be used as input attachments to be read in the fragment shader
-	VkAttachmentReference input_references[2];
-	input_references[0] = { 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-	input_references[1] = { 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-		
-	// Use the attachments filled in the first pass as input attachments
-	subpass_descriptions[1].inputAttachmentCount = 2;
-	subpass_descriptions[1].pInputAttachments = input_references;
+	      m_framebuffer_attachments.data[i].depth_attachment =
+		make_framebuffer_attachment(depth_format,
+					    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+	  
+	  
+	    }
+	  }
+	  
+	  // Input attachments
+	  // These will be written in the first subpass, transitioned to input attachments 
+	  // and then read in the secod subpass
+	  attachments.push_back(make_attachment_description(attachment_kind::input_color));
+	  attachments.push_back(make_attachment_description(attachment_kind::input_depth));
 
-	/*
-	  Subpass dependencies for layout transitions
-	*/
-	std::array<VkSubpassDependency, 3> dependencies;
+	  swapchain_attachment_ref.attachment = 0;
+	  color_attachment_ref.attachment = 1;
+	  depth_attachment_ref.attachment = 2;
 
-	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[0].dstSubpass = 0;
-	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+	  input_attachment_refs.resize(2);
+	  
+	  // Second subpass
+	  // Color and depth attachment written to in first sub pass will
+	  // be used as input attachments to be read in the fragment shader
+	  input_attachment_refs[0] = { 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+	  input_attachment_refs[1] = { 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+	  
+	  // Second subpass
+	  // Read the input attachments,
+	  // and then write to the
+	  // swapchain color attachment.
+	  subpass_descriptions.push_back(VkSubpassDescription {// flags
+					  0,
+					  // pipelineBindPoint
+					  VK_PIPELINE_BIND_POINT_GRAPHICS,
+					  // inputAttachmentCount
+					  static_cast<uint32_t>(input_attachment_refs.size()),
+					  // pInputAttachments
+					  input_attachment_refs.data(),
+					  // colorAttachmentCount
+					  1,
+					  // pColorAttachments
+					  &swapchain_attachment_ref,
+					  // pResolveAttachments
+					  nullptr,
+					  // pDepthStencilAttachment
+					  nullptr,
+					  // preserveAttachmentCount
+					  0,
+					  // pPreserveAttachments
+					  nullptr });
 
-	// This dependency transitions the input attachment from color attachment to shader read
-	dependencies[1].srcSubpass = 0;
-	dependencies[1].dstSubpass = 1;
-	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-	dependencies[2].srcSubpass = 0;
-	dependencies[2].dstSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[2].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[2].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[2].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+	  // Now we add subpass dependencies for the layout transitions
+	  subpass_dependencies.push_back(VkSubpassDependency {// srcSubpass
+					  //---------------
+					  // VK_SUBPASS_EXTERNAL refers to the previous
+					  // executed subpass from a prior complete render pass,
+					  // given the fact that the srcStageMask is
+					  // "VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT"
+					  //---------------
+	                                  VK_SUBPASS_EXTERNAL,
+		                          // dstSubpass
+					  0,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_MEMORY_READ_BIT,
+					  // dstAccessMask
+					  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					  // dependencyFlags
+					  VK_DEPENDENCY_BY_REGION_BIT});
+
+	  
+	  // This dependency transitions the input attachment from color attachment to shader read
+	  subpass_dependencies.push_back({// srcSubpass
+	                                  0,
+		                          // dstSubpass
+					  1,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					  // dstAccessMask
+					  VK_ACCESS_SHADER_READ_BIT,
+					  // dependencyFlags
+					  VK_DEPENDENCY_BY_REGION_BIT});
+
+	  // This dependency ensures that we can read and write our memory
+	  // up until we've finished with the COLOR_ATTACHMENT_OUTPUT stage.
+	  // Afterward, we explicitly state that we want the pipeline
+	  // to allow for the memory to always be readable until
+	  // the end of the render pass (or frame, for that matter).
+	  //
+	  // Notice that the first subpass dependency given above expects the source,
+	  // external subpass to have a VK_ACCESS_MEMORY_READ_BIT setting
+	  // for its access mask. This here is what closes that loop.
+	  //
+	  // The reason for this is to limit undefined behavior.
+	  subpass_dependencies.push_back({// srcSubpass
+	                                  0,
+		                          // dstSubpass
+					  VK_SUBPASS_EXTERNAL,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					  // dstAccessMask
+					  VK_ACCESS_SHADER_READ_BIT,
+					  // dependencyFlags
+					  VK_DEPENDENCY_BY_REGION_BIT});
+	  
+	  break;
+	case pass_type::single:
+	  // generate the depth framebuffer attachment;
+	  // we leave data[i].color_attachment alone (i.e., we don't generate it),
+	  // since it isn't needed.
+	  {
+	    const VkFormat depth_format = depthbuffer_info::query_format();	    
+
+	    for (size_t i{0}; i < m_framebuffer_attachments.data.size(); i++) {
+
+	      m_framebuffer_attachments.data[i].depth_attachment =
+		make_framebuffer_attachment(depth_format,
+					    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	  
+	  
+	    }
+	  }
+	  
+	  // depth attachment; we still need a depth buffer,
+	  // and this describes how we wish to use the image view
+	  // (which we create in the loop right above this line)
+	  attachments.push_back(make_attachment_description(attachment_kind::depth));
+
+	  // we've already passed the addresses of these to the first
+	  // subpass above
+	  color_attachment_ref.attachment = 0;
+	  depth_attachment_ref.attachment = 1;
+	  
+	  // From external to color attachment output
+	  subpass_dependencies.push_back({// srcSubpass
+	                                  VK_SUBPASS_EXTERNAL,
+		                          // dstSubpass
+					  0,
+					  // srcStageMask					 
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // srcAccessMask
+					  0,
+					  // dstAccessMask
+					  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					  // dependencyFlags
+					  VK_DEPENDENCY_BY_REGION_BIT});
+
+	  // Close the loop
+	  subpass_dependencies.push_back({// srcSubpass
+	                                  0,
+	  	                          // dstSubpass
+	  				  VK_SUBPASS_EXTERNAL,
+					  // srcStageMask
+					  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					  // dstStageMask
+					  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+					  // srcAccessMask
+					  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+					  // dstAccessMask
+					  0,
+					  // dependencyFlags
+					  VK_DEPENDENCY_BY_REGION_BIT});
+	  
+	  break;
+	}
 
 	VkRenderPassCreateInfo render_pass_info_ci{};
+
 	render_pass_info_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	render_pass_info_ci.attachmentCount = static_cast<uint32_t>(attachments.size());
 	render_pass_info_ci.pAttachments = attachments.data();
 	render_pass_info_ci.subpassCount = static_cast<uint32_t>(subpass_descriptions.size());
 	render_pass_info_ci.pSubpasses = subpass_descriptions.data();
-	render_pass_info_ci.dependencyCount = static_cast<uint32_t>(dependencies.size());
-	render_pass_info_ci.pDependencies = dependencies.data();
+	render_pass_info_ci.dependencyCount = static_cast<uint32_t>(subpass_dependencies.size());
+	render_pass_info_ci.pDependencies = subpass_dependencies.data();
+	
 	VK_FN(vkCreateRenderPass(m_vk_curr_ldevice, &render_pass_info_ci, nullptr, &m_vk_render_pass));
 	
 	if (H_OK(m_vk_render_pass)) {
@@ -1629,12 +2085,136 @@ namespace vulkan {
       }
     }
 
-    void setup_attachment_read_descriptors() {
+    enum attachment_kind
+      {
+       // 
+       swapchain,
+       //
+       depth,
+       // for multipass rendering
+       input_color,
+       // for multipass rendering
+       input_depth,
+      };
+    
+    VkAttachmentDescription make_attachment_description(attachment_kind k) {
+      switch (k) {       
+      case attachment_kind::swapchain:
+	return
+	  VkAttachmentDescription {
+	   // flags
+	   0,
+	   // format
+	   m_vk_khr_swapchain_format.format,
+	   // samples
+	   VK_SAMPLE_COUNT_1_BIT,
+	   // loadOp
+	   VK_ATTACHMENT_LOAD_OP_CLEAR,
+	   // storeOp
+	   VK_ATTACHMENT_STORE_OP_STORE,
+	   // stencilLoadOp
+	   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	   // stencilStoreOp
+	   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	   // initialLayout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
+	   // finalLayout
+	   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	  };
+      case attachment_kind::input_color:
+	return
+	  VkAttachmentDescription {
+	   // flags
+	   0,
+	   // format
+	   VK_FORMAT_R8G8B8A8_UNORM,
+	   // samples
+	   VK_SAMPLE_COUNT_1_BIT,
+	   // loadOp
+	   VK_ATTACHMENT_LOAD_OP_CLEAR,
+	   // storeOp
+	   VK_ATTACHMENT_STORE_OP_STORE,
+	   // stencilLoadOp
+	   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	   // stencilStoreOp
+	   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	   // initialLayout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
+	   // finalLayout
+	   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	  };
+      case attachment_kind::input_depth:	
+	return
+	  VkAttachmentDescription {
+	   // flags
+	   0,
+	   // format
+	   depthbuffer_info::query_format(),
+	   // samples
+	   VK_SAMPLE_COUNT_1_BIT,
+	   // loadOp
+	   VK_ATTACHMENT_LOAD_OP_CLEAR,
+	   // storeOp
+	   VK_ATTACHMENT_STORE_OP_STORE,
+	   // stencilLoadOp
+	   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	   // stencilStoreOp
+	   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	   // initialLayout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
+	   // finalLayout
+	   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	  };
+      case attachment_kind::depth:	
+	return
+	  VkAttachmentDescription {
+	   // flags
+	   0,
+	   // format
+	   depthbuffer_info::query_format(),
+	   // samples
+	   VK_SAMPLE_COUNT_1_BIT,
+	   // loadOp
+	   VK_ATTACHMENT_LOAD_OP_CLEAR,
+	   // storeOp
+	   VK_ATTACHMENT_STORE_OP_STORE,
+	   // stencilLoadOp
+	   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	   // stencilStoreOp
+	   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	   // initialLayout
+	   VK_IMAGE_LAYOUT_UNDEFINED,
+	   // finalLayout
+	   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	  };
+      default:
+	__FATAL__("Received unsupported parameter 0x%" PRIx32,
+		  static_cast<uint32_t>(k));
+	break;
+      }
+
+      return {};
+    }
+
+    //
+    // By default, we actually don't need to use
+    // these. They're only necessary if we plan to use
+    // input attachments and we need to reference those
+    // attachments in a shader executing in a multipass
+    // setup.
+    //
+    enum class attachment_read_descriptor_type
+      {
+       none,
+       complete				       
+      };
+    
+    void setup_attachment_read_descriptors(attachment_read_descriptor_type type = attachment_read_descriptor_type::none) {
       if (ok_render_pass()) {
 
 	bool good = true;
 
-	{
+	if (type == attachment_read_descriptor_type::complete) {
 	  descriptor_set_gen_params attachment_read_params =
 	    {
 	     // stages
@@ -1657,7 +2237,9 @@ namespace vulkan {
 
 	  m_descriptors
 	    .attachment_read
-	    .resize(m_framebuffer_attachments.data.size());
+	    .resize(m_framebuffer_attachments
+		    .data
+		    .size());
 	  
 	  size_t i{0};
 	  while (i < m_framebuffer_attachments.data.size() && good) {
@@ -1716,23 +2298,26 @@ namespace vulkan {
 
 	    i++;
 	  }
+	}
 
-	  m_ok_attachment_read_descriptors = good;
-	}	
+	m_ok_attachment_read_descriptors = good;
       }
     }
     
     void setup_uniform_block_data() {
       if (ok_attachment_read_descriptors()) {
+	// setup descriptor set for all uniform blocks
 	{
 	  descriptor_set_gen_params uniform_block_desc_set_params =
 	    {
 	     {
-	      VK_SHADER_STAGE_VERTEX_BIT // binding 0: transform block
+	      VK_SHADER_STAGE_VERTEX_BIT, // binding 0: transform block
+	      VK_SHADER_STAGE_VERTEX_BIT // binding 1: surface block
 	     },
-	     // separate descriptors
+	     // descriptor counts for each binding
 	     {
-	      1
+	      1, // binding 0
+	      1 // binding 1
 	     },
 	     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
 	    };
@@ -1742,30 +2327,26 @@ namespace vulkan {
 						      uniform_block_desc_set_params);
 	}
 
+	// the pool will forward descriptor set info when
+	// creating a uniform block
 	m_uniform_block_pool.set_descriptor_set_pool(&m_descriptor_set_pool);
-	
-	{
-	  uniform_block_gen_params transform_block_params =
-	    {
-	     m_test_descriptor_set_indices[k_descriptor_set_uniform_blocks],	   
 
-	     static_cast<void*>(&m_transform_uniform_block.data),
-	     sizeof(m_transform_uniform_block.data),
-	     // array element index
-	     0,
-	     // binding index
-	     0
-	    };
-	
-	  m_transform_uniform_block.index =
-	    m_uniform_block_pool.make_uniform_block(make_device_resource_properties(),
-						    transform_block_params);
+	//
+	// generate the uniform blocks.
+	//
+	// m_uniform_block_pool will be assigned to each
+	// created block data instance
+	//
+	uniform_block::series_gen gen
+	  {
+	   make_device_resource_properties(),
+	   m_test_descriptor_set_indices.at(k_descriptor_set_uniform_blocks),
+	   &m_uniform_block_pool
+	  };
 
-	  m_transform_uniform_block.pool = &m_uniform_block_pool;
-	}
-
-
-	m_ok_uniform_block_data = m_transform_uniform_block.ok();
+	m_ok_uniform_block_data =
+	  gen.make<uniform_block::transform>(m_transform_uniform_block, uniform_block::k_binding_transform) &&
+	  gen.make<uniform_block::surface>(m_surface_uniform_block, uniform_block::k_binding_surface);
       }
     }
     
@@ -1794,30 +2375,6 @@ namespace vulkan {
 	    };
 
 	  m_test_descriptor_set_indices[k_descriptor_set_samplers] =
-	    m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
-						      descriptor_set_params);
-	}
-
-	//
-	// create our descriptor set that's used for
-	// the cubemap
-	// 
-	{
-	  descriptor_set_gen_params descriptor_set_params =
-	    {
-	     // stages
-	     {
-	      VK_SHADER_STAGE_FRAGMENT_BIT
-	     },
-	     // descriptor_counts
-	     {
-	      1
-	     },
-	     // type
-	     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-	    };
-
-	  m_test_descriptor_set_indices[k_descriptor_set_sampler_cubemap] =
 	    m_descriptor_set_pool.make_descriptor_set(make_device_resource_properties(),
 						      descriptor_set_params);
 	}
@@ -1892,13 +2449,13 @@ namespace vulkan {
 	   // aspect flags
 	   VK_IMAGE_ASPECT_COLOR_BIT,
 	   // source pipeline stage
-	   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+	   VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
 	   // dest pipeline stage
 	   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 	   // source access flags
 	   0,
 	   // dest access flags
-	   VK_ACCESS_SHADER_READ_BIT,
+	   VK_ACCESS_UNIFORM_READ_BIT,
 	    
 	   // width
 	   image_w,
@@ -1974,16 +2531,6 @@ namespace vulkan {
       }
     }
 
-    void setup_depthbuffer_data() {
-      if (ok_texture_data()) {
-	m_depthbuffer = make_depthbuffer(make_device_resource_properties(),
-					 g_m.device_ctx->width(),
-					 g_m.device_ctx->height());
-	
-	m_ok_depthbuffer_data = m_depthbuffer.ok();
-      }
-    }
-
 
     bool setup_pipeline(int render_phase_index,
 			int subpass_index,
@@ -2018,17 +2565,13 @@ namespace vulkan {
 			    {
 			     // descriptor set layouts
 			     {
-			      descriptor_set_layout(k_descriptor_set_samplers),
-			      
+			      descriptor_set_layout(k_descriptor_set_samplers),			      
 			      descriptor_set_layout(k_descriptor_set_uniform_blocks)
 			     },
 			     // push constant ranges
 			     {
-			      {
-			       VK_SHADER_STAGE_FRAGMENT_BIT,
-			       0,
-			       sizeof(int)
-			      }
+			      push_constant::basic_pbr_range(),
+			      push_constant::model_range()
 			     }
 			    },
 			    // pipeline
@@ -2068,62 +2611,81 @@ namespace vulkan {
 			     realpath_spv("attachment_read.frag.spv")			     
 			    });
     }
-    
-    bool setup_pipeline_cubemap() {
-      return false;
-      /*
-      return setup_pipeline(k_pass_cubemap,
-			    // pipeline layout
-			    {
-			     // descriptor set layouts
-			     {
-			      descriptor_set_layout(k_descriptor_set_sampler_cubemap),
-			      
-			      descriptor_set_layout(k_descriptor_set_uniform_blocks)
-			     },
-			     // push constant ranges
-			     {}
-			    },
-			    // pipeline
-			    {
-			     // render pass
-			     m_vk_render_pass,
-			     // viewport extent
-			     m_vk_swapchain_extent,	   
-			     // vert spv path
-			     realpath_spv("cubemap.vert.spv"),
-			     // frag spv path
-			     realpath_spv("cubemap.frag.spv")
 
-			     // remaining index parameters handled in setup_pipeline()
-			    });
-      */
-    }
+    //
+    // texture2d is used in both pipeline types,
+    // and thus is purely independent.
+    //
+    enum class pipeline_type
+      {
+       pbr_basic_single,
+       pbr_basic_to_quad
+      };
     
-    void setup_graphics_pipeline() {      
-      if (ok_depthbuffer_data()) {
+    void setup_graphics_pipeline(pipeline_type type=pipeline_type::pbr_basic_single) {      
+      if (ok_texture_data()) {
 	m_pipeline_pool.set_pipeline_layout_pool(&m_pipeline_layout_pool);
 
-	m_ok_graphics_pipeline =
-	  setup_pipeline_texture2d() &&
-	  setup_pipeline_test_fbo();       
+	switch (type) {
+	case pipeline_type::pbr_basic_single:
+	  m_ok_graphics_pipeline =
+	    setup_pipeline_texture2d();
+	  break;
+	case pipeline_type::pbr_basic_to_quad:
+	  m_ok_graphics_pipeline =
+	    setup_pipeline_texture2d() &&
+	    setup_pipeline_test_fbo();
+	  break;
+	default:
+	  __FATAL__("Unrecognized pipeline_type: 0x%" PRIx32, type);
+	  break;
+	}	
       }
     }
 
+    //
+    // framebuffer_attach_depth_output and framebuffer_attach_depth_input
+    // currently will result in the same thing: the addition
+    // of the same depth image view being added to the framebuffer's
+    // set of attachments.
+    //
+    // The distinction is important for both readability as well
+    // as maintainability.
+    //
+    enum framebuffer_attach_flag_bits
+      {
+       framebuffer_attach_depth_output = 1 << 0,
+       framebuffer_attach_color_input = 1 << 1,
+       framebuffer_attach_depth_input = 1 << 2
+      };
+
+    typedef uint32_t framebuffer_attach_flags_t;
+    
     darray<VkFramebuffer> make_framebuffer_list(VkRenderPass fb_render_pass,
-						const darray<VkImageView>& color_image_views) {
+						const darray<VkImageView>& color_image_views,
+						framebuffer_attach_flags_t attach_flags=0) {
       darray<VkFramebuffer> ret(color_image_views.size(), VK_NULL_HANDLE);
 
       size_t i{0};
       bool good{true};
       
       while (i < ret.size() && good) {
-	std::array<VkImageView, 3> attachments =
-	  {
-	   color_image_views.at(i),
-	   m_framebuffer_attachments.color_image_view(i),
-	   m_framebuffer_attachments.depth_image_view(i)
-	  };
+	darray<VkImageView> attachments{};
+
+	// always this
+	attachments.push_back(color_image_views.at(i));
+
+	if ((attach_flags & framebuffer_attach_depth_output) != 0) {
+	  attachments.push_back(m_framebuffer_attachments.depth_image_view(i));	  
+	}
+
+	if ((attach_flags & framebuffer_attach_color_input) != 0) {
+	  attachments.push_back(m_framebuffer_attachments.color_image_view(i));	  
+	}
+
+	if ((attach_flags & framebuffer_attach_depth_input) != 0) {
+	  attachments.push_back(m_framebuffer_attachments.depth_image_view(i));	  
+	}	
 
 	VkFramebufferCreateInfo framebuffer_info = {};
 	framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -2154,30 +2716,44 @@ namespace vulkan {
 
       return ret;
     }	  
+
+    //
+    // single pass results in 2 attachments for each
+    // framebuffer: the swapchain color image view and
+    // the depth image view that was created in setup_render_pass()
+    //
+    // for two_pass, we'll end up using 3, the aforementioned 2
+    // plus another color image view.
+    //
+    enum class framebuffer_setup_method
+      {
+       two_pass,
+       single_pass
+      };
     
-    void setup_framebuffers() {
+    void setup_framebuffers(framebuffer_setup_method fbmethod = framebuffer_setup_method::single_pass) {
       if (ok_vertex_buffer()) {
+	framebuffer_attach_flags_t flags = 0;
+
+	switch (fbmethod) {
+	case framebuffer_setup_method::two_pass:
+	  flags =
+	    framebuffer_attach_color_input |
+	    framebuffer_attach_depth_input;
+	  break;
+	case framebuffer_setup_method::single_pass:
+	  flags =
+	    framebuffer_attach_depth_output;
+	  break;
+	}
+	
 	m_vk_swapchain_framebuffers =
 	  make_framebuffer_list(m_vk_render_pass,
-				m_vk_swapchain_image_views);	
+				m_vk_swapchain_image_views,
+				flags);	
 
 	m_ok_framebuffers = !m_vk_swapchain_framebuffers.empty(); 
       }
-    }
-
-    void setup_command_pool() {
-      if (ok_framebuffers()) {
-	queue_family_indices indices = query_queue_families(m_vk_curr_pdevice, m_vk_khr_surface);
-
-	VkCommandPoolCreateInfo pool_info = {};
-	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	pool_info.queueFamilyIndex = indices.graphics_family.value();
-	pool_info.flags = 0;
-
-	VK_FN(vkCreateCommandPool(m_vk_curr_ldevice, &pool_info, nullptr, &m_vk_command_pool));
-
-	m_ok_command_pool = true;	
-      }      
     }
 
     void commands_begin_pipeline(VkCommandBuffer cmd_buffer,
@@ -2185,19 +2761,13 @@ namespace vulkan {
 				 VkPipelineLayout pipeline_layout,
 				 bool with_vertex_buffer,
 				 const darray<VkDescriptorSet>& descriptor_sets) {
-
-      VkDeviceSize vertex_buffer_ofs = 0;
       
       vkCmdBindPipeline(cmd_buffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			pipeline);
 
       if (with_vertex_buffer) {
-	vkCmdBindVertexBuffers(cmd_buffer,
-			       0,
-			       1,
-			       &m_vk_vertex_buffer,
-			       &vertex_buffer_ofs);
+	m_vertex_buffer.bind_vertex(cmd_buffer);
       }
 
       vkCmdBindDescriptorSets(cmd_buffer,
@@ -2248,32 +2818,6 @@ namespace vulkan {
 			   VK_SUBPASS_CONTENTS_INLINE);      
     }
 
-    void commands_draw_inner_objects(VkCommandBuffer cmd_buffer) const {
-      // first 3 objects: two triangles and one small cube
-      vkCmdDraw(cmd_buffer,
-		(m_instance_count - 12) * 3, // num vertices
-		m_instance_count - 12, // num instances
-		0, // first vertex
-		0); // first instance
-    }
-
-    void commands_draw_room(VkCommandBuffer cmd_buffer) const {
-      // big cube encompassing the scene
-      vkCmdDraw(cmd_buffer,
-		36,
-		12, // (6 faces, 12 triangles)
-		42, // 3 vertices + 3 vertices + 36 vertices
-		14); // 2 triangles + one cube (6 faces, 12 triangles)
-    }
-
-    void commands_draw_quad_no_vb(VkCommandBuffer cmd_buffer) const {
-      vkCmdDraw(cmd_buffer,
-		4,
-		1,
-		0,
-		0);
-    }
-
     bool commands_begin_buffer(VkCommandBuffer cmd_buffer) {
       bool ret = ok();
       
@@ -2310,47 +2854,72 @@ namespace vulkan {
 		     &copy_region);		     
     }
 
-    bool commands_layout_transition(VkCommandBuffer cmd_buffer,
-				    image_pool::index_type image) const {
-      bool ret = ok();
-      if (ret) {
-	auto layout_transition =
-	  m_image_pool.make_layout_transition(image);
-
-        ret = c_assert(layout_transition.ok());
-	  
-	if (ret) {
-	  layout_transition.via(cmd_buffer);
-	  ret = c_assert(ok());
+    void commands_draw_inner_objects(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
+      for (auto const& [name, index]: m_model_data.indices) {
+	if (name != "outer-cube") {	   
+	  commands_draw_model(index,
+			      cmd_buffer,
+			      pipeline_layout);	  
 	}
       }
-      return ret;
     }
 
+    void commands_draw_room(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout) const {
+      commands_draw_model("outer-cube",
+			  cmd_buffer,
+			  pipeline_layout);
+    }
+
+    void commands_draw_quad_no_vb(VkCommandBuffer cmd_buffer) const {
+      vkCmdDraw(cmd_buffer,
+		4,
+		1,
+		0,
+		0);
+    }
+    
+    void commands_draw_model(uint32_t model,
+			     VkCommandBuffer cmd_buffer,
+			     VkPipelineLayout pipeline_layout) const {
+
+      push_constant::model pc_m{};
+      
+      pc_m.model_to_world = m_model_data.transforms.at(model)();
+      push_constant::model_upload(pc_m, cmd_buffer, pipeline_layout);
+      
+      vkCmdDraw(cmd_buffer,
+		m_model_data.vb_lengths.at(model), // num vertices
+	        m_model_data.vb_lengths.at(model) / 3, // num instances
+		m_model_data.vb_offsets.at(model), // first vertex
+		m_model_data.vb_offsets.at(model) / 3); // first instance
+
+    }
+
+    void commands_draw_model(const std::string& name,
+			     VkCommandBuffer cmd_buffer,
+			     VkPipelineLayout pipeline_layout) const {
+      commands_draw_model(m_model_data.indices.at(name),
+			  cmd_buffer,
+			  pipeline_layout);
+    }
+    
     void commands_draw_main(VkCommandBuffer cmd_buffer,
 			    VkPipelineLayout pipeline_layout) const {
-      // Note that instances are per-triangle
-      uint32_t sampler0 = 0;
-      vkCmdPushConstants(cmd_buffer,
-			 pipeline_layout,
-			 VK_SHADER_STAGE_FRAGMENT_BIT,
-			 0,
-			 sizeof(sampler0),
-			 &sampler0);
-	    
-      commands_draw_inner_objects(cmd_buffer);
-	  
-      uint32_t sampler1 = 1;
-      vkCmdPushConstants(cmd_buffer,
-			 pipeline_layout,
-			 VK_SHADER_STAGE_FRAGMENT_BIT,
-			 0,
-			 sizeof(sampler1),
-			 &sampler1);
       
-      commands_draw_room(cmd_buffer);
-    }
+      push_constant::basic_pbr pc_bp{push_constant::basic_pbr_default()};
 
+      pc_bp.camera_position = m_camera_position;
+      pc_bp.sampler = 0;
+      push_constant::basic_pbr_upload(pc_bp, cmd_buffer, pipeline_layout);
+      
+      commands_draw_inner_objects(cmd_buffer, pipeline_layout);
+      
+      pc_bp.sampler = 1;
+      push_constant::basic_pbr_upload(pc_bp, cmd_buffer, pipeline_layout);
+      
+      commands_draw_room(cmd_buffer, pipeline_layout);
+    }     
+    
     //
     // we always use the command pool here to allocate command buffer memory
     //
@@ -2393,9 +2962,25 @@ namespace vulkan {
     // associates the descriptor set with the descriptor
     // set layout that was associated with the
     // pipeline layout created earlier.
-    void setup_command_buffers() {
+    // --------------------
+    // WRT to command_buffer_type
+    // --------------------
+    //
+    // The command for the second pass, used for the
+    // render-to-textured-quad, will be included
+    // in the command buffer if "two_pass" is used.
+    // Otherwise, we just omit it.
+    // 
+
+    enum class command_buffer_type
+      {
+       single_pass,
+       two_pass
+      };
+    
+    void setup_command_buffers(command_buffer_type cmd_type = command_buffer_type::two_pass) {
       m_image_pool.print_images_info();
-      if (ok_command_pool()) {
+      if (ok_framebuffers()) {
 	
 	//
 	// bind sampler[i] to test_texture_indices[i] via
@@ -2417,7 +3002,7 @@ namespace vulkan {
 		       m_image_pool.make_layout_transitions(cmd_buf,
 							    m_test_image_indices);
 		   },
-	    [this]() {
+	    [this](one_shot_command_error err) {
 	      puts("run_cmds ERROR");
 	      ASSERT(false);
 	      m_ok_scene = false;
@@ -2426,13 +3011,14 @@ namespace vulkan {
 	  //
 	  // update the descriptor sets here to include the input attachment
 	  // for the shader
-	  //	   	    
-
+	  //
+	  
 	  m_vk_command_buffers.resize(m_vk_swapchain_image_views.size());
 
 	  bool good = c_assert(make_command_buffers(m_vk_command_buffers));
 	    
-	  if (good) {	    
+	  if (good) {
+	    
 	    //
 	    // begin the command buffer series;
 	    // we obviously have two render passes,
@@ -2448,16 +3034,9 @@ namespace vulkan {
 	      good = c_assert(commands_begin_buffer(cmd_buff));
 	      
 	      if (good) {
-		vkCmdUpdateBuffer(cmd_buff,
-				  m_vk_vertex_buffer,
-				  0,
-				  sizeof(m_vertex_buffer_vertices[0]) * m_vertex_buffer_vertices.size(),
-				  m_vertex_buffer_vertices.data());
-		
 		commands_start_render_pass(cmd_buff,
 					   m_vk_swapchain_framebuffers.at(i),
 					   m_vk_render_pass);
-
 		//
 		// subpass 1: fill depth and color attachments
 		//
@@ -2465,45 +3044,36 @@ namespace vulkan {
 		commands_begin_pipeline(cmd_buff,
 					pipeline(k_pass_texture2d),
 					pipeline_layout(k_pass_texture2d),
-					true,
-				        {
+					true, // bind vertex buffer
+					{
 					 descriptor_set(k_descriptor_set_samplers),
 					 descriptor_set(k_descriptor_set_uniform_blocks)
 					});
 
 		commands_draw_main(cmd_buff,
 				   pipeline_layout(k_pass_texture2d));
-
-
-		vkCmdNextSubpass(cmd_buff, VK_SUBPASS_CONTENTS_INLINE);
 		
-		//
-		// subpass 2: read depth and color attachments
-		//
 
-		commands_begin_pipeline(cmd_buff,
-					pipeline(k_pass_test_fbo),
-					pipeline_layout(k_pass_test_fbo),
-					false, // do not bind vertex buffer
-					m_descriptor_set_pool.descriptor_sets(m_descriptors.attachment_read));		
+		if (cmd_type == command_buffer_type::two_pass) {
+		  //
+		  // subpass 2: read depth and color attachments
+		  //
+		  
+		  vkCmdNextSubpass(cmd_buff, VK_SUBPASS_CONTENTS_INLINE);
 		
-		commands_draw_quad_no_vb(cmd_buff);
 
+		  commands_begin_pipeline(cmd_buff,
+					  pipeline(k_pass_test_fbo),
+					  pipeline_layout(k_pass_test_fbo),
+					  false, // do not bind vertex buffer
+					  m_descriptor_set_pool.descriptor_sets(m_descriptors.attachment_read));		
+		
+		  commands_draw_quad_no_vb(cmd_buff);
+		}
+		
 		vkCmdEndRenderPass(cmd_buff);
-#if 0
-		image_layout_transition().
-		  from_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-		  to_stage(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT).
-		  for_aspect(depthbuffer_data::k_image_aspect_flags).
-		  from_access(0).
-		  to_access(depthbuffer_data::k_access_flags).
-		  from(depthbuffer_data::k_initial_layout).
-		  to(depthbuffer_layouts::primary()).
-		  for_image(m_depthbuffer.image).
-		  via(cmd_buffer);
-#endif
 		
-		good = c_assert(commands_end_buffer(cmd_buff));
+		good = c_assert(commands_end_buffer(cmd_buff));		
 	      }
 	      	      
 	      i++;
@@ -2515,53 +3085,99 @@ namespace vulkan {
       }
     }
 
-    void setup_semaphores() {
+    void setup_sync_objects() {
       if (ok_command_buffers()) {
 	VkSemaphoreCreateInfo semaphore_info = {};
 	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphore_info.pNext = nullptr;
+	semaphore_info.flags = 0;
+	
+	VkFenceCreateInfo fence_info = {};
+	fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fence_info.pNext = nullptr;
+	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
-				&semaphore_info,
-				nullptr,
-				&m_vk_sem_image_available));
+	m_vk_sems_image_available.resize(max_frames_in_flight());
+	m_vk_sems_render_finished.resize(max_frames_in_flight());
+	m_vk_fences_in_flight.resize(max_frames_in_flight());
 
-	VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
-				&semaphore_info,
-				nullptr,
-				&m_vk_sem_render_finished));
+	STATIC_IF (st_config::c_renderer::m_render::k_allow_more_frames_than_fences) {
+	  m_vk_images_in_flight.resize(m_vk_swapchain_images.size(), VK_NULL_HANDLE);
+	}
 
+	m_frame_stimes.resize(max_frames_in_flight(), 0.0);
+	m_frame_dtimes.resize(max_frames_in_flight(), 0.0);
+	
+	for (uint32_t i = 0; i < max_frames_in_flight(); ++i) {
+	  VK_FN(vkCreateFence(m_vk_curr_ldevice,
+			      &fence_info,
+			      nullptr,
+			      &m_vk_fences_in_flight[i]));
+	  
+	  VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
+				  &semaphore_info,
+				  nullptr,
+				  &m_vk_sems_image_available[i]));
+
+	  VK_FN(vkCreateSemaphore(m_vk_curr_ldevice,
+				  &semaphore_info,
+				  nullptr,
+				  &m_vk_sems_render_finished[i]));
+	}
+	
 	if (ok()) {
-	  m_ok_semaphores = true;
+	  m_ok_sync_objects = true;
 	}
       }
     }
 
     void setup_scene() {
-      if (ok_semaphores()) {
-	
+      if (ok_sync_objects()) {	
 	m_ok_scene = true;
       }
     }
 
     void setup() {
+      pass_type ps_type{};
+      attachment_read_descriptor_type desc_type{};
+      pipeline_type pl_type{};
+      command_buffer_type cmd_type{};
+      framebuffer_setup_method fb_setup{};
+      
+      STATIC_IF (st_config::c_renderer::m_setup::k_use_single_pass) {
+	ps_type = pass_type::single;
+	desc_type = attachment_read_descriptor_type::none;
+	pl_type = pipeline_type::pbr_basic_single;
+	cmd_type = command_buffer_type::single_pass;
+	fb_setup = framebuffer_setup_method::single_pass;
+      }
+      else {
+	ps_type = pass_type::dual_via_input_attachment;
+	desc_type = attachment_read_descriptor_type::complete;
+	pl_type = pipeline_type::pbr_basic_to_quad;
+	cmd_type = command_buffer_type::two_pass;
+	fb_setup = framebuffer_setup_method::two_pass;
+      }
+      
       setup_presentation();
+      setup_command_pool();
+      setup_vertex_data();
       setup_descriptor_pool();
-      setup_render_pass();
-      setup_attachment_read_descriptors();
+      setup_render_pass(ps_type);
+      setup_attachment_read_descriptors(desc_type);
       setup_uniform_block_data();
       setup_texture_data();
-      setup_depthbuffer_data();
-      setup_graphics_pipeline();
+      setup_graphics_pipeline(pl_type);
       setup_vertex_buffer();
-      setup_framebuffers();
-      setup_command_pool();
-      setup_command_buffers();
-      setup_semaphores();
+      setup_framebuffers(fb_setup);
+      setup_command_buffers(cmd_type);
+      setup_sync_objects();
       setup_scene();
     }
 
     void set_world_to_view_transform(const mat4_t& w2v) {
       m_transform_uniform_block.data.world_to_view = w2v;
+      m_camera_position = -vec3_t{w2v[3]};
     }
 
     void set_view_to_clip_transform(const mat4_t& v2c) {
@@ -2573,26 +3189,62 @@ namespace vulkan {
 	m_uniform_block_pool.update_block(m_transform_uniform_block.index,
 					  m_vk_curr_ldevice);
 	
-	VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
+	constexpr uint64_t k_timeout_ns = 16 * 1000000 + 6000000 * 100; // 100 * 16.6 milliseconds
 	
-	constexpr uint64_t k_timeout_ns = 10000000000; // 10 seconds
+	VK_FN(vkWaitForFences(m_vk_curr_ldevice,
+			      1,
+			      &m_vk_fences_in_flight[m_current_frame],
+			      VK_TRUE,
+			      k_timeout_ns));
+	{
+	  double time = glfwGetTime();
+	  m_frame_dtimes[m_current_frame] = time - m_frame_stimes.at(m_current_frame);
+	  m_frame_stimes[m_current_frame] = time; // stimes = start times
+
+	  STATIC_IF (st_config::c_renderer::m_render::k_use_frustum_culling) {
+	    m_frustum.update();
+	  }
+	}
+	
 	uint32_t image_index = UINT32_MAX;
 	
 	VK_FN(vkAcquireNextImageKHR(m_vk_curr_ldevice,
 				    m_vk_khr_swapchain,
 				    k_timeout_ns,
-				    m_vk_sem_image_available,
+				    m_vk_sems_image_available.at(m_current_frame),
 				    VK_NULL_HANDLE,
 				    &image_index));
-
+	
+	STATIC_IF (st_config::c_renderer::m_render::k_allow_more_frames_than_fences) {
+	  if (m_vk_images_in_flight.at(image_index) != VK_NULL_HANDLE) {
+	    VK_FN(vkWaitForFences(m_vk_curr_ldevice,
+				  1,
+				  &m_vk_images_in_flight[image_index],
+				  VK_TRUE,
+				  k_timeout_ns));
+	  }
+	  
+	  m_vk_images_in_flight[image_index] = m_vk_fences_in_flight.at(m_current_frame);
+	}
+	else {
+	  // m_vk_images_in_flight makes sense if and only if we're submitting more frames than
+	  // we have fences. Otherwise, the image index should directly
+	  // map to the current frame.
+	  ASSERT(image_index == m_current_frame);
+	}
+	
 	if (ok()) {	  
 	  ASSERT(m_vk_command_buffers.size() == m_vk_swapchain_images.size());
 	  ASSERT(image_index < m_vk_command_buffers.size());
 
+	  VK_FN(vkResetFences(m_vk_curr_ldevice,
+			      1,
+			      &m_vk_fences_in_flight[m_current_frame]));			
+	  
 	  VkSubmitInfo submit_info = {};
 	  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-	  VkSemaphore wait_semaphores[] = { m_vk_sem_image_available };
+	  VkSemaphore wait_semaphores[] = { m_vk_sems_image_available.at(m_current_frame) };
 	  
 	  VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };	  	  
 	  
@@ -2603,14 +3255,14 @@ namespace vulkan {
 	  submit_info.commandBufferCount = 1;
 	  submit_info.pCommandBuffers = &m_vk_command_buffers[image_index];
 
-	  VkSemaphore signal_semaphores[] = { m_vk_sem_render_finished  };
+	  VkSemaphore signal_semaphores[] = { m_vk_sems_render_finished.at(m_current_frame) };
 	  submit_info.signalSemaphoreCount = 1;
 	  submit_info.pSignalSemaphores = signal_semaphores;
 
 	  VK_FN(vkQueueSubmit(m_vk_graphics_queue,
 			      1,
 			      &submit_info,
-			      VK_NULL_HANDLE));
+			      m_vk_fences_in_flight.at(m_current_frame)));
 
 	  VkPresentInfoKHR present_info = {};
 	  present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -2627,8 +3279,14 @@ namespace vulkan {
 
 	  VK_FN(vkQueuePresentKHR(m_vk_present_queue, &present_info));
 
-	  VK_FN(vkDeviceWaitIdle(m_vk_curr_ldevice));
+	  m_current_frame = (m_current_frame + 1) % max_frames_in_flight();
 	}
+      }
+    }
+
+    void device_wait() const {
+      if (m_vk_curr_ldevice != VK_NULL_HANDLE) {
+        vkDeviceWaitIdle(m_vk_curr_ldevice);
       }
     }
     
@@ -2682,16 +3340,13 @@ namespace vulkan {
     // The command pool also will free any allocated command
     // buffers.
     void free_mem() {
-      if (m_vk_curr_ldevice != VK_NULL_HANDLE) {
-	vkDeviceWaitIdle(m_vk_curr_ldevice);
-      }
+      device_wait();
+
+      m_vertex_buffer.free_mem(m_vk_curr_ldevice);
       
-      free_vk_ldevice_handle<VkDeviceMemory, &vkFreeMemory>(m_vk_vertex_buffer_mem);
-      
-      free_vk_ldevice_handle<VkBuffer, &vkDestroyBuffer>(m_vk_vertex_buffer);
-      
-      free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_image_available);
-      free_vk_ldevice_handle<VkSemaphore, &vkDestroySemaphore>(m_vk_sem_render_finished);
+      free_vk_ldevice_handles<VkSemaphore, &vkDestroySemaphore>(m_vk_sems_image_available);
+      free_vk_ldevice_handles<VkSemaphore, &vkDestroySemaphore>(m_vk_sems_render_finished);
+      free_vk_ldevice_handles<VkFence, &vkDestroyFence>(m_vk_fences_in_flight);
       
       free_vk_ldevice_handle<VkCommandPool, &vkDestroyCommandPool>(m_vk_command_pool);
       
@@ -2706,9 +3361,7 @@ namespace vulkan {
       //      m_render_pass_pool.free_mem(m_vk_curr_ldevice);
       
       m_texture_pool.free_mem(m_vk_curr_ldevice);
-      m_image_pool.free_mem(m_vk_curr_ldevice);
-      
-      m_depthbuffer.free_mem(m_vk_curr_ldevice);
+      m_image_pool.free_mem(m_vk_curr_ldevice);    
 
       m_uniform_block_pool.free_mem(m_vk_curr_ldevice);
 
