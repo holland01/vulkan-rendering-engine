@@ -1,4 +1,5 @@
 #include "vk_common.hpp"
+#include <string.h>
 
 namespace vulkan {
   const darray<VkImageLayout> k_invalid_attachment_layouts =

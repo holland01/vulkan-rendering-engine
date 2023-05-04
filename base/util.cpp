@@ -4,6 +4,8 @@
 
 #include <fstream>
 
+#include <string.h>
+
 #if defined(BASE_DEBUG)
 unsigned long long g_log_mask = 
   logflag_programs_load | 

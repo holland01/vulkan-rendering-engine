@@ -297,7 +297,7 @@ struct framebuffer_ops {
                                  static_cast<gapi::bytesize_t>(all_faces.size()),
                                  &all_faces[0]);
 
-      return std::move(all_faces);
+      return all_faces;
     }
 
     glm::mat4 set_face(index_type cube_id, axis face) const {

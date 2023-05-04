@@ -2,19 +2,21 @@
 
 #include "common.hpp"
 
+#include <optional>
+
 #if defined(BASE_DEBUG) && defined(BASE_VK_LOG_CALL)
-#define VK_FN(expr)						\
-  do {								\
-    if (api_ok()) {						\
-      g_vk_result = vk_call((expr), #expr, __LINE__, __FILE__);	\
-    }								\
+#define VK_FN(expr)                                             \
+  do {                                                          \
+    if (api_ok()) {                                             \
+      g_vk_result = vk_call((expr), #expr, __LINE__, __FILE__); \
+    }                                                           \
   } while (0)
 #elif defined(BASE_DEBUG)
-#define VK_FN(expr)						\
-  do {								\
-    if (api_ok()) {						\
-      g_vk_result = (expr);					\
-    }								\
+#define VK_FN(expr)                             \
+  do {                                          \
+    if (api_ok()) {                             \
+      g_vk_result = (expr);                     \
+    }                                           \
   } while (0)
 #else
 #define VK_FN(expr) expr
@@ -35,10 +37,10 @@ namespace vulkan {
 #define CA_H_NULL(h) c_assert((h) == VK_NULL_HANDLE)
   
 #define HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, handle_type, null_value) \
-  handle_type ret{null_value};						\
-  if (ok_fn_name(index_name)) {						\
-    ret = vector_member.at(index_name);					\
-  }									\
+  handle_type ret{null_value};                                          \
+  if (ok_fn_name(index_name)) {                                         \
+    ret = vector_member.at(index_name);                                 \
+  }                                                                     \
   return ret
   
 #define VK_HANDLE_GET_FN_IMPL(index_name, ok_fn_name, vector_member, vk_handle_type) \
@@ -63,12 +65,12 @@ namespace vulkan {
   namespace st_config {
     namespace c_renderer {
       enum class present_mode_select
-	{
-	 fifo,
-	 fifo_relaxed,
-	 config_file, // not implemented yet
-	 best_fit     // not implemented yet
-	};
+      {
+      fifo,
+      fifo_relaxed,
+      config_file, // not implemented yet
+      best_fit     // not implemented yet
+    };
 
       static inline constexpr uint32_t k_max_frames_in_flight{BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE};
       
@@ -77,35 +79,35 @@ namespace vulkan {
       static inline constexpr bool k_enable_validation_layers{true};
       
       namespace m_render {
-	static inline constexpr bool k_use_frustum_culling{false};
-	static inline constexpr bool k_allow_more_frames_than_fences{false};
+        static inline constexpr bool k_use_frustum_culling{false};
+        static inline constexpr bool k_allow_more_frames_than_fences{false};
       }
       namespace m_setup_vertex_buffer {
-	static inline constexpr bool k_use_staging{false};
+        static inline constexpr bool k_use_staging{false};
       }
       namespace m_setup {
-	static inline constexpr bool k_use_single_pass{true};
+        static inline constexpr bool k_use_single_pass{true};
       }
       namespace m_select_present_mode {
-	static inline constexpr present_mode_select k_select_method{present_mode_select::fifo};
+        static inline constexpr present_mode_select k_select_method{present_mode_select::fifo};
       }
 
       static_assert((k_max_frames_in_flight == k_desired_swapchain_image_count) ||
-		    m_render::k_allow_more_frames_than_fences,
-		    "invalid frame count configuration; must ensure either of the given conditions hold:\n"
-		    "\tst_config::c_renderer::k_max_frames_in_flight == st_config::c_renderer::k_desired_swapchain_image_count, or\n"
-		    "\tst_config::c_renderer::m_render::k_allow_more_frames_than_fences == true");
+                    m_render::k_allow_more_frames_than_fences,
+                    "invalid frame count configuration; must ensure either of the given conditions hold:\n"
+                    "\tst_config::c_renderer::k_max_frames_in_flight == st_config::c_renderer::k_desired_swapchain_image_count, or\n"
+                    "\tst_config::c_renderer::m_render::k_allow_more_frames_than_fences == true");
     }
 
     namespace c_image_pool {
       namespace m_make_image {
-	// this takes an image_gen_params with settings
-	// that are designed to produce an image with preinitialized
-	// data and internally, within the pool itself,
-	// produces an image with an optimal data layout.
-	// The tradeoff is that it will take longer to create the image,
-	// but if this is during init then it's really not a problem.
-	static inline constexpr bool k_always_produce_optimal_images{true};
+        // this takes an image_gen_params with settings
+        // that are designed to produce an image with preinitialized
+        // data and internally, within the pool itself,
+        // produces an image with an optimal data layout.
+        // The tradeoff is that it will take longer to create the image,
+        // but if this is during init then it's really not a problem.
+        static inline constexpr bool k_always_produce_optimal_images{true};
       }
     }
   }
@@ -182,92 +184,92 @@ namespace vulkan {
   // are used, that number is subject to change.
   //
   struct image_layout_transition {
-  private:
-    bool m_ready;
+    private:
+      bool m_ready;
     
-  public:    
-    VkImageMemoryBarrier barrier;
+    public:
+      VkImageMemoryBarrier barrier;
 
-    VkPipelineStageFlags src_stage_mask;
-    VkPipelineStageFlags dst_stage_mask;
+      VkPipelineStageFlags src_stage_mask;
+      VkPipelineStageFlags dst_stage_mask;
     
-    image_layout_transition(bool pre_ready = true)
-      : m_ready(pre_ready) {     
-      barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-      barrier.pNext = nullptr;
-      barrier.srcAccessMask = 0;
-      barrier.dstAccessMask = 0;
+      image_layout_transition(bool pre_ready = true)
+        : m_ready(pre_ready) {
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.pNext = nullptr;
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = 0;
 	
-      barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
-      barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      barrier.subresourceRange.baseMipLevel = 0;
-      barrier.subresourceRange.levelCount = 1;
-      barrier.subresourceRange.baseArrayLayer = 0;
-      barrier.subresourceRange.layerCount = 1;
-    }
-
-    image_layout_transition& from_stage(VkPipelineStageFlags flags) {
-      src_stage_mask = flags; return *this;
-    }
-
-    image_layout_transition& to_stage(VkPipelineStageFlags flags) {
-      dst_stage_mask = flags; return *this;
-    }
-
-    image_layout_transition& for_aspect(VkImageAspectFlags aspect_mask) {
-      barrier.subresourceRange.aspectMask = aspect_mask; return *this;
-    }
-
-    image_layout_transition& from_access(VkAccessFlags src_mask) {
-      barrier.srcAccessMask = src_mask; return *this;
-    }
-
-    image_layout_transition& to_access(VkAccessFlags dst_mask) {
-      barrier.dstAccessMask = dst_mask; return *this;
-    }
-
-    image_layout_transition& from(VkImageLayout layout) {
-      barrier.oldLayout = layout; return *this;
-    }
-
-    image_layout_transition& to(VkImageLayout layout) {
-      barrier.newLayout = layout; return *this;
-    }
-
-    image_layout_transition& for_image(VkImage image) {
-      barrier.image = image; return *this;
-    }
-
-    image_layout_transition& ready() {
-      m_ready = true;
-      return *this;
-    }
-
-    bool ok() const {
-      bool r =
-	api_ok() && m_ready == true;
-      ASSERT(r);
-      return r;
-    }
-
-    image_layout_transition& via(VkCommandBuffer buffer) {       
-      if (ok()) {
-	vkCmdPipelineBarrier(buffer,
-			     src_stage_mask,
-			     dst_stage_mask,
-			     0,
-			     0,
-			     nullptr,
-			     0,
-			     nullptr,
-			     1,
-			     &barrier);
-			       
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
       }
-      return *this;
-    }
+
+      image_layout_transition& from_stage(VkPipelineStageFlags flags) {
+        src_stage_mask = flags; return *this;
+      }
+
+      image_layout_transition& to_stage(VkPipelineStageFlags flags) {
+        dst_stage_mask = flags; return *this;
+      }
+
+      image_layout_transition& for_aspect(VkImageAspectFlags aspect_mask) {
+        barrier.subresourceRange.aspectMask = aspect_mask; return *this;
+      }
+
+      image_layout_transition& from_access(VkAccessFlags src_mask) {
+        barrier.srcAccessMask = src_mask; return *this;
+      }
+
+      image_layout_transition& to_access(VkAccessFlags dst_mask) {
+        barrier.dstAccessMask = dst_mask; return *this;
+      }
+
+      image_layout_transition& from(VkImageLayout layout) {
+        barrier.oldLayout = layout; return *this;
+      }
+
+      image_layout_transition& to(VkImageLayout layout) {
+        barrier.newLayout = layout; return *this;
+      }
+
+      image_layout_transition& for_image(VkImage image) {
+        barrier.image = image; return *this;
+      }
+
+      image_layout_transition& ready() {
+        m_ready = true;
+        return *this;
+      }
+
+      bool ok() const {
+        bool r =
+          api_ok() && m_ready == true;
+        ASSERT(r);
+        return r;
+      }
+
+      image_layout_transition& via(VkCommandBuffer buffer) {
+        if (ok()) {
+          vkCmdPipelineBarrier(buffer,
+                               src_stage_mask,
+                               dst_stage_mask,
+                               0,
+                               0,
+                               nullptr,
+                               0,
+                               nullptr,
+                               1,
+                               &barrier);
+			       
+        }
+        return *this;
+      }
   };
   
   struct image_requirements {
@@ -280,32 +282,32 @@ namespace vulkan {
       ASSERT(ok());
       
       return
-	static_cast<VkDeviceSize>((bytes_per_pixel * required.width * required.height) *
-				  required.depth);
+        static_cast<VkDeviceSize>((bytes_per_pixel * required.width * required.height) *
+                                  required.depth);
     }
     
     bool ok() const {
       const bool ok_desired =
-	desired.width != UINT32_MAX &&
-	desired.height != UINT32_MAX &&
-	desired.depth != UINT32_MAX;
+        desired.width != UINT32_MAX &&
+        desired.height != UINT32_MAX &&
+        desired.depth != UINT32_MAX;
       
       const bool ok_required =
-	required.width != UINT32_MAX &&
-	required.height != UINT32_MAX &&
-	required.depth != UINT32_MAX;
+        required.width != UINT32_MAX &&
+        required.height != UINT32_MAX &&
+        required.depth != UINT32_MAX;
 
       const bool ok_cmp =
-	desired.width <= required.width &&
-	desired.height <= required.height &&
-	desired.depth <= required.depth;
+        desired.width <= required.width &&
+        desired.height <= required.height &&
+        desired.depth <= required.depth;
 
       return
-	(bytes_per_pixel <= 4) &&
-	(memory_type_index < 32) &&
-	ok_desired &&
-	ok_required &&
-	ok_cmp;		    
+        (bytes_per_pixel <= 4) &&
+        (memory_type_index < 32) &&
+        ok_desired &&
+        ok_required &&
+        ok_cmp;
     }
   };
 
@@ -329,28 +331,28 @@ namespace vulkan {
      
     bool ok() const {
       return
- 	!queue_family_indices.empty() &&
-	c_assert(H_OK(physical_device)) &&
-	c_assert(H_OK(device)) &&
-	c_assert(H_OK(descriptor_pool)) &&
+        !queue_family_indices.empty() &&
+        c_assert(H_OK(physical_device)) &&
+        c_assert(H_OK(device)) &&
+        c_assert(H_OK(descriptor_pool)) &&
         c_assert(H_OK(command_pool)) &&
-	c_assert(H_OK(command_queue)) 
-	; 
+        c_assert(H_OK(command_queue))
+        ;
     }
   };
 
   static inline uint32_t bpp_from_format(VkFormat in) {
     uint32_t ret = 0;
     switch (in) {
-    case VK_FORMAT_D24_UNORM_S8_UINT:
-    case VK_FORMAT_D32_SFLOAT:
-    case VK_FORMAT_R8G8B8A8_UNORM:
-    case VK_FORMAT_B8G8R8A8_UNORM:
-      ret = 4;
-      break;
-    default:
-      ASSERT(false);
-      break;
+      case VK_FORMAT_D24_UNORM_S8_UINT:
+      case VK_FORMAT_D32_SFLOAT:
+      case VK_FORMAT_R8G8B8A8_UNORM:
+      case VK_FORMAT_B8G8R8A8_UNORM:
+        ret = 4;
+        break;
+      default:
+        ASSERT(false);
+        break;
     }
     return ret;
   }
@@ -366,14 +368,14 @@ namespace vulkan {
   }
 
   template <class vkHandleType,
-	    void (*vkDestroyFn)(VkDevice, vkHandleType, const VkAllocationCallbacks*)>
+            void (*vkDestroyFn)(VkDevice, vkHandleType, const VkAllocationCallbacks*)>
   void free_device_handle(VkDevice device, vkHandleType& handle) {
     if (api_ok()) {
       ASSERT(device != VK_NULL_HANDLE);
       VK_FN(vkDeviceWaitIdle(device));
       if (handle != VK_NULL_HANDLE) {
-	vkDestroyFn(device, handle, nullptr);
-	handle = VK_NULL_HANDLE;
+        vkDestroyFn(device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
       }
     }
   }
@@ -425,15 +427,15 @@ namespace vulkan {
 
     bool ok() const {
       bool r = 
-	sampler != VK_NULL_HANDLE &&
-	image != VK_NULL_HANDLE &&
-	image_view != VK_NULL_HANDLE &&
-	memory != VK_NULL_HANDLE &&
-	descriptor_set_layout != VK_NULL_HANDLE &&
-	descriptor_set != VK_NULL_HANDLE &&
-	format != VK_FORMAT_UNDEFINED &&
-	width != UINT32_MAX &&
-	height != UINT32_MAX;
+        sampler != VK_NULL_HANDLE &&
+        image != VK_NULL_HANDLE &&
+        image_view != VK_NULL_HANDLE &&
+        memory != VK_NULL_HANDLE &&
+        descriptor_set_layout != VK_NULL_HANDLE &&
+        descriptor_set != VK_NULL_HANDLE &&
+        format != VK_FORMAT_UNDEFINED &&
+        width != UINT32_MAX &&
+        height != UINT32_MAX;
       ASSERT(r);
       return r;
     }
@@ -441,9 +443,9 @@ namespace vulkan {
     VkDescriptorImageInfo make_descriptor_image_info() const {
       VkDescriptorImageInfo ret = {};
       if (ok()) {
-	ret.sampler = sampler;
-	ret.imageView = image_view;
-	ret.imageLayout = layout;
+        ret.sampler = sampler;
+        ret.imageView = image_view;
+        ret.imageLayout = layout;
       }
       return ret;
     }
@@ -451,16 +453,16 @@ namespace vulkan {
     VkWriteDescriptorSet make_write_descriptor_set(const VkDescriptorImageInfo* image_info) const {
       VkWriteDescriptorSet ret = {};
       if (ok()) {
-	ret.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	ret.pNext = nullptr;
-	ret.dstSet = descriptor_set;
-	ret.dstBinding = k_binding;
-	ret.dstArrayElement = k_array_elem;
-	ret.descriptorCount = k_descriptor_count;
-	ret.descriptorType = k_descriptor_type;
-	ret.pImageInfo = image_info;
-	ret.pBufferInfo = nullptr;
-	ret.pTexelBufferView = nullptr;
+        ret.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        ret.pNext = nullptr;
+        ret.dstSet = descriptor_set;
+        ret.dstBinding = k_binding;
+        ret.dstArrayElement = k_array_elem;
+        ret.descriptorCount = k_descriptor_count;
+        ret.descriptorType = k_descriptor_type;
+        ret.pImageInfo = image_info;
+        ret.pBufferInfo = nullptr;
+        ret.pTexelBufferView = nullptr;
       }
       return ret;
     }
@@ -469,11 +471,11 @@ namespace vulkan {
       VK_FN(vkDeviceWaitIdle(device));
 
       if (api_ok()) {
-	vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);	
-	vkDestroySampler(device, sampler, nullptr);
-	vkDestroyImageView(device, image_view, nullptr);
-	vkDestroyImage(device, image, nullptr);	
-	vkFreeMemory(device, memory, nullptr);
+        vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
+        vkDestroySampler(device, sampler, nullptr);
+        vkDestroyImageView(device, image_view, nullptr);
+        vkDestroyImage(device, image, nullptr);
+        vkFreeMemory(device, memory, nullptr);
       }
     }
   };
@@ -507,11 +509,11 @@ namespace vulkan {
     
     bool ok() const {
       bool r =
-	width != UINT32_MAX &&
-	height != UINT32_MAX &&
-	image != VK_NULL_HANDLE &&
-	image_view != VK_NULL_HANDLE &&
-	memory != VK_NULL_HANDLE;
+        width != UINT32_MAX &&
+        height != UINT32_MAX &&
+        image != VK_NULL_HANDLE &&
+        image_view != VK_NULL_HANDLE &&
+        memory != VK_NULL_HANDLE;
       ASSERT(r);
       return r;
     }
@@ -519,11 +521,11 @@ namespace vulkan {
     std::string to_string() const {
       std::stringstream ss;
       ss << "depthbuffer_info:\n"
-	 << "..." << AS_STRING_SS(width) << "\n"
-	 << "..." << AS_STRING_SS(height) << "\n"
-	 << "..." << SS_HEX_NAME(image) << "\n"
-	 << "..." << SS_HEX_NAME(image_view) << "\n"
-	 << "..." << SS_HEX_NAME(memory) << "\n";
+         << "..." << AS_STRING_SS(width) << "\n"
+         << "..." << AS_STRING_SS(height) << "\n"
+         << "..." << SS_HEX_NAME(image) << "\n"
+         << "..." << SS_HEX_NAME(image_view) << "\n"
+         << "..." << SS_HEX_NAME(memory) << "\n";
       return ss.str();
     }
     
@@ -545,72 +547,72 @@ namespace vulkan {
   std::string to_string(VkExtent3D e);
   std::string to_string(const image_requirements& r);
 
-    // Find _a_ memory in `memory_type_bits_req` that includes all of `req_properties`
+  // Find _a_ memory in `memory_type_bits_req` that includes all of `req_properties`
   int32_t find_memory_properties(const VkPhysicalDeviceMemoryProperties* memory_properties,
-				 uint32_t memory_type_bits_req,
-				 VkMemoryPropertyFlags req_properties);
+                                 uint32_t memory_type_bits_req,
+                                 VkMemoryPropertyFlags req_properties);
 				 
 
   VkViewport make_viewport(vec2_t origin, VkExtent2D dim, float depthmin, float depthmax);
 
   VkFormat find_supported_format(VkPhysicalDevice physical_device,
-				 const darray<VkFormat>& candidates,
-				 VkImageTiling tiling,
-				 VkFormatFeatureFlags features);
+                                 const darray<VkFormat>& candidates,
+                                 VkImageTiling tiling,
+                                 VkFormatFeatureFlags features);
 
   VkDescriptorSetLayoutBinding make_descriptor_set_layout_binding(uint32_t binding,
-								  VkShaderStageFlags stages,
-								  uint32_t num_descriptors,
-								  VkDescriptorType type);
+                                                                  VkShaderStageFlags stages,
+                                                                  uint32_t num_descriptors,
+                                                                  VkDescriptorType type);
 
 
     
   VkDescriptorSetLayout make_descriptor_set_layout(VkDevice device,
-						   const VkDescriptorSetLayoutBinding* bindings,
-						   uint32_t num_bindings);
+                                                   const VkDescriptorSetLayoutBinding* bindings,
+                                                   uint32_t num_bindings);
 
   VkDescriptorSet make_descriptor_set(VkDevice device,
-				      VkDescriptorPool descriptor_pool,
-				      const VkDescriptorSetLayout* layouts,
-				      uint32_t num_sets);
+                                      VkDescriptorPool descriptor_pool,
+                                      const VkDescriptorSetLayout* layouts,
+                                      uint32_t num_sets);
 
   void write_device_memory(VkDevice device,
-			   VkDeviceMemory memory,
-			   const void* data,
-			   VkDeviceSize size);
+                           VkDeviceMemory memory,
+                           const void* data,
+                           VkDeviceSize size);
   
   VkDeviceMemory make_device_memory(VkDevice device,
-				    const void* data,
-				    VkDeviceSize size,
-				    VkDeviceSize alloc_size,
-				    uint32_t memory_property_index);
+                                    const void* data,
+                                    VkDeviceSize size,
+                                    VkDeviceSize alloc_size,
+                                    uint32_t memory_property_index);
 
   VkBuffer make_buffer(const device_resource_properties& resource_props,
-		       VkBufferCreateFlags create_flags,
-		       VkBufferUsageFlags usage_flags,
-		       VkDeviceSize sz);
+                       VkBufferCreateFlags create_flags,
+                       VkBufferUsageFlags usage_flags,
+                       VkDeviceSize sz);
 
   VkDescriptorBufferInfo make_descriptor_buffer_info(VkBuffer buffer, VkDeviceSize size);
 
   VkWriteDescriptorSet make_write_descriptor_buffer_set(VkDescriptorSet descset,
-							const VkDescriptorBufferInfo* buffer_info,
-							uint32_t binding_index,
-							uint32_t array_element,
-							VkDescriptorType descriptor_type);
+                                                        const VkDescriptorBufferInfo* buffer_info,
+                                                        uint32_t binding_index,
+                                                        uint32_t array_element,
+                                                        VkDescriptorType descriptor_type);
 
   VkWriteDescriptorSet make_write_descriptor_set(VkDescriptorSet descset,
-						 const VkDescriptorImageInfo* image_info,
-						 uint32_t binding,
-						 VkDescriptorType type,
-						 uint32_t descriptor_count = 1);
+                                                 const VkDescriptorImageInfo* image_info,
+                                                 uint32_t binding,
+                                                 VkDescriptorType type,
+                                                 uint32_t descriptor_count = 1);
   
   bool write_descriptor_set(VkDevice device,
-			    VkBuffer buffer,
-			    VkDeviceSize size,
-			    VkDescriptorSet descset,
-			    uint32_t binding_index,
-			    uint32_t array_element,
-			    VkDescriptorType descriptor_type);
+                            VkBuffer buffer,
+                            VkDeviceSize size,
+                            VkDescriptorSet descset,
+                            uint32_t binding_index,
+                            uint32_t array_element,
+                            VkDescriptorType descriptor_type);
 
   struct buffer_reqs {
     VkDeviceSize required_size{std::numeric_limits<VkDeviceSize>::max()};
@@ -618,30 +620,30 @@ namespace vulkan {
 
     bool ok() const {
       return
-	c_assert(required_size > 0) &&
-	c_assert(required_size != std::numeric_limits<VkDeviceSize>::max()) &&
-	c_assert(memory_property_index != UINT32_MAX);
+        c_assert(required_size > 0) &&
+        c_assert(required_size != std::numeric_limits<VkDeviceSize>::max()) &&
+        c_assert(memory_property_index != UINT32_MAX);
     }
   };
 
   std::optional<buffer_reqs> get_buffer_requirements(const device_resource_properties& resource_props,
-						     VkBufferCreateFlags create_flags,
-						     VkBufferUsageFlags usage_flags,
-						     VkMemoryPropertyFlags memory_property_flags,
-						     VkDeviceSize desired_size);
+                                                     VkBufferCreateFlags create_flags,
+                                                     VkBufferUsageFlags usage_flags,
+                                                     VkMemoryPropertyFlags memory_property_flags,
+                                                     VkDeviceSize desired_size);
 
   enum class one_shot_command_error
-    {
-     device_resource_properties,
-     allocate_command_buffer,     
-    };
+  {
+  device_resource_properties,
+  allocate_command_buffer,
+};
 
   typedef std::function<void(VkCommandBuffer)> one_shot_command_fn_ok_t;
   typedef std::function<void(one_shot_command_error)> one_shot_command_fn_err_t;
 
   void one_shot_command_buffer(const device_resource_properties& properties,
-			       one_shot_command_fn_ok_t f_ok,
-			       one_shot_command_fn_err_t f_err);
+                               one_shot_command_fn_ok_t f_ok,
+                               one_shot_command_fn_err_t f_err);
 
   static inline std::string realpath_spv(const std::string& spv_filename) {
     return "resources/shaders/bin/" + spv_filename;

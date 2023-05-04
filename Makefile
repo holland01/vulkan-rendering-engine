@@ -17,8 +17,8 @@ OBJ_C = $(subst base,obj,$(OFILES_C))
 
 OUT = renderer
 
-LIBS := $(shell pkg-config --libs glfw3)
-LIBS += $(shell pkg-config --libs glew)
+LIBS := -lglfw #$(shell pkg-config --libs glfw3)
+LIBS += -lGLEW -lGLU -lGL #$(shell pkg-config --libs glew)
 LIBS += -lstdc++fs -lvulkan
 
 ##
@@ -27,7 +27,7 @@ LIBS += -lstdc++fs -lvulkan
 ##
 
 CPPFLAGS=-I./base -I${LIBROOT}/json/include -DGLM_ENABLE_EXPERIMENTAL -DBASE_ENABLE_VULKAN
-CXXFLAGS=-std=c++17 -Wall -Wpedantic -Werror -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable
+CXXFLAGS=-std=c++20 -Wall -Wpedantic -Werror -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-maybe-uninitialized -Wno-deprecated-enum-enum-conversion
 CFLAGS=
 
 ifdef DEBUG

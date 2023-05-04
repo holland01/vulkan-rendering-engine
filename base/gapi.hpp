@@ -229,7 +229,7 @@ public:
                                   texture_wrap_mode>;
 private:
   type m_type{type::mipmap_base_level};
-  value_type m_value{0};
+  value_type m_value{uint8_t(0)};
 
 public:
   texture_param& mag_filter(texture_mag_filter f) {

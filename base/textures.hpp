@@ -114,19 +114,17 @@ struct module_textures: public type_module {
 
       darray<gapi::texture_param> v;
 
-      v.insert(v.end(), {
-        gapi::texture_param{}.min_filter(min_filter),
-        gapi::texture_param{}.mag_filter(mag_filter),
-        gapi::texture_param{}.wrap_mode_s(wrap_mode_s),
-        gapi::texture_param{}.wrap_mode_t(wrap_mode_t),
-        gapi::texture_param{}.mip_base_level(mip_base_level),
-        gapi::texture_param{}.mip_max_level(mip_max_level)
-      });
+
+      v.push_back(gapi::texture_param{}.min_filter(min_filter));
+      v.push_back(gapi::texture_param{}.mag_filter(mag_filter));
+      v.push_back(gapi::texture_param{}.wrap_mode_s(wrap_mode_s));
+      v.push_back(gapi::texture_param{}.wrap_mode_t(wrap_mode_t));
+      v.push_back(gapi::texture_param{}.mip_base_level(mip_base_level));
+      v.push_back(gapi::texture_param{}.mip_max_level(mip_max_level));
 
       if (type == gapi::texture_object_target::texture_cube_map) {
-        v.insert(v.end(), {
-          gapi::texture_param{}.wrap_mode_r(wrap_mode_r)
-        });
+        //v.insert(v.end(), gapi::texture_param{}.wrap_mode_r(wrap_mode_r));
+        v.push_back(gapi::texture_param{}.wrap_mode_r(wrap_mode_r));
       }
 
       return v;

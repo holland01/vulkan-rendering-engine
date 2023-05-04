@@ -21,6 +21,8 @@
 
 #define DEBUG_ASSERTS
 
+#define STEP_UNIT 0.1f
+
 #if defined(_MSC_VER)
 #define OS_WINDOWS
 #elif defined(__linux__)
