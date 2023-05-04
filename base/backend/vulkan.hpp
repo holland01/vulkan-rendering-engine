@@ -28,6 +28,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <string.h>
+
 #define STOP(x) std::cout << "made it" << std::endl; if (false) { x } 
 
 namespace vulkan {
@@ -995,15 +997,21 @@ namespace vulkan {
           // we can optimize later as necessary.
           m_swapchain_image_count = details.capabilities.minImageCount;
           ASSERT(m_swapchain_image_count != 0);
+
+          // One driver might set the max image count to 0, for whatever reason,
+          // where as the minimum is a reasonable number, like 3.
+          details.capabilities.maxImageCount = std::max(details.capabilities.maxImageCount, details.capabilities.minImageCount);
+
 	  if (st_config::c_renderer::k_desired_swapchain_image_count ==
 	      BASE_VK_SWAPCHAIN_IMAGE_USE_MAX_AVAILABLE) {
+
 	    m_swapchain_image_count = details.capabilities.maxImageCount;
 	  }
 	  else if (m_swapchain_image_count != st_config::c_renderer::k_desired_swapchain_image_count) {	    
-            m_swapchain_image_count = st_config::c_renderer::k_desired_swapchain_image_count;
-          }
-          ASSERT(details.capabilities.minImageCount <= m_swapchain_image_count &&
-		 m_swapchain_image_count <= details.capabilities.maxImageCount);
+      m_swapchain_image_count = st_config::c_renderer::k_desired_swapchain_image_count;
+    }
+    ASSERT(details.capabilities.minImageCount <= m_swapchain_image_count &&
+           m_swapchain_image_count <= details.capabilities.maxImageCount);
 
 	  write_logf("selected swapchain image count = %" PRIu32 "\n"
 		     "min image count allowed = %" PRIu32 "\n"
